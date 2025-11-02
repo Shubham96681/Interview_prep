@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Index() {
   const navigate = useNavigate();
-  const { user, loading, isAuthenticated, login, logout } = useAuth();
+  const { user, loading, login, logout } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'candidate' | 'expert'>('candidate');
 

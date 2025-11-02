@@ -436,7 +436,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.monthlyEarnings.map((month, index) => (
+              {analyticsData.monthlyEarnings.map((month) => (
                 <div key={month.month} className="flex items-center justify-between">
                   <span className="text-sm font-medium text-gray-600">{month.month}</span>
                   <div className="flex items-center gap-3">
@@ -498,7 +498,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.weeklyStats.map((week, index) => (
+              {analyticsData.weeklyStats.map((week) => (
                 <div key={week.week} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
                     <p className="font-medium text-gray-900">{week.week}</p>

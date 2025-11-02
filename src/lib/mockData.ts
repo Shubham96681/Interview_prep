@@ -38,8 +38,8 @@ export interface Session {
   meetingLink?: string;
   // Legacy fields for backward compatibility
   type?: string;
-  date?: string;
-  time?: string;
+  legacyDate?: string;
+  legacyTime?: string;
   rating?: number;
   feedback?: string;
 }

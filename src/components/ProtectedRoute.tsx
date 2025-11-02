@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute = ({ children, requireAuth = true }: ProtectedRouteProps) => {
-  const { user, loading, isAuthenticated, login } = useAuth();
+  const { loading, isAuthenticated, login } = useAuth();
 
   // Show loading state while checking authentication
   if (loading) {
@@ -29,7 +29,7 @@ export const ProtectedRoute = ({ children, requireAuth = true }: ProtectedRouteP
         <AuthModal
           isOpen={true}
           onClose={() => window.history.back()}
-          onLogin={(userType, userData) => {
+          onLogin={(_userType, userData) => {
             login(userData);
           }}
         />

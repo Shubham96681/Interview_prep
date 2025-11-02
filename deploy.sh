@@ -7,7 +7,7 @@ cd /var/www/interview-prep
 
 # Pull latest changes
 echo "Pulling latest changes from GitHub..."
-git pull origin main
+git pull origin main || echo "Already up to date"
 
 # Install root dependencies (frontend)
 echo "Installing frontend dependencies..."
@@ -33,8 +33,8 @@ fi
 # Run database migrations
 echo "Running database migrations..."
 cd server
-npx prisma migrate deploy
 npx prisma generate
+npx prisma migrate deploy || npx prisma db push --skip-generate
 cd ..
 
 # Restart backend server

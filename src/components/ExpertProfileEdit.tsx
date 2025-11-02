@@ -96,12 +96,12 @@ export default function ExpertProfileEdit({ isOpen, onClose, user, onUpdate }: E
       // Make actual API call to update profile
       const formData = new FormData();
       formData.append('hourlyRate', hourlyRate);
-      formData.append('timezone', timezone);
-      formData.append('workingHoursStart', workingHoursStart);
-      formData.append('workingHoursEnd', workingHoursEnd);
-      formData.append('daysAvailable', JSON.stringify(selectedDays));
+      formData.append('timezone', availability.timezone);
+      formData.append('workingHoursStart', availability.workingHours.start);
+      formData.append('workingHoursEnd', availability.workingHours.end);
+      formData.append('daysAvailable', JSON.stringify(availability.daysAvailable));
       
-      const response = await apiService.updateProfile(formData);
+      await apiService.updateProfile(formData);
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Failed to update profile. Please try again.');

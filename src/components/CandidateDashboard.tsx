@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, Star, Video, FileText, Users, DollarSign } from 'lucide-react';
+import { Calendar, Clock, Star, Video, FileText } from 'lucide-react';
 import { Session } from '@/lib/mockData';
 import { apiService } from '@/lib/apiService';
 import realtimeService from '@/lib/realtimeService';
@@ -20,7 +20,7 @@ interface CandidateDashboardProps {
   onLogout: () => void;
 }
 
-export default function CandidateDashboard({ user, onLogout }: CandidateDashboardProps) {
+export default function CandidateDashboard({ user }: CandidateDashboardProps) {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
 

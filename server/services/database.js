@@ -49,13 +49,9 @@ class DatabaseService {
             name: 'John Doe',
             userType: 'candidate',
             password: 'hashed_password_123', // In real app, this would be properly hashed
-            profile: {
-              create: {
-                bio: 'Experienced software developer looking to improve interview skills',
-                experience: '5+ years',
-                skills: ['JavaScript', 'React', 'Node.js']
-              }
-            }
+            bio: 'Experienced software developer looking to improve interview skills',
+            experience: '5+ years',
+            skills: JSON.stringify(['JavaScript', 'React', 'Node.js'])
           }
         }),
         prisma.user.upsert({
@@ -66,18 +62,15 @@ class DatabaseService {
             name: 'Jane Smith',
             userType: 'expert',
             password: 'hashed_password_123',
-            profile: {
-              create: {
-                bio: 'Senior Software Engineer with 10+ years of experience',
-                experience: '10+ years',
-                skills: ['React', 'Node.js', 'TypeScript', 'System Design'],
-                hourlyRate: 75,
-                timezone: 'UTC-5',
-                workingHoursStart: '09:00',
-                workingHoursEnd: '17:00',
-                daysAvailable: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-              }
-            }
+            bio: 'Senior Software Engineer with 10+ years of experience',
+            experience: '10+ years',
+            skills: JSON.stringify(['React', 'Node.js', 'TypeScript', 'System Design']),
+            hourlyRate: 75,
+            timezone: 'UTC-5',
+            workingHoursStart: '09:00',
+            workingHoursEnd: '17:00',
+            daysAvailable: JSON.stringify(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']),
+            isVerified: true
           }
         }),
         prisma.user.upsert({
@@ -88,13 +81,9 @@ class DatabaseService {
             name: 'Shubham Singh',
             userType: 'candidate',
             password: 'hashed_password_123',
-            profile: {
-              create: {
-                bio: 'Software developer preparing for technical interviews',
-                experience: '3+ years',
-                skills: ['JavaScript', 'React', 'Python', 'SQL']
-              }
-            }
+            bio: 'Software developer preparing for technical interviews',
+            experience: '3+ years',
+            skills: JSON.stringify(['JavaScript', 'React', 'Python', 'SQL'])
           }
         })
       ]);
@@ -146,10 +135,7 @@ class DatabaseService {
 
   async getUserByEmail(email) {
     return await prisma.user.findUnique({
-      where: { email },
-      include: {
-        profile: true
-      }
+      where: { email }
     });
   }
 

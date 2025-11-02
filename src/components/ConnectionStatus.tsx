@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { WifiOff, RefreshCw } from 'lucide-react';
 import { apiService } from '@/lib/apiService';
 
 export default function ConnectionStatus() {

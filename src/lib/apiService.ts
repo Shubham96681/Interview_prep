@@ -24,7 +24,8 @@ class ApiService {
   private isBackendAvailable: boolean | null = null;
   private healthCheckPromise: Promise<boolean> | null = null;
 
-  // Check if backend is available
+  // Check if backend is available (currently unused but kept for future use)
+  // @ts-ignore - Method kept for potential future use
   private async checkBackendHealth(): Promise<boolean> {
     if (this.healthCheckPromise) {
       return this.healthCheckPromise;
@@ -60,7 +61,7 @@ class ApiService {
   }
 
   // Retry mechanism with exponential backoff
-  private async retryRequest<T>(
+  private async retryRequest(
     requestFn: () => Promise<Response>,
     retries: number = MAX_RETRIES
   ): Promise<Response> {

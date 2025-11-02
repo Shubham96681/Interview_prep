@@ -23,7 +23,7 @@ interface ExpertDashboardProps {
   onLogout: () => void;
 }
 
-export default function ExpertDashboard({ user, onLogout }: ExpertDashboardProps) {
+export default function ExpertDashboard({ user }: ExpertDashboardProps) {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'analytics'>('dashboard');

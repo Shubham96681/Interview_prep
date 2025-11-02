@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
@@ -51,7 +51,6 @@ export default function PaymentModal({ isOpen, onClose, onPaymentSuccess, sessio
     phone: ''
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isProcessing, setIsProcessing] = useState(false);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -124,7 +123,6 @@ export default function PaymentModal({ isOpen, onClose, onPaymentSuccess, sessio
   };
 
   const simulatePayment = async () => {
-    setIsProcessing(true);
     setStep('processing');
 
     try {
@@ -168,7 +166,7 @@ export default function PaymentModal({ isOpen, onClose, onPaymentSuccess, sessio
         description: 'An error occurred during payment processing.'
       });
     } finally {
-      setIsProcessing(false);
+      // Payment processing completed
     }
   };
 
@@ -195,7 +193,6 @@ export default function PaymentModal({ isOpen, onClose, onPaymentSuccess, sessio
       phone: ''
     });
     setErrors({});
-    setIsProcessing(false);
   };
 
   const formatDate = (dateStr: string) => {

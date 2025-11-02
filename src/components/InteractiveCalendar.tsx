@@ -2,16 +2,14 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+// Dialog components not currently used
 import { 
   ChevronLeft, 
   ChevronRight, 
   Calendar as CalendarIcon, 
   Clock, 
-  User, 
   Video,
   Plus,
-  Eye,
   Edit
 } from 'lucide-react';
 import { Session } from '@/lib/mockData';
@@ -35,7 +33,7 @@ interface CalendarEvent {
   color: string;
 }
 
-export default function InteractiveCalendar({ expertId, sessions, availabilitySlots = [] }: InteractiveCalendarProps) {
+export default function InteractiveCalendar({ sessions, availabilitySlots = [] }: InteractiveCalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
