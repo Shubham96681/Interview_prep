@@ -1,0 +1,169 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "sqlite"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  userType  UserType
+  phone     String?
+  company   String?
+  title     String?
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Profile information
+  bio                String?
+  experience         String?
+  skills             String? // JSON string of skills array
+  rating             Float    @default(0)
+  totalSessions      Int      @default(0)
+  hourlyRate         Float?
+  isVerified         Boolean  @default(false)
+  yearsOfExperience  String?
+  proficiency        String? // JSON string of proficiency array
+  
+  // Availability information
+  timezone           String?  @default("UTC")
+  workingHoursStart  String?  @default("09:00")
+  workingHoursEnd    String?  @default("17:00")
+  daysAvailable      String?  // JSON string of available days array
+
+  // File uploads
+  resumePath         String?
+  profilePhotoPath   String?
+  certificationPaths String? // JSON string of certification paths array
+
+  // Relations
+  candidateSessions Session[] @relation("CandidateSessions")
+  expertSessions    Session[] @relation("ExpertSessions")
+  reviewsGiven      Review[]  @relation("ReviewsGiven")
+  reviewsReceived   Review[]  @relation("ReviewsReceived")
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Session {
+  id            String        @id @default(cuid())
+  title         String
+  description   String?
+  scheduledDate DateTime
+  duration      Int           // Duration in minutes
+  sessionType   SessionType
+  status        SessionStatus @default(scheduled)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Time tracking
+  actualStartTime DateTime?   // When the session actually started
+  actualEndTime   DateTime?   // When the session actually ended
+  actualDuration  Int?        // Actual duration in minutes
+
+  // Relations
+  candidateId String
+  candidate   User   @relation("CandidateSessions", fields: [candidateId], references: [id])
+  expertId    String
+  expert      User   @relation("ExpertSessions", fields: [expertId], references: [id])
+
+  // Payment information
+  paymentAmount   Float?
+  paymentStatus   PaymentStatus @default(pending)
+  paymentMethod   String?
+
+  // Feedback
+  feedbackRating  Int?
+  feedbackComment String?
+  feedbackDate    DateTime?
+
+  // Reviews
+  reviews Review[]
+
+  @@map("sessions")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5 stars
+  comment   String?
+  categories String? // JSON string of review categories array
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id])
+  reviewerId String
+  reviewer   User    @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  revieweeId String
+  reviewee   User    @relation("ReviewsReceived", fields: [revieweeId], references: [id])
+
+  @@map("reviews")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // Additional data as JSON
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+enum UserType {
+  candidate
+  expert
+}
+
+enum SessionType {
+  technical
+  behavioral
+  system_design
+  resume
+  mock_interview
+  coding_challenge
+}
+
+enum SessionStatus {
+  scheduled
+  in_progress
+  completed
+  cancelled
+  rescheduled
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum NotificationType {
+  session_booking
+  session_reminder
+  session_completed
+  payment_received
+  review_received
+  general
+}

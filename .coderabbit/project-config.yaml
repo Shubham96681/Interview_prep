@@ -1,0 +1,121 @@
+# CodeRabbit Project-Specific Configuration
+# Tailored for Interview Marketplace Application
+
+project:
+  name: "Interview Marketplace"
+  type: "fullstack"
+  languages: ["typescript", "javascript", "sql"]
+  
+# Frontend Configuration
+frontend:
+  framework: "react"
+  build_tool: "vite"
+  styling: "tailwindcss"
+  
+  rules:
+    - "Check for proper React hooks usage"
+    - "Verify TypeScript types are properly defined"
+    - "Ensure components are properly memoized when needed"
+    - "Check for accessibility best practices"
+    - "Verify responsive design implementation"
+    - "Check for proper error boundaries"
+
+# Backend Configuration
+backend:
+  framework: "express"
+  database: "sqlite"
+  orm: "prisma"
+  
+  rules:
+    - "Check for proper database connection handling"
+    - "Verify SQL injection prevention"
+    - "Check for proper error handling in API endpoints"
+    - "Ensure proper JWT token validation"
+    - "Check for rate limiting implementation"
+    - "Verify CORS configuration"
+
+# Database Configuration
+database:
+  type: "sqlite"
+  
+  rules:
+    - "Check for proper migration scripts"
+    - "Verify database schema consistency"
+    - "Check for proper indexing"
+    - "Ensure data validation at database level"
+
+# API Configuration
+api:
+  style: "REST"
+  
+  rules:
+    - "Check for proper HTTP status codes"
+    - "Verify request/response validation"
+    - "Check for proper error responses"
+    - "Ensure consistent API naming conventions"
+    - "Check for proper pagination implementation"
+
+# Security Configuration
+security:
+  authentication: "JWT"
+  
+  rules:
+    - "Check for proper password hashing"
+    - "Verify token expiration handling"
+    - "Check for proper input sanitization"
+    - "Ensure secure session management"
+    - "Check for proper CORS configuration"
+
+# Testing Configuration
+testing:
+  frontend_tests: "jest"
+  e2e_tests: "playwright"
+  
+  rules:
+    - "Check for adequate test coverage"
+    - "Verify test quality and meaningfulness"
+    - "Check for proper test data setup"
+    - "Ensure tests are maintainable"
+
+# Deployment Configuration
+deployment:
+  frontend: "static"
+  backend: "node"
+  
+  rules:
+    - "Check for proper environment variable usage"
+    - "Verify build optimization"
+    - "Check for proper error logging"
+    - "Ensure proper health checks"
+
+# Code Style Configuration
+style:
+  frontend: "prettier + eslint"
+  backend: "prettier + eslint"
+  
+  rules:
+    - "Check for consistent code formatting"
+    - "Verify proper import organization"
+    - "Check for proper naming conventions"
+    - "Ensure proper file structure"
+
+# Performance Configuration
+performance:
+  rules:
+    - "Check for unnecessary re-renders in React"
+    - "Verify proper database query optimization"
+    - "Check for proper caching strategies"
+    - "Ensure proper image optimization"
+    - "Check for proper bundle size optimization"
+
+
+
+
+
+
+
+
+
+
+
+
