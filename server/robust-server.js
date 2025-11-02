@@ -3,6 +3,8 @@ const cors = require('cors');
 const config = require('./config/server');
 const databaseService = require('./services/database');
 const realtimeService = require('./services/realtime');
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 class RobustServer {
   constructor() {
@@ -230,6 +232,46 @@ class RobustServer {
         
         console.log('Creating session:', { expertId, candidateId, date, time, duration, sessionType });
         
+        // Validate that expert and candidate exist
+        let expert = null;
+        let candidate = null;
+        
+        // Try to find by ID first
+        if (expertId) {
+          expert = await prisma.user.findUnique({ where: { id: expertId } });
+        }
+        if (candidateId) {
+          candidate = await prisma.user.findUnique({ where: { id: candidateId } });
+        }
+        
+        // If not found by ID and looks like email, try email
+        if (!expert && typeof expertId === 'string' && expertId.includes('@')) {
+          expert = await databaseService.getUserByEmail(expertId);
+        }
+        if (!candidate && typeof candidateId === 'string' && candidateId.includes('@')) {
+          candidate = await databaseService.getUserByEmail(candidateId);
+        }
+        
+        if (!expert || expert.userType !== 'expert') {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid expert ID',
+            message: 'Expert not found'
+          });
+        }
+        
+        if (!candidate || candidate.userType !== 'candidate') {
+          return res.status(400).json({
+            success: false,
+            error: 'Invalid candidate ID',
+            message: 'Candidate not found'
+          });
+        }
+        
+        // Use the actual database IDs
+        const actualExpertId = expert.id;
+        const actualCandidateId = candidate.id;
+        
         // Create session in database
         // Parse date and time as local time (not UTC)
         const [year, month, day] = date.split('-').map(Number);
@@ -243,8 +285,8 @@ class RobustServer {
           duration: duration || 60,
           sessionType: sessionType || 'technical',
           status: 'scheduled',
-          candidateId,
-          expertId,
+          candidateId: actualCandidateId,
+          expertId: actualExpertId,
           paymentAmount: 75,
           paymentStatus: 'pending'
         };
