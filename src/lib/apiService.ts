@@ -1,17 +1,21 @@
 // API Service with retry logic and error handling
-import backendDetector from './backendDetector';
 
-let API_BASE_URL = 'http://localhost:5000'; // Default fallback
+// Use relative URL for production (works with Nginx proxy)
+// Fallback to localhost for local development
+const getApiBaseUrl = (): string => {
+  // In production, use relative path (Nginx will proxy /api to backend)
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return ''; // Empty string means relative URLs like '/api'
+  }
+  // In development, try to detect backend port
+  return 'http://localhost:5000';
+};
+
+let API_BASE_URL = getApiBaseUrl();
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
-// Initialize backend detection
-backendDetector.detectBackendPort().then(port => {
-  API_BASE_URL = `http://localhost:${port}`;
-  console.log(`🌐 API Service configured for: ${API_BASE_URL}`);
-}).catch(error => {
-  console.warn('⚠️ Backend detection failed, using default port:', error);
-});
+console.log(`🌐 API Service configured for: ${API_BASE_URL || 'relative URLs (production mode)'}`);
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -40,7 +44,8 @@ class ApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
       
-      const response = await fetch(`${API_BASE_URL}/api/health`, {
+      const url = API_BASE_URL ? `${API_BASE_URL}/api/health` : '/api/health';
+      const response = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
       });
