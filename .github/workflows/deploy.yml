@@ -37,8 +37,24 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd /var/www/interview-prep || (cd /var/www && git clone https://github.com/Shubham96681/Interview_prep.git interview-prep && cd interview-prep)
-          git pull origin main
+          # Ensure /var/www exists and has correct permissions
+          sudo mkdir -p /var/www
+          sudo chown ec2-user:ec2-user /var/www
+          
+          # Create project directory if it doesn't exist
+          if [ ! -d /var/www/interview-prep ]; then
+            cd /var/www
+            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep
+            cd interview-prep
+          else
+            cd /var/www/interview-prep
+            git pull origin main || git fetch origin main && git reset --hard origin/main
+          fi
+          
+          # Ensure correct ownership
+          sudo chown -R ec2-user:ec2-user /var/www/interview-prep
+          
+          # Make deploy script executable and run it
           chmod +x deploy.sh
           ./deploy.sh
       
