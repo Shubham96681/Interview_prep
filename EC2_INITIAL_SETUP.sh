@@ -59,11 +59,11 @@ if [ ! -f .env ]; then
 fi
 cd ..
 
-# Install dependencies
+# Install dependencies (including dev dependencies for building)
 echo "Installing dependencies..."
-npm install --production
+npm install
 cd server
-npm install --production
+npm install
 cd ..
 
 # Build frontend

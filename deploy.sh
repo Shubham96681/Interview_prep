@@ -9,11 +9,11 @@ cd /var/www/interview-prep
 echo "Pulling latest changes from GitHub..."
 git pull origin main || echo "Already up to date"
 
-# Install root dependencies (frontend)
+# Install root dependencies (frontend) - need dev deps for build
 echo "Installing frontend dependencies..."
-npm install --production
+npm install
 
-# Install server dependencies
+# Install server dependencies (production only)
 echo "Installing backend dependencies..."
 cd server
 npm install --production
