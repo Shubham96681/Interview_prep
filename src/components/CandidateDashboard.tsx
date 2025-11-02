@@ -26,8 +26,10 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
 
   // Fetch sessions from backend API
   const fetchSessions = useCallback(async () => {
+    if (!user?.id) return;
+    
     try {
-      const response = await apiService.getSessions(100);
+      const response = await apiService.getSessions(100, user.id, 'candidate');
       
       if (response.success && response.data) {
         setSessions(response.data.sessions || []);
@@ -35,7 +37,7 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
-  }, []);
+  }, [user?.id]);
 
   // Setup real-time updates
   useEffect(() => {

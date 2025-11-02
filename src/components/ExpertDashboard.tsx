@@ -30,8 +30,10 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
 
   // Fetch sessions from backend API
   const fetchSessions = useCallback(async () => {
+    if (!user?.id) return;
+    
     try {
-      const response = await apiService.getSessions(100);
+      const response = await apiService.getSessions(100, user.id, 'expert');
       
       if (response.success && response.data) {
         setSessions(response.data.sessions || []);
@@ -39,7 +41,7 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
-  }, []);
+  }, [user?.id]);
 
   // Setup real-time updates
   useEffect(() => {

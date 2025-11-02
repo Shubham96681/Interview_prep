@@ -179,8 +179,11 @@ class ApiService {
     return this.request('/api/auth/me');
   }
 
-  async getSessions(limit: number = 100) {
-    return this.request(`/api/sessions?limit=${limit}`);
+  async getSessions(limit: number = 100, userId?: string, userType?: string) {
+    const params = new URLSearchParams({ limit: limit.toString() });
+    if (userId) params.append('userId', userId);
+    if (userType) params.append('userType', userType);
+    return this.request(`/api/sessions?${params.toString()}`);
   }
 
   async createSession(sessionData: {
