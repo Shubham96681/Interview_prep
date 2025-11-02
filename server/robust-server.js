@@ -162,11 +162,18 @@ class RobustServer {
         
         console.log('Fetching sessions for:', { userId, userType, limit });
         
-        // Default to your user if no userId provided
-        const targetUserId = userId || 'cmguho5y30000mb9sp9zy6gwe';
+        // If no userId provided, return empty sessions (frontend will handle it)
+        if (!userId) {
+          return res.json({
+            success: true,
+            sessions: [],
+            total: 0
+          });
+        }
+        
         const targetUserType = userType || 'candidate';
         
-        const sessions = await databaseService.getSessionsForUser(targetUserId, targetUserType);
+        const sessions = await databaseService.getSessionsForUser(userId, targetUserType);
         
         console.log('Found sessions in database:', sessions.length);
         
