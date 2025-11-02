@@ -139,31 +139,18 @@ class RobustServer {
           });
         }
 
-        // For demo purposes, return a default user
-        // In production, you'd verify the JWT token
-        const user = await databaseService.getUserByEmail('shubhamsingh6087@gmail.com');
-        
-        if (user) {
-          res.json({
-            success: true,
-            data: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              userType: user.userType
-            }
-          });
-        } else {
-          res.status(401).json({
-            success: false,
-            message: 'Invalid token'
-          });
-        }
+        // For demo purposes, just return success if token exists
+        // In production, you'd verify the JWT token and get the user from it
+        // For now, return 401 so the frontend knows to show login
+        res.status(401).json({
+          success: false,
+          message: 'Please login'
+        });
       } catch (error) {
         console.error('Auth error:', error);
-        res.status(500).json({
+        res.status(401).json({
           success: false,
-          message: 'Internal server error'
+          message: 'Authentication required'
         });
       }
     });
