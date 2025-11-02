@@ -34,7 +34,7 @@ fi
 echo "Running database migrations..."
 cd server
 npx prisma generate
-npx prisma migrate deploy || npx prisma db push --skip-generate
+npx prisma db push --skip-generate
 cd ..
 
 # Restart backend server
