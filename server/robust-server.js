@@ -252,6 +252,11 @@ class RobustServer {
           candidate = await databaseService.getUserByEmail(candidateId);
         }
         
+        // Handle mock expert IDs (map to real database experts)
+        if (!expert && expertId === 'expert-001') {
+          expert = await databaseService.getUserByEmail('jane@example.com');
+        }
+        
         if (!expert || expert.userType !== 'expert') {
           return res.status(400).json({
             success: false,
