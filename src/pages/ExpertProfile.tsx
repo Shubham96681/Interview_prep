@@ -191,6 +191,11 @@ export default function ExpertProfile() {
       return;
     }
 
+    if (!currentUser?.id) {
+      toast.error('User information not available');
+      return;
+    }
+
     try {
       // Create the session via API
       const sessionData = {
