@@ -194,8 +194,8 @@ export default function ExpertProfile() {
     try {
       // Create the session via API
       const sessionData = {
-        expertId: 'cmgnfskqx0001mbh0inzrgmsy', // Jane Smith's ID from database
-        candidateId: 'cmguho5y30000mb9sp9zy6gwe', // Your user ID from database
+        expertId: expert.id, // Use the expert's ID from the expert object
+        candidateId: currentUser.id, // Use the logged-in user's ID
         date,
         time,
         duration: 60, // Default 1 hour
