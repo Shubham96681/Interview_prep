@@ -37,39 +37,57 @@ jobs:
         host: 54.159.42.7
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        timeout: 300s
+        command_timeout: 300s
         script_stop: true
         script: |
-          set -e  # Exit on any error
+          set -e
           
           echo "🚀 Starting automated deployment..."
+          echo "Current user: $(whoami)"
+          echo "Current directory: $(pwd)"
+          echo "Home directory: $HOME"
+          
+          # Test sudo access
+          echo "Testing sudo access..."
+          sudo -n true || echo "Warning: sudo may require password"
           
           # Ensure /var/www exists and has correct permissions
-          sudo mkdir -p /var/www
-          sudo chown ec2-user:ec2-user /var/www
+          echo "Setting up /var/www directory..."
+          sudo mkdir -p /var/www || { echo "Failed to create /var/www"; exit 1; }
+          sudo chown ec2-user:ec2-user /var/www || { echo "Failed to chown /var/www"; exit 1; }
+          echo "✅ /var/www directory ready"
           
           # Navigate to project directory or clone if it doesn't exist
           if [ ! -d /var/www/interview-prep ]; then
             echo "📦 Cloning repository for the first time..."
-            cd /var/www
-            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep
-            cd interview-prep
+            cd /var/www || { echo "Failed to cd to /var/www"; exit 1; }
+            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep || { echo "Failed to clone repository"; exit 1; }
+            cd interview-prep || { echo "Failed to cd to interview-prep"; exit 1; }
+            echo "✅ Repository cloned"
           else
             echo "🔄 Pulling latest changes..."
-            cd /var/www/interview-prep
-            git fetch origin main
-            git reset --hard origin/main
-            git clean -fd
+            cd /var/www/interview-prep || { echo "Failed to cd to /var/www/interview-prep"; exit 1; }
+            git fetch origin main || { echo "Failed to fetch from origin"; exit 1; }
+            git reset --hard origin/main || { echo "Failed to reset to origin/main"; exit 1; }
+            git clean -fd || { echo "Failed to clean untracked files"; exit 1; }
+            echo "✅ Repository updated"
           fi
           
           # Ensure correct ownership
-          sudo chown -R ec2-user:ec2-user /var/www/interview-prep
+          echo "Setting ownership..."
+          sudo chown -R ec2-user:ec2-user /var/www/interview-prep || { echo "Failed to chown project directory"; exit 1; }
+          echo "✅ Ownership set"
           
           # Make deploy script executable
-          chmod +x deploy.sh
+          echo "Making deploy.sh executable..."
+          chmod +x deploy.sh || { echo "Failed to chmod deploy.sh"; exit 1; }
+          echo "✅ deploy.sh is executable"
           
           # Run deployment script
           echo "📦 Running deployment script..."
-          ./deploy.sh
+          ./deploy.sh || { echo "Deployment script failed"; exit 1; }
           
           echo "✅ Deployment script completed successfully"
       
