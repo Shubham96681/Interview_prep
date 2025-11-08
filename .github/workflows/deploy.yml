@@ -59,21 +59,35 @@ jobs:
           sudo chown ec2-user:ec2-user /var/www || { echo "Failed to chown /var/www"; exit 1; }
           echo "✅ /var/www directory ready"
           
-          # Navigate to project directory or clone if it doesn't exist
-          if [ ! -d /var/www/interview-prep ]; then
-            echo "📦 Cloning repository for the first time..."
-            cd /var/www || { echo "Failed to cd to /var/www"; exit 1; }
-            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep || { echo "Failed to clone repository"; exit 1; }
-            cd interview-prep || { echo "Failed to cd to interview-prep"; exit 1; }
-            echo "✅ Repository cloned"
-          else
+          # Check if git is available
+          echo "Checking git availability..."
+          git --version || { echo "Git is not installed!"; exit 1; }
+          
+          # Check if directory exists
+          echo "Checking if project directory exists..."
+          if [ -d /var/www/interview-prep ]; then
+            echo "📁 Project directory exists"
             echo "🔄 Pulling latest changes..."
             cd /var/www/interview-prep || { echo "Failed to cd to /var/www/interview-prep"; exit 1; }
+            echo "Current directory after cd: $(pwd)"
             git fetch origin main || { echo "Failed to fetch from origin"; exit 1; }
             git reset --hard origin/main || { echo "Failed to reset to origin/main"; exit 1; }
             git clean -fd || { echo "Failed to clean untracked files"; exit 1; }
             echo "✅ Repository updated"
+          else
+            echo "📦 Project directory does not exist, cloning repository..."
+            cd /var/www || { echo "Failed to cd to /var/www"; exit 1; }
+            echo "Current directory: $(pwd)"
+            echo "Listing /var/www contents:"
+            ls -la /var/www || true
+            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep || { echo "Failed to clone repository"; exit 1; }
+            cd interview-prep || { echo "Failed to cd to interview-prep"; exit 1; }
+            echo "✅ Repository cloned"
           fi
+          
+          echo "Final directory: $(pwd)"
+          echo "Verifying we're in the right place..."
+          ls -la || { echo "Failed to list directory contents"; exit 1; }
           
           # Ensure correct ownership
           echo "Setting ownership..."
