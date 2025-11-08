@@ -8,13 +8,14 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
       
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '18'
         cache: 'npm'
@@ -31,41 +32,96 @@ jobs:
       run: npm run build
       
     - name: Deploy to EC2
-      uses: appleboy/ssh-action@v0.1.6
+      uses: appleboy/ssh-action@v1.0.3
       with:
         host: 54.159.42.7
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
+        script_stop: true
         script: |
+          set -e  # Exit on any error
+          
+          echo "🚀 Starting automated deployment..."
+          
           # Ensure /var/www exists and has correct permissions
           sudo mkdir -p /var/www
           sudo chown ec2-user:ec2-user /var/www
           
-          # Create project directory if it doesn't exist
+          # Navigate to project directory or clone if it doesn't exist
           if [ ! -d /var/www/interview-prep ]; then
+            echo "📦 Cloning repository for the first time..."
             cd /var/www
             git clone https://github.com/Shubham96681/Interview_prep.git interview-prep
             cd interview-prep
           else
+            echo "🔄 Pulling latest changes..."
             cd /var/www/interview-prep
-            git pull origin main || git fetch origin main && git reset --hard origin/main
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
           fi
           
           # Ensure correct ownership
           sudo chown -R ec2-user:ec2-user /var/www/interview-prep
           
-          # Make deploy script executable and run it
+          # Make deploy script executable
           chmod +x deploy.sh
+          
+          # Run deployment script
+          echo "📦 Running deployment script..."
           ./deploy.sh
+          
+          echo "✅ Deployment script completed successfully"
       
     - name: Verify deployment
-      uses: appleboy/ssh-action@v0.1.6
+      uses: appleboy/ssh-action@v1.0.3
       with:
         host: 54.159.42.7
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          sleep 10
-          pm2 status || echo "PM2 not running yet"
-          curl -f http://localhost:5000/api/health || echo "Backend health check failed"
+          set -e
+          
+          echo "🔍 Verifying deployment..."
+          
+          # Wait for services to start
+          sleep 5
+          
+          # Check PM2 status
+          echo "📊 PM2 Status:"
+          pm2 status
+          
+          # Check backend health
+          echo "🏥 Checking backend health..."
+          for i in {1..5}; do
+            if curl -f http://localhost:5000/api/health > /dev/null 2>&1; then
+              echo "✅ Backend is healthy!"
+              curl http://localhost:5000/api/health
+              break
+            else
+              echo "⏳ Waiting for backend... (attempt $i/5)"
+              sleep 2
+            fi
+          done
+          
+          # Check if frontend files exist
+          echo "📁 Checking frontend build..."
+          if [ -d /var/www/interview-prep/dist ] && [ -f /var/www/interview-prep/dist/index.html ]; then
+            echo "✅ Frontend build exists"
+            ls -lh /var/www/interview-prep/dist/
+          else
+            echo "❌ Frontend build not found!"
+            exit 1
+          fi
+          
+          # Check nginx is serving the site
+          echo "🌐 Checking nginx..."
+          if curl -f http://localhost > /dev/null 2>&1; then
+            echo "✅ Nginx is serving the site!"
+          else
+            echo "⚠️  Nginx might need a reload"
+            sudo systemctl reload nginx || true
+          fi
+          
+          echo "✅ Deployment verification complete!"
 
