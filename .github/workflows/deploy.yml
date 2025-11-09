@@ -112,8 +112,22 @@ jobs:
           
           # Run deployment script with timeout
           echo "📦 Running deployment script..."
-          timeout 600 ./deploy.sh || { echo "Deployment script failed or timed out"; exit 1; }
-          
+          echo "   Starting at: $(date)"
+          if command -v timeout >/dev/null 2>&1; then
+            timeout 600 ./deploy.sh
+            DEPLOY_EXIT=$?
+            if [ $DEPLOY_EXIT -eq 124 ]; then
+              echo "❌ Deployment script timed out after 10 minutes"
+              exit 1
+            elif [ $DEPLOY_EXIT -ne 0 ]; then
+              echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
+              exit 1
+            fi
+          else
+            echo "⚠️  timeout command not available, running without timeout..."
+            ./deploy.sh || { echo "Deployment script failed"; exit 1; }
+          fi
+          echo "   Completed at: $(date)"
           echo "✅ Deployment script completed successfully"
       
     - name: Verify deployment

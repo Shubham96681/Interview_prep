@@ -1,9 +1,11 @@
 #!/bin/bash
 
-set -e  # Exit on any error
+# Don't use set -e, handle errors manually for better control
+set +e
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
+echo "PID: $$"
 
 # Navigate to project directory
 cd /var/www/interview-prep
@@ -15,7 +17,25 @@ git checkout main || true
 # Only install if node_modules doesn't exist or package.json changed
 if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
     echo "📦 Installing frontend dependencies..."
-    timeout 300 npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
+    echo "   Starting at: $(date)"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 300 npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
+        INSTALL_EXIT=$?
+        if [ $INSTALL_EXIT -eq 124 ]; then
+            echo "❌ npm install timed out after 5 minutes"
+            exit 1
+        elif [ $INSTALL_EXIT -ne 0 ]; then
+            echo "❌ npm install failed with exit code $INSTALL_EXIT"
+            exit 1
+        fi
+    else
+        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
+        if [ $? -ne 0 ]; then
+            echo "❌ npm install failed"
+            exit 1
+        fi
+    fi
+    echo "   Completed at: $(date)"
 else
     echo "✅ Frontend dependencies already installed, skipping..."
 fi
@@ -24,7 +44,25 @@ fi
 echo "📦 Installing backend dependencies..."
 cd server
 if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
-    timeout 300 npm install --production --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
+    echo "   Starting at: $(date)"
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 300 npm install --production --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
+        INSTALL_EXIT=$?
+        if [ $INSTALL_EXIT -eq 124 ]; then
+            echo "❌ npm install timed out after 5 minutes"
+            exit 1
+        elif [ $INSTALL_EXIT -ne 0 ]; then
+            echo "❌ npm install failed with exit code $INSTALL_EXIT"
+            exit 1
+        fi
+    else
+        npm install --production --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
+        if [ $? -ne 0 ]; then
+            echo "❌ npm install failed"
+            exit 1
+        fi
+    fi
+    echo "   Completed at: $(date)"
 else
     echo "✅ Backend dependencies already installed, skipping..."
 fi
@@ -32,7 +70,25 @@ cd ..
 
 # Build frontend
 echo "🔨 Building frontend application..."
-timeout 300 npm run build || { echo "❌ Frontend build failed or timed out"; exit 1; }
+echo "   Starting at: $(date)"
+if command -v timeout >/dev/null 2>&1; then
+    timeout 300 npm run build
+    BUILD_EXIT=$?
+    if [ $BUILD_EXIT -eq 124 ]; then
+        echo "❌ Frontend build timed out after 5 minutes"
+        exit 1
+    elif [ $BUILD_EXIT -ne 0 ]; then
+        echo "❌ Frontend build failed with exit code $BUILD_EXIT"
+        exit 1
+    fi
+else
+    npm run build
+    if [ $? -ne 0 ]; then
+        echo "❌ Frontend build failed"
+        exit 1
+    fi
+fi
+echo "   Completed at: $(date)"
 
 # Verify build succeeded
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
@@ -56,10 +112,34 @@ fi
 # Run database migrations
 echo "🗄️  Running database migrations..."
 cd server
-echo "   Generating Prisma client..."
-timeout 60 npx prisma generate --silent || { echo "❌ Prisma generate failed"; exit 1; }
-echo "   Pushing database schema..."
-timeout 30 npx prisma db push --skip-generate --accept-data-loss --skip-seed || { echo "❌ Database push failed"; exit 1; }
+echo "   Generating Prisma client at: $(date)"
+if command -v timeout >/dev/null 2>&1; then
+    timeout 60 npx prisma generate --silent
+    if [ $? -ne 0 ]; then
+        echo "❌ Prisma generate failed or timed out"
+        exit 1
+    fi
+else
+    npx prisma generate --silent
+    if [ $? -ne 0 ]; then
+        echo "❌ Prisma generate failed"
+        exit 1
+    fi
+fi
+echo "   Pushing database schema at: $(date)"
+if command -v timeout >/dev/null 2>&1; then
+    timeout 30 npx prisma db push --skip-generate --accept-data-loss --skip-seed
+    if [ $? -ne 0 ]; then
+        echo "❌ Database push failed or timed out"
+        exit 1
+    fi
+else
+    npx prisma db push --skip-generate --accept-data-loss --skip-seed
+    if [ $? -ne 0 ]; then
+        echo "❌ Database push failed"
+        exit 1
+    fi
+fi
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
