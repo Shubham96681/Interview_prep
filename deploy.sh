@@ -79,6 +79,16 @@ fi
 # Save PM2 configuration
 pm2 save
 
+# Update Nginx config for WebSocket support (if needed)
+echo "🌐 Checking Nginx configuration..."
+if [ -f "/etc/nginx/conf.d/interview-prep.conf" ]; then
+    # Check if socket.io location exists
+    if ! grep -q "location /socket.io/" /etc/nginx/conf.d/interview-prep.conf; then
+        echo "⚠️  Nginx config missing Socket.io support. Please update manually:"
+        echo "   See nginx.conf in the repository for the correct configuration"
+    fi
+fi
+
 # Reload nginx to serve new frontend build
 echo "🌐 Reloading nginx..."
 sudo systemctl reload nginx || sudo systemctl restart nginx
