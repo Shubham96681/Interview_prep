@@ -389,6 +389,10 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
     try {
       if (!isScreenSharing) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+          throw new Error('Screen sharing is not available. HTTPS is required in production.');
+        }
+        
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
           audio: true
