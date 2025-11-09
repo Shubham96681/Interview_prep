@@ -31,6 +31,13 @@ jobs:
     - name: Build frontend
       run: npm run build
       
+    - name: Check EC2 Instance Status
+      run: |
+        echo "🔍 Checking EC2 instance connectivity..."
+        echo "Instance IP: 54.159.42.7"
+        echo "Testing connectivity..."
+        timeout 5 bash -c 'cat < /dev/null > /dev/tcp/54.159.42.7/22' && echo "✅ Port 22 is open" || echo "⚠️  Port 22 might be closed or instance is down"
+    
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -41,6 +48,9 @@ jobs:
         timeout: 300s
         command_timeout: 300s
         script_stop: true
+        debug: true
+        retry: 3
+        retry_interval: 10s
         script: |
           set -e
           
@@ -48,10 +58,19 @@ jobs:
           echo "Current user: $(whoami)"
           echo "Current directory: $(pwd)"
           echo "Home directory: $HOME"
+          echo "Hostname: $(hostname)"
+          echo "Uptime: $(uptime)"
           
           # Check disk space first
           echo "💾 Current disk space:"
           df -h / | tail -1
+          
+          # Check if instance is responsive
+          echo "🔍 System status check..."
+          echo "Memory usage:"
+          free -h || true
+          echo "Disk usage details:"
+          df -h || true
           
           # Test sudo access
           echo "Testing sudo access..."
@@ -115,6 +134,11 @@ jobs:
         host: 54.159.42.7
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        timeout: 300s
+        debug: true
+        retry: 2
+        retry_interval: 5s
         script: |
           set -e
           
