@@ -29,7 +29,8 @@ export default function Meeting() {
         console.log('Session response:', response);
         if (response.success && response.data) {
           const sessionData = response.data;
-          console.log('Session data received:', {
+          console.log('Session data received (full object):', sessionData);
+          console.log('Session data received (extracted):', {
             id: sessionData.id,
             candidateId: sessionData.candidateId,
             expertId: sessionData.expertId,

@@ -30,6 +30,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const localStreamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isRecordingRef = useRef(false);
+  const isInitializedRef = useRef(false);
 
   // STUN/TURN servers configuration
   const rtcConfiguration: RTCConfiguration = {
@@ -140,6 +141,83 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   }, [meetingId]);
 
   useEffect(() => {
+    // Prevent re-initialization if already initialized for this meeting
+    if (isInitializedRef.current) {
+      return;
+    }
+    
+    isInitializedRef.current = true;
+    
+    const initializeSocket = async () => {
+      try {
+        const apiBaseUrl = window.location.origin;
+        const socketInstance = io(apiBaseUrl, {
+          transports: ['websocket', 'polling']
+        });
+
+        socketInstance.on('connect', async () => {
+          console.log('✅ Connected to signaling server');
+          setIsConnected(true);
+          
+          // Start local stream immediately
+          await startLocalStream();
+          
+          socketInstance.emit('join-meeting', {
+            meetingId,
+            userId: user?.id || 'anonymous'
+          });
+        });
+
+        socketInstance.on('joined-meeting', async ({ otherUsers }) => {
+          console.log('✅ Joined meeting, other users:', otherUsers);
+          
+          // Ensure local stream is started
+          if (!localStreamRef.current) {
+            await startLocalStream();
+          }
+          
+          if (otherUsers.length > 0) {
+            await createPeerConnection();
+          }
+        });
+
+        socketInstance.on('user-joined', async () => {
+          console.log('👤 Another user joined');
+          await createPeerConnection();
+        });
+
+        socketInstance.on('offer', async ({ offer, senderSocketId }) => {
+          console.log('📥 Received offer');
+          await handleOffer(offer, senderSocketId);
+        });
+
+        socketInstance.on('answer', async ({ answer }) => {
+          console.log('📥 Received answer');
+          await handleAnswer(answer);
+        });
+
+        socketInstance.on('ice-candidate', async ({ candidate }) => {
+          console.log('📥 Received ICE candidate');
+          await handleIceCandidate(candidate);
+        });
+
+        socketInstance.on('user-left', () => {
+          console.log('👤 User left');
+          setRemoteStream(null);
+        });
+
+        socketInstance.on('disconnect', () => {
+          console.log('❌ Disconnected from signaling server');
+          setIsConnected(false);
+        });
+
+        setSocket(socketInstance);
+        socketRef.current = socketInstance;
+      } catch (error) {
+        console.error('Error initializing socket:', error);
+      }
+    };
+    
     initializeSocket();
     
     // Handle page unload (browser close, navigation away, etc.)
@@ -161,11 +239,14 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     
     return () => {
       console.log('🧹 WebRTCVideoCall component unmounting, cleaning up...');
+      isInitializedRef.current = false;
+      // Use cleanup function directly (it's stable via useCallback)
       cleanup();
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [meetingId, cleanup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meetingId]); // Only depend on meetingId - cleanup is stable via useCallback
 
   useEffect(() => {
     const videoElement = localVideoRef.current;
@@ -234,75 +315,6 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     };
   }, [remoteStream]);
 
-  const initializeSocket = async () => {
-    try {
-      const apiBaseUrl = window.location.origin;
-      const socketInstance = io(apiBaseUrl, {
-        transports: ['websocket', 'polling']
-      });
-
-      socketInstance.on('connect', async () => {
-        console.log('✅ Connected to signaling server');
-        setIsConnected(true);
-        
-        // Start local stream immediately
-        await startLocalStream();
-        
-        socketInstance.emit('join-meeting', {
-          meetingId,
-          userId: user?.id || 'anonymous'
-        });
-      });
-
-      socketInstance.on('joined-meeting', async ({ otherUsers }) => {
-        console.log('✅ Joined meeting, other users:', otherUsers);
-        
-        // Ensure local stream is started
-        if (!localStream) {
-          await startLocalStream();
-        }
-        
-        if (otherUsers.length > 0) {
-          await createPeerConnection();
-        }
-      });
-
-      socketInstance.on('user-joined', async () => {
-        console.log('👤 Another user joined');
-        await createPeerConnection();
-      });
-
-      socketInstance.on('offer', async ({ offer, senderSocketId }) => {
-        console.log('📥 Received offer');
-        await handleOffer(offer, senderSocketId);
-      });
-
-      socketInstance.on('answer', async ({ answer }) => {
-        console.log('📥 Received answer');
-        await handleAnswer(answer);
-      });
-
-      socketInstance.on('ice-candidate', async ({ candidate }) => {
-        console.log('📥 Received ICE candidate');
-        await handleIceCandidate(candidate);
-      });
-
-      socketInstance.on('user-left', () => {
-        console.log('👤 User left');
-        setRemoteStream(null);
-      });
-
-      socketInstance.on('disconnect', () => {
-        console.log('❌ Disconnected from signaling server');
-        setIsConnected(false);
-      });
-
-      setSocket(socketInstance);
-      socketRef.current = socketInstance;
-    } catch (error) {
-      console.error('Error initializing socket:', error);
-    }
-  };
 
   const startLocalStream = async () => {
     try {
