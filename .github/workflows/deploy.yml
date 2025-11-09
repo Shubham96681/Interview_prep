@@ -75,6 +75,7 @@ jobs:
         command_timeout: 300s
         script_stop: true
         debug: true
+        fingerprint: false
         script: |
           set -e
           
