@@ -1141,6 +1141,65 @@ class RobustServer {
       }
     });
 
+    // Create new user (admin only)
+    this.app.post('/api/admin/users', checkAdmin, async (req, res) => {
+      try {
+        const { name, email, userType, password, bio, experience, skills, hourlyRate, isVerified, isActive } = req.body;
+
+        if (!name || !email || !userType) {
+          return res.status(400).json({
+            success: false,
+            message: 'Name, email, and userType are required'
+          });
+        }
+
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+          where: { email }
+        });
+
+        if (existingUser) {
+          return res.status(400).json({
+            success: false,
+            message: 'User with this email already exists'
+          });
+        }
+
+        // Create new user
+        const newUser = await prisma.user.create({
+          data: {
+            name,
+            email,
+            userType,
+            password: password || 'hashed_password_' + Date.now(), // Default password if not provided
+            bio: bio || null,
+            experience: experience || null,
+            skills: skills ? (typeof skills === 'string' ? skills : JSON.stringify(skills)) : null,
+            hourlyRate: hourlyRate || null,
+            isVerified: isVerified !== undefined ? isVerified : (userType === 'expert' ? false : true),
+            isActive: isActive !== undefined ? isActive : true,
+            rating: 0,
+            totalSessions: 0
+          }
+        });
+
+        const { password: _, ...userWithoutPassword } = newUser;
+
+        res.json({
+          success: true,
+          data: userWithoutPassword,
+          message: 'User created successfully'
+        });
+      } catch (error) {
+        console.error('Error creating user:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to create user',
+          message: error.message
+        });
+      }
+    });
+
     // Approve/Reject expert (admin only)
     this.app.post('/api/admin/users/:id/approve-expert', checkAdmin, async (req, res) => {
       try {

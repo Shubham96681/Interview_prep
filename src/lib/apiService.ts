@@ -299,6 +299,14 @@ class ApiService {
     return this.request(`/api/admin/users/${userId}?email=${encodeURIComponent(user.email || '')}`);
   }
 
+  async createUser(userData: any) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/users?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
   async approveExpert(userId: string, approved: boolean, reason?: string) {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return this.request(`/api/admin/users/${userId}/approve-expert?email=${encodeURIComponent(user.email || '')}`, {
