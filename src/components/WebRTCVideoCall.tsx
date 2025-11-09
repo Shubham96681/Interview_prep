@@ -421,11 +421,16 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
     if (remoteStream) {
       remoteStream.getTracks().forEach(track => track.stop());
     }
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
     }
     if (socket) {
       socket.disconnect();
