@@ -12,6 +12,7 @@ import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
 import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
+import AddUserForm from './AddUserForm';
 
 interface Session {
   id: string;
@@ -108,6 +109,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editSessionOpen, setEditSessionOpen] = useState(false);
   const [editUserOpen, setEditUserOpen] = useState(false);
+  const [addUserOpen, setAddUserOpen] = useState(false);
   const [addParticipantsOpen, setAddParticipantsOpen] = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -998,6 +1000,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   <CardDescription>Manage all users in the system</CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  <Button onClick={() => setAddUserOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add New User
+                  </Button>
                   <Input
                     placeholder="Search users..."
                     value={userFilters.search}
@@ -1748,6 +1754,33 @@ export default function AdminDashboard({}: AdminDashboardProps) {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={addUserOpen} onOpenChange={setAddUserOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogDescription>Create a new user account</DialogDescription>
+          </DialogHeader>
+          <AddUserForm
+            onSave={async (userData: any) => {
+              try {
+                const response = await apiService.createUser(userData);
+                if (response.success) {
+                  toast.success('User created successfully');
+                  setAddUserOpen(false);
+                  loadData();
+                } else {
+                  toast.error(response.message || 'Failed to create user');
+                }
+              } catch (error: any) {
+                toast.error(error.message || 'Failed to create user');
+              }
+            }}
+            onCancel={() => setAddUserOpen(false)}
+          />
         </DialogContent>
       </Dialog>
 
