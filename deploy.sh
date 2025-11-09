@@ -15,7 +15,7 @@ git checkout main || true
 # Only install if node_modules doesn't exist or package.json changed
 if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
     echo "📦 Installing frontend dependencies..."
-    npm install --legacy-peer-deps --prefer-offline --no-audit
+    timeout 300 npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
 else
     echo "✅ Frontend dependencies already installed, skipping..."
 fi
@@ -24,7 +24,7 @@ fi
 echo "📦 Installing backend dependencies..."
 cd server
 if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
-    npm install --production --legacy-peer-deps --prefer-offline --no-audit
+    timeout 300 npm install --production --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
 else
     echo "✅ Backend dependencies already installed, skipping..."
 fi
@@ -63,7 +63,7 @@ npx prisma db push --skip-generate --accept-data-loss --skip-seed
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
-timeout 30 node -e "
+timeout 20 node -e "
 const db = require('./services/database');
 db.initialize()
   .then(() => {
@@ -74,7 +74,7 @@ db.initialize()
     console.error('❌ Database seeding failed:', err);
     process.exit(1);
   });
-" || echo "⚠️  Database seeding timed out or failed, continuing..."
+" 2>&1 || echo "⚠️  Database seeding timed out or failed, continuing..."
 cd ..
 
 # Restart backend server
