@@ -177,11 +177,25 @@ export default function Meeting() {
       <div className="fixed inset-0 z-50">
         <WebRTCVideoCall
           meetingId={meetingId || ''}
-          onEndCall={() => setIsInCall(false)}
+          onEndCall={() => {
+            console.log('📞 Call ended, returning to meeting page');
+            setIsInCall(false);
+          }}
         />
       </div>
     );
   }
+
+  // Cleanup effect: ensure video call is ended when component unmounts or user navigates away
+  useEffect(() => {
+    return () => {
+      // This cleanup runs when the component unmounts or when dependencies change
+      if (isInCall) {
+        console.log('🧹 Meeting component unmounting, ensuring call is ended...');
+        setIsInCall(false);
+      }
+    };
+  }, [isInCall]);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Video, VideoOff, Mic, MicOff, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
@@ -28,6 +28,8 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const isRecordingRef = useRef(false);
 
   // STUN/TURN servers configuration
   const rtcConfiguration: RTCConfiguration = {
@@ -37,12 +39,133 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     ]
   };
 
+  // Memoize cleanup function to avoid stale closures
+  const cleanup = useCallback(() => {
+    console.log('🧹 Cleaning up video call resources...');
+    
+    // Stop all local stream tracks (camera and microphone) from ref
+    if (localStreamRef.current) {
+      console.log('🛑 Stopping local stream tracks from ref...');
+      localStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+        console.log(`✅ Stopped ${track.kind} track:`, track.label);
+      });
+      localStreamRef.current = null;
+    }
+    
+    // Also stop tracks from state (in case ref wasn't updated)
+    // We'll access this via a closure-safe approach
+    const currentLocalStream = localStreamRef.current || localVideoRef.current?.srcObject as MediaStream | null;
+    if (currentLocalStream) {
+      console.log('🛑 Stopping local stream tracks from video element...');
+      currentLocalStream.getTracks().forEach(track => {
+        if (track.readyState !== 'ended') {
+          track.stop();
+          console.log(`✅ Stopped ${track.kind} track from video element:`, track.label);
+        }
+      });
+    }
+    
+    // Clear video elements to ensure camera indicator turns off
+    if (localVideoRef.current) {
+      console.log('🛑 Clearing local video element...');
+      const stream = localVideoRef.current.srcObject as MediaStream | null;
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          if (track.readyState !== 'ended') {
+            track.stop();
+          }
+        });
+      }
+      localVideoRef.current.srcObject = null;
+      localVideoRef.current.pause();
+    }
+    
+    if (remoteVideoRef.current) {
+      console.log('🛑 Clearing remote video element...');
+      const stream = remoteVideoRef.current.srcObject as MediaStream | null;
+      if (stream) {
+        stream.getTracks().forEach(track => {
+          if (track.readyState !== 'ended') {
+            track.stop();
+          }
+        });
+      }
+      remoteVideoRef.current.srcObject = null;
+      remoteVideoRef.current.pause();
+    }
+    
+    // Close peer connection
+    if (peerConnectionRef.current) {
+      console.log('🛑 Closing peer connection...');
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    
+    // Stop media recorder if recording
+    if (mediaRecorderRef.current && isRecordingRef.current) {
+      console.log('🛑 Stopping media recorder...');
+      try {
+        if (mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (e) {
+        console.error('Error stopping recorder:', e);
+      }
+      mediaRecorderRef.current = null;
+      isRecordingRef.current = false;
+    }
+    
+    // Disconnect socket
+    if (socketRef.current) {
+      console.log('🛑 Disconnecting socket...');
+      try {
+        socketRef.current.emit('leave-meeting', { meetingId });
+        socketRef.current.disconnect();
+      } catch (e) {
+        console.error('Error disconnecting socket:', e);
+      }
+      socketRef.current = null;
+    }
+    
+    // Reset states
+    setLocalStream(null);
+    setRemoteStream(null);
+    setIsConnected(false);
+    setIsVideoEnabled(false);
+    setIsAudioEnabled(false);
+    setIsScreenSharing(false);
+    
+    console.log('✅ Cleanup complete - all camera and microphone access should be released');
+  }, [meetingId]);
+
   useEffect(() => {
     initializeSocket();
-    return () => {
+    
+    // Handle page unload (browser close, navigation away, etc.)
+    const handleBeforeUnload = () => {
+      console.log('⚠️ Page unloading, cleaning up video call...');
       cleanup();
     };
-  }, [meetingId]);
+    
+    // Handle visibility change (tab switch, minimize, etc.)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        console.log('⚠️ Page hidden, but keeping call active');
+        // Don't cleanup on visibility change, just log it
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      console.log('🧹 WebRTCVideoCall component unmounting, cleaning up...');
+      cleanup();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [meetingId, cleanup]);
 
   useEffect(() => {
     const videoElement = localVideoRef.current;
@@ -175,6 +298,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       });
 
       setSocket(socketInstance);
+      socketRef.current = socketInstance;
     } catch (error) {
       console.error('Error initializing socket:', error);
     }
@@ -457,19 +581,22 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         const url = URL.createObjectURL(blob);
         setRecordingUrl(url);
         setIsRecording(false);
+        isRecordingRef.current = false;
       };
 
       recorder.start();
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
+      isRecordingRef.current = true;
     } catch (error) {
       console.error('Error starting recording:', error);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && isRecordingRef.current) {
       mediaRecorderRef.current.stop();
+      isRecordingRef.current = false;
     }
   };
 
@@ -477,29 +604,6 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     cleanup();
     if (onEndCall) {
       onEndCall();
-    }
-  };
-
-  const cleanup = () => {
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
-    }
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-      localStreamRef.current = null;
-    }
-    if (remoteStream) {
-      remoteStream.getTracks().forEach(track => track.stop());
-    }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-      peerConnectionRef.current = null;
-    }
-    if (socket) {
-      socket.disconnect();
-    }
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
     }
   };
 
