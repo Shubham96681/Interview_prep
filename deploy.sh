@@ -79,79 +79,9 @@ fi
 # Save PM2 configuration
 pm2 save
 
-# Update Nginx configuration for WebSocket support
-echo "🌐 Updating Nginx configuration for WebSocket support..."
-sudo tee /etc/nginx/conf.d/interview-prep.conf > /dev/null << 'NGINX_EOF'
-server {
-    listen 80;
-    server_name 54.159.42.7;
-
-    # Increase body size for file uploads
-    client_max_body_size 10M;
-
-    # Frontend static files
-    location / {
-        root /var/www/interview-prep/dist;
-        try_files $uri $uri/ /index.html;
-        index index.html;
-    }
-
-    # Socket.io WebSocket connections
-    location /socket.io/ {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 86400;
-    }
-
-    # Backend API proxy
-    location /api {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        proxy_read_timeout 86400;
-    }
-
-    # Real-time updates (Server-Sent Events)
-    location /api/realtime {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Connection '';
-        proxy_buffering off;
-        proxy_cache off;
-        chunked_transfer_encoding off;
-        proxy_read_timeout 86400;
-    }
-}
-NGINX_EOF
-
-# Add the map block to nginx.conf if not present
-if ! grep -q "map \$http_upgrade \$connection_upgrade" /etc/nginx/nginx.conf; then
-    echo "Adding WebSocket map to nginx.conf..."
-    sudo sed -i '/^http {/a\    map $http_upgrade $connection_upgrade {\n        default upgrade;\n        '\'''\'' close;\n    }' /etc/nginx/nginx.conf
-fi
-
-# Test and reload nginx
-echo "🌐 Testing Nginx configuration..."
-if sudo nginx -t; then
-    sudo systemctl reload nginx || sudo systemctl restart nginx
-    echo "✅ Nginx configuration updated and reloaded"
-else
-    echo "❌ Nginx configuration test failed!"
-    exit 1
-fi
+# Reload nginx to serve new frontend build
+echo "🌐 Reloading nginx..."
+sudo systemctl reload nginx || sudo systemctl restart nginx
 
 # Wait a moment for services to stabilize
 sleep 3
