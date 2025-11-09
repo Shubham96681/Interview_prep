@@ -13,17 +13,8 @@ import Meeting from './pages/Meeting';
 import NotFound from './pages/NotFound';
 import ConnectionStatus from './components/ConnectionStatus';
 import React from 'react';
-import ReactDOM from 'react-dom/client';
 
 const queryClient = new QueryClient();
-
-// Debug: Check for multiple React instances
-if (typeof window !== 'undefined') {
-  console.log('React version:', React.version);
-  if (window.React && window.React !== React) {
-    console.warn('⚠️ Multiple React instances detected! This can cause React error #310');
-  }
-}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
