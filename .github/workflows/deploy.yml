@@ -134,22 +134,47 @@ jobs:
           echo "[8/8] Running deployment script..."
           echo "   Starting at: $(date)"
           echo "   This may take several minutes..."
+          echo "   Working directory: $(pwd)"
+          echo "   Deploy script exists: $([ -f ./deploy.sh ] && echo 'yes' || echo 'no')"
+          echo "   Deploy script executable: $([ -x ./deploy.sh ] && echo 'yes' || echo 'no')"
           
-          # Use timeout wrapper function
+          # Ensure script is executable
+          chmod +x ./deploy.sh
+          
+          # Run with explicit bash and unbuffered output
           if command -v timeout >/dev/null 2>&1; then
-            timeout 600 bash -c './deploy.sh' || {
-              DEPLOY_EXIT=$?
-              if [ $DEPLOY_EXIT -eq 124 ]; then
-                echo "❌ Deployment script timed out after 10 minutes"
-                exit 1
-              else
-                echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
-                exit 1
-              fi
-            }
+            echo "   Using timeout wrapper (10 minutes max)..."
+            # Use stdbuf to ensure unbuffered output
+            if command -v stdbuf >/dev/null 2>&1; then
+              timeout 600 stdbuf -oL -eL bash ./deploy.sh 2>&1 || {
+                DEPLOY_EXIT=$?
+                if [ $DEPLOY_EXIT -eq 124 ]; then
+                  echo "❌ Deployment script timed out after 10 minutes"
+                  exit 1
+                else
+                  echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
+                  exit 1
+                fi
+              }
+            else
+              timeout 600 bash ./deploy.sh 2>&1 || {
+                DEPLOY_EXIT=$?
+                if [ $DEPLOY_EXIT -eq 124 ]; then
+                  echo "❌ Deployment script timed out after 10 minutes"
+                  exit 1
+                else
+                  echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
+                  exit 1
+                fi
+              }
+            fi
           else
             echo "⚠️  timeout command not available, running without timeout..."
-            bash -c './deploy.sh' || { echo "Deployment script failed"; exit 1; }
+            echo "   WARNING: No timeout protection - script may hang indefinitely!"
+            bash ./deploy.sh 2>&1 || { 
+              echo "❌ Deployment script failed with exit code $?"
+              exit 1
+            }
           fi
           
           echo "   Completed at: $(date)"

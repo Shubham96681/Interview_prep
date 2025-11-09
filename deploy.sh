@@ -1,11 +1,21 @@
 #!/bin/bash
 
+# Ensure output is unbuffered for real-time logging
+export PYTHONUNBUFFERED=1
+if command -v stdbuf >/dev/null 2>&1; then
+  exec stdbuf -oL -eL bash "$0" "$@"
+fi
+
 # Don't use set -e, handle errors manually for better control
 set +e
+
+# Ensure we're in the right directory
+cd "$(dirname "$0")" || exit 1
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
 echo "PID: $$"
+echo "Working directory: $(pwd)"
 
 # Navigate to project directory
 cd /var/www/interview-prep
