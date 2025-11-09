@@ -46,47 +46,53 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
   useEffect(() => {
     const videoElement = localVideoRef.current;
-    if (localStream && videoElement) {
-      console.log('📹 Assigning local stream to video element');
+    if (!videoElement) return;
+
+    if (localStream) {
+      console.log('📹 Setting local stream to video element');
       videoElement.srcObject = localStream;
       
-      // Ensure video plays
-      const playPromise = videoElement.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            console.log('✅ Local video is playing');
-          })
-          .catch(err => {
-            console.error('❌ Error playing local video:', err);
-            // Try again after a short delay
-            setTimeout(() => {
-              if (videoElement && videoElement.srcObject) {
-                videoElement.play().catch(e => console.error('Retry play failed:', e));
-              }
-            }, 500);
-          });
-      }
+      // Force play with multiple attempts
+      const playVideo = async () => {
+        try {
+          await videoElement.play();
+          console.log('✅ Local video is playing');
+        } catch (err: any) {
+          console.error('❌ Error playing local video:', err);
+          // Retry after a short delay
+          setTimeout(() => {
+            if (videoElement && videoElement.srcObject) {
+              videoElement.play().catch(e => console.error('Retry play failed:', e));
+            }
+          }, 500);
+        }
+      };
       
-      // Listen for loadedmetadata event
+      // Play immediately
+      playVideo();
+      
+      // Also try when metadata is loaded
       const handleLoadedMetadata = () => {
-        console.log('✅ Local video metadata loaded');
+        console.log('✅ Video metadata loaded, attempting to play');
         videoElement.play().catch(err => console.error('Play after metadata failed:', err));
       };
       
+      // Also try when video can play
+      const handleCanPlay = () => {
+        console.log('✅ Video can play, attempting to play');
+        videoElement.play().catch(err => console.error('Play after canplay failed:', err));
+      };
+      
       videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+      videoElement.addEventListener('canplay', handleCanPlay);
       
       return () => {
         videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        if (videoElement) {
-          videoElement.srcObject = null;
-        }
+        videoElement.removeEventListener('canplay', handleCanPlay);
       };
-    } else if (localStreamRef.current && videoElement) {
-      // Fallback: try to use stream from ref
-      console.log('📹 Using stream from ref');
-      videoElement.srcObject = localStreamRef.current;
-      videoElement.play().catch(err => console.error('Error playing from ref:', err));
+    } else {
+      // Clear srcObject if no stream
+      videoElement.srcObject = null;
     }
   }, [localStream]);
 
@@ -117,11 +123,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         setIsConnected(true);
         
         // Start local stream immediately
-        console.log('🎥 Starting local stream...');
         await startLocalStream();
-        
-        // Wait a moment for stream to be set
-        await new Promise(resolve => setTimeout(resolve, 200));
         
         socketInstance.emit('join-meeting', {
           meetingId,
@@ -521,12 +523,12 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
             className="w-full h-full object-cover"
             style={{ 
               opacity: localStream && isVideoEnabled ? 1 : 0,
-              backgroundColor: '#000',
               position: 'absolute',
               top: 0,
               left: 0,
               width: '100%',
-              height: '100%'
+              height: '100%',
+              zIndex: localStream && isVideoEnabled ? 1 : 0
             }}
             onLoadedMetadata={() => {
               console.log('✅ Video metadata loaded');
