@@ -183,6 +183,15 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const startLocalStream = async () => {
     try {
       console.log('🎥 Requesting camera and microphone access...');
+      
+      // Check if mediaDevices API is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        const errorMsg = 'MediaDevices API is not available. This usually requires HTTPS in production.';
+        console.error('❌', errorMsg);
+        alert('Camera and microphone access requires HTTPS. Please access the site via HTTPS (https://54.91.53.228) or use a secure connection.');
+        throw new Error(errorMsg);
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
