@@ -4,31 +4,35 @@
 
 ### Admin User
 - **Email**: `admin@interviewace.com`
-- **Password**: Any password (accepts any password for demo)
+- **Password**: `admin123` (or any password - accepts any password for demo)
 - **Role**: Admin
 - **Access**: Full admin dashboard with all management features
 
 ### Candidate Users
 1. **John Doe**
    - **Email**: `john@example.com`
-   - **Password**: Any password (accepts any password for demo)
+   - **Password**: `password123` (or any password - accepts any password for demo)
    - **Role**: Candidate
 
 2. **Shubham Singh**
    - **Email**: `shubhamsingh6087@gmail.com`
-   - **Password**: Any password (accepts any password for demo)
+   - **Password**: `password123` (or any password - accepts any password for demo)
    - **Role**: Candidate
 
 ### Expert User
 - **Jane Smith**
   - **Email**: `jane@example.com`
-  - **Password**: Any password (accepts any password for demo)
+  - **Password**: `password123` (or any password - accepts any password for demo)
   - **Role**: Expert
   - **Status**: Verified
 
 ## Notes
 
 - **For demo purposes, the login accepts ANY password** - you just need to use the correct email address
+- **Recommended passwords** (for consistency):
+  - Admin: `admin123`
+  - Candidates: `password123`
+  - Expert: `password123`
 - These users are automatically created when the database is first initialized
 - If you get "Invalid credentials", it means:
   1. The user doesn't exist in the database (database might not be seeded)
