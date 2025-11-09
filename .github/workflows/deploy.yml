@@ -152,8 +152,7 @@ jobs:
         port: 22
         timeout: 300s
         debug: true
-        fingerprint: false
-        args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+        fingerprint: ""
         script: |
           set -e
           
