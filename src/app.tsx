@@ -12,7 +12,6 @@ import Dashboard from './pages/Dashboard';
 import Meeting from './pages/Meeting';
 import NotFound from './pages/NotFound';
 import ConnectionStatus from './components/ConnectionStatus';
-import React from 'react';
 
 const queryClient = new QueryClient();
 
