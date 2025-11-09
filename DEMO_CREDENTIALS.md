@@ -57,7 +57,15 @@ The database is automatically seeded when:
 
 To manually seed the database on EC2:
 ```bash
+# Option 1: Using the seed script (recommended)
 cd /var/www/interview-prep/server
-node -e "const db = require('./services/database'); db.seedDatabase().then(() => process.exit(0)).catch(err => { console.error(err); process.exit(1); });"
+node scripts/seed-database.js
+
+# Option 2: Using the database service
+cd /var/www/interview-prep/server
+node -e "const db = require('./services/database'); db.initialize().then(() => { console.log('✅ Database seeded!'); process.exit(0); }).catch(err => { console.error('❌ Error:', err); process.exit(1); });"
+
+# After seeding, restart the server
+pm2 restart interview-prep-backend
 ```
 
