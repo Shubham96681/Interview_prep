@@ -134,20 +134,52 @@ else
     pm2 logs interview-prep-backend --lines 20 --nostream
 fi
 
-# Configure nginx for WebSocket support
+# Configure nginx for WebSocket support and HTTPS
 echo "🌐 Configuring nginx..."
 NGINX_CONFIG="/etc/nginx/conf.d/interview-prep.conf"
 NGINX_CONFIG_DIR="/etc/nginx/conf.d"
+NGINX_SSL_DIR="/etc/nginx/ssl"
 
-# Create nginx config directory if it doesn't exist
+# Create nginx config and SSL directories if they don't exist
 sudo mkdir -p "$NGINX_CONFIG_DIR"
+sudo mkdir -p "$NGINX_SSL_DIR"
+
+# Generate self-signed certificate if it doesn't exist
+if [ ! -f "$NGINX_SSL_DIR/nginx-selfsigned.crt" ]; then
+    echo "   Generating self-signed SSL certificate..."
+    sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+      -keyout "$NGINX_SSL_DIR/nginx-selfsigned.key" \
+      -out "$NGINX_SSL_DIR/nginx-selfsigned.crt" \
+      -subj "/CN=54.91.53.228" 2>/dev/null || {
+        echo "⚠️  Failed to generate SSL certificate. Continuing with HTTP only."
+    }
+fi
 
 # Create or update nginx configuration
 echo "   Creating/updating nginx configuration..."
 sudo tee "$NGINX_CONFIG" > /dev/null <<EOF
+# HTTP server - redirect to HTTPS
 server {
     listen 80 default_server;
     server_name 54.91.53.228;
+    
+    # Redirect all HTTP to HTTPS
+    return 301 https://\$server_name\$request_uri;
+}
+
+# HTTPS server
+server {
+    listen 443 ssl http2 default_server;
+    server_name 54.91.53.228;
+
+    # SSL certificate configuration
+    ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt;
+    ssl_certificate_key /etc/nginx/ssl/nginx-selfsigned.key;
+    
+    # SSL settings
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
 
     # Frontend static files
     location / {
@@ -229,6 +261,11 @@ df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)
 echo ""
 echo "=== Deployment Completed Successfully ==="
 echo "Backend: http://54.91.53.228:5000"
-echo "Frontend: http://54.91.53.228"
+echo "Frontend: https://54.91.53.228 (HTTPS)"
+echo "          http://54.91.53.228 (redirects to HTTPS)"
+echo ""
+echo "⚠️  Note: Self-signed certificate is used. Browsers will show a security warning."
+echo "   Click 'Advanced' → 'Proceed to 54.91.53.228' to continue."
+echo ""
 echo "Timestamp: $(date)"
 
