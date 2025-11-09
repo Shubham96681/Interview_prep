@@ -54,39 +54,51 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       }
 
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
-          <Card className="max-w-2xl w-full">
-            <CardHeader>
-              <CardTitle className="text-red-600">Something went wrong</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-gray-700 mb-2">
-                  {this.state.error?.message || 'An unexpected error occurred'}
-                </p>
-                {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
-                  <details className="mt-4">
-                    <summary className="cursor-pointer text-sm text-gray-600 mb-2">
-                      Error Details (Development Only)
-                    </summary>
-                    <pre className="bg-gray-100 p-4 rounded text-xs overflow-auto max-h-64">
-                      {this.state.error?.stack}
-                      {'\n\n'}
-                      {this.state.errorInfo.componentStack}
-                    </pre>
-                  </details>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={this.handleReset} variant="outline">
-                  Try Again
-                </Button>
-                <Button onClick={this.handleReload}>
-                  Reload Page
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full text-center">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Something went wrong</h2>
+            <p className="text-gray-600 mb-4">
+              There was an error loading the meeting. This is usually a temporary issue.
+            </p>
+            {this.state.error?.message && (
+              <p className="text-sm text-red-600 mb-4 bg-red-50 p-2 rounded">
+                {this.state.error.message}
+              </p>
+            )}
+            <div className="space-y-3">
+              <button 
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition"
+              >
+                Try Again
+              </button>
+              <button 
+                onClick={() => window.location.href = '/'}
+                className="w-full bg-gray-200 text-gray-800 py-3 px-4 rounded-lg font-semibold hover:bg-gray-300 transition"
+              >
+                Go Home
+              </button>
+              <button 
+                onClick={() => window.location.reload()}
+                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition"
+              >
+                Reload Page
+              </button>
+            </div>
+            {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+              <details className="mt-4 text-left">
+                <summary className="cursor-pointer text-sm text-gray-600 mb-2">
+                  Error Details (Development Only)
+                </summary>
+                <pre className="bg-gray-100 p-4 rounded text-xs overflow-auto max-h-64">
+                  {this.state.error?.stack}
+                  {'\n\n'}
+                  {this.state.errorInfo.componentStack}
+                </pre>
+              </details>
+            )}
+          </div>
         </div>
       );
     }
