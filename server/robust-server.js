@@ -290,25 +290,45 @@ class RobustServer {
           });
         }
 
-        // Format session to match frontend expectations
-        const localDate = new Date(session.scheduledDate);
-        const year = localDate.getFullYear();
-        const month = String(localDate.getMonth() + 1).padStart(2, '0');
-        const day = String(localDate.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`;
-        const hours = String(localDate.getHours()).padStart(2, '0');
-        const minutes = String(localDate.getMinutes()).padStart(2, '0');
-        const timeStr = `${hours}:${minutes}`;
-
-        const formattedSession = {
+        // Debug: Log session data to see what we have
+        console.log('Session found:', {
           id: session.id,
           expertId: session.expertId,
           candidateId: session.candidateId,
-          expertName: session.expert.name,
-          candidateName: session.candidate.name,
-          date: dateStr,
-          time: timeStr,
-          scheduledDate: session.scheduledDate.toISOString(),
+          expert: session.expert ? { id: session.expert.id, name: session.expert.name } : null,
+          candidate: session.candidate ? { id: session.candidate.id, name: session.candidate.name } : null,
+          scheduledDate: session.scheduledDate
+        });
+
+        // Format session to match frontend expectations
+        // Handle cases where scheduledDate might be null
+        let dateStr = '';
+        let timeStr = '';
+        let scheduledDateISO = null;
+        
+        if (session.scheduledDate) {
+          const localDate = new Date(session.scheduledDate);
+          const year = localDate.getFullYear();
+          const month = String(localDate.getMonth() + 1).padStart(2, '0');
+          const day = String(localDate.getDate()).padStart(2, '0');
+          dateStr = `${year}-${month}-${day}`;
+          const hours = String(localDate.getHours()).padStart(2, '0');
+          const minutes = String(localDate.getMinutes()).padStart(2, '0');
+          timeStr = `${hours}:${minutes}`;
+          scheduledDateISO = session.scheduledDate.toISOString();
+        }
+
+        const formattedSession = {
+          id: session.id,
+          expertId: session.expertId || null,
+          candidateId: session.candidateId || null,
+          expertName: session.expert?.name || null,
+          candidateName: session.candidate?.name || null,
+          expertEmail: session.expert?.email || null,
+          candidateEmail: session.candidate?.email || null,
+          date: dateStr || null,
+          time: timeStr || null,
+          scheduledDate: scheduledDateISO,
           duration: session.duration,
           sessionType: session.sessionType,
           status: session.status,
@@ -320,6 +340,14 @@ class RobustServer {
           isRecordingEnabled: session.isRecordingEnabled,
           createdAt: session.createdAt.toISOString()
         };
+
+        console.log('Formatted session being sent:', {
+          id: formattedSession.id,
+          expertId: formattedSession.expertId,
+          candidateId: formattedSession.candidateId,
+          expertName: formattedSession.expertName,
+          candidateName: formattedSession.candidateName
+        });
 
         res.json({
           success: true,

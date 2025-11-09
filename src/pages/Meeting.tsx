@@ -30,11 +30,16 @@ export default function Meeting() {
         if (response.success && response.data) {
           const sessionData = response.data;
           console.log('Session data received:', {
+            id: sessionData.id,
+            candidateId: sessionData.candidateId,
+            expertId: sessionData.expertId,
+            candidateName: sessionData.candidateName,
+            expertName: sessionData.expertName,
+            candidateEmail: sessionData.candidateEmail,
+            expertEmail: sessionData.expertEmail,
             scheduledDate: sessionData.scheduledDate,
             date: sessionData.date,
             time: sessionData.time,
-            candidateName: sessionData.candidateName,
-            expertName: sessionData.expertName,
             meetingId: sessionData.meetingId
           });
           setSession(sessionData);
@@ -90,15 +95,17 @@ export default function Meeting() {
   // 2. User is the expert
   // 3. User is an admin
   // 4. User is in additionalParticipants
-  // 5. User is authenticated (for now, allow any authenticated user to access meetings)
+  // 5. User email matches candidate or expert email (fallback)
   const isParticipant = 
     !user || // Allow if no user (will be checked later)
-    user?.id === session.candidateId || 
-    user?.id === session.expertId ||
+    (session.candidateId && user?.id === session.candidateId) || 
+    (session.expertId && user?.id === session.expertId) ||
     user?.userType === 'admin' ||
     (session.additionalParticipants && Array.isArray(session.additionalParticipants) && session.additionalParticipants.includes(user?.id)) ||
-    user?.email === session.candidateName || // Fallback: check by email/name
-    user?.email === session.expertName;
+    (session.candidateEmail && user?.email === session.candidateEmail) || // Check by email
+    (session.expertEmail && user?.email === session.expertEmail) || // Check by email
+    (session.candidateName && user?.email === session.candidateName) || // Fallback: check by name (if name is email)
+    (session.expertName && user?.email === session.expertName); // Fallback: check by name (if name is email)
 
   // Debug logging
   console.log('Meeting access check:', {
@@ -108,21 +115,26 @@ export default function Meeting() {
     expertId: session.expertId,
     candidateName: session.candidateName,
     expertName: session.expertName,
+    candidateEmail: session.candidateEmail,
+    expertEmail: session.expertEmail,
     userType: user?.userType,
     isParticipant: isParticipant,
     additionalParticipants: session.additionalParticipants
   });
 
-  // For now, allow any authenticated user to access meetings
-  // This can be made more strict later if needed
-  if (!isParticipant && user) {
-    // Still allow access but log the mismatch for debugging
-    console.warn('User ID mismatch, but allowing access:', {
+  // Log warning only if IDs are missing (not if user just doesn't match)
+  if (user && !session.candidateId && !session.expertId) {
+    console.warn('⚠️ Session missing candidateId and expertId - this may indicate a data issue:', {
+      sessionId: session.id,
+      meetingId: session.meetingId
+    });
+  } else if (user && !isParticipant) {
+    // User doesn't match, but IDs are present - this is expected for unauthorized access
+    console.log('ℹ️ User is not a participant of this meeting:', {
       userId: user?.id,
       candidateId: session.candidateId,
       expertId: session.expertId
     });
-    // Allow access anyway for now - we can make this stricter later
   }
 
   // If user is not loaded yet, show loading
