@@ -28,7 +28,9 @@ export default function Meeting() {
         const response = await apiService.getSessionByMeetingId(meetingId);
         console.log('Session response:', response);
         if (response.success && response.data) {
-          const sessionData = response.data;
+          // Handle nested response structure: backend returns {success: true, data: {...}}
+          // API service wraps it: {success: true, data: {success: true, data: {...}}}
+          const sessionData = response.data.data || response.data;
           console.log('Session data received (full object):', sessionData);
           console.log('Session data received (extracted):', {
             id: sessionData.id,

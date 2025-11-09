@@ -140,13 +140,22 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     console.log('✅ Cleanup complete - all camera and microphone access should be released');
   }, [meetingId]);
 
+  // Store functions in refs to avoid dependency issues
+  const startLocalStreamRef = useRef<() => Promise<void>>();
+  const createPeerConnectionRef = useRef<() => Promise<void>>();
+  const handleOfferRef = useRef<(offer: RTCSessionDescriptionInit, senderSocketId: string) => Promise<void>>();
+  const handleAnswerRef = useRef<(answer: RTCSessionDescriptionInit) => Promise<void>>();
+  const handleIceCandidateRef = useRef<(candidate: RTCIceCandidateInit) => Promise<void>>();
+  const socketInitializedRef = useRef(false);
+
   useEffect(() => {
     // Prevent re-initialization if already initialized for this meeting
-    if (isInitializedRef.current) {
+    if (isInitializedRef.current || socketInitializedRef.current) {
       return;
     }
     
     isInitializedRef.current = true;
+    socketInitializedRef.current = true;
     
     const initializeSocket = async () => {
       try {
@@ -159,8 +168,10 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
           console.log('✅ Connected to signaling server');
           setIsConnected(true);
           
-          // Start local stream immediately
-          await startLocalStream();
+          // Start local stream immediately using ref
+          if (startLocalStreamRef.current) {
+            await startLocalStreamRef.current();
+          }
           
           socketInstance.emit('join-meeting', {
             meetingId,
@@ -172,33 +183,41 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
           console.log('✅ Joined meeting, other users:', otherUsers);
           
           // Ensure local stream is started
-          if (!localStreamRef.current) {
-            await startLocalStream();
+          if (!localStreamRef.current && startLocalStreamRef.current) {
+            await startLocalStreamRef.current();
           }
           
-          if (otherUsers.length > 0) {
-            await createPeerConnection();
+          if (otherUsers.length > 0 && createPeerConnectionRef.current) {
+            await createPeerConnectionRef.current();
           }
         });
 
         socketInstance.on('user-joined', async () => {
           console.log('👤 Another user joined');
-          await createPeerConnection();
+          if (createPeerConnectionRef.current) {
+            await createPeerConnectionRef.current();
+          }
         });
 
         socketInstance.on('offer', async ({ offer, senderSocketId }) => {
           console.log('📥 Received offer');
-          await handleOffer(offer, senderSocketId);
+          if (handleOfferRef.current) {
+            await handleOfferRef.current(offer, senderSocketId);
+          }
         });
 
         socketInstance.on('answer', async ({ answer }) => {
           console.log('📥 Received answer');
-          await handleAnswer(answer);
+          if (handleAnswerRef.current) {
+            await handleAnswerRef.current(answer);
+          }
         });
 
         socketInstance.on('ice-candidate', async ({ candidate }) => {
           console.log('📥 Received ICE candidate');
-          await handleIceCandidate(candidate);
+          if (handleIceCandidateRef.current) {
+            await handleIceCandidateRef.current(candidate);
+          }
         });
 
         socketInstance.on('user-left', () => {
@@ -240,13 +259,22 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     return () => {
       console.log('🧹 WebRTCVideoCall component unmounting, cleaning up...');
       isInitializedRef.current = false;
-      // Use cleanup function directly (it's stable via useCallback)
+      socketInitializedRef.current = false;
       cleanup();
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meetingId]); // Only depend on meetingId - cleanup is stable via useCallback
+
+  // Update refs when functions are defined (runs on every render to keep refs current)
+  useEffect(() => {
+    startLocalStreamRef.current = startLocalStream;
+    createPeerConnectionRef.current = createPeerConnection;
+    handleOfferRef.current = handleOffer;
+    handleAnswerRef.current = handleAnswer;
+    handleIceCandidateRef.current = handleIceCandidate;
+  });
 
   useEffect(() => {
     const videoElement = localVideoRef.current;
