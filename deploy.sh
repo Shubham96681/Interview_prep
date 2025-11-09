@@ -134,6 +134,16 @@ else
     pm2 logs interview-prep-backend --lines 20 --nostream
 fi
 
+# Ensure nginx is configured for WebSocket support
+echo "🌐 Checking nginx configuration..."
+if [ -f /etc/nginx/conf.d/interview-prep.conf ]; then
+    # Check if socket.io location exists
+    if ! grep -q "location /socket.io/" /etc/nginx/conf.d/interview-prep.conf; then
+        echo "⚠️  Warning: nginx config missing /socket.io/ location block"
+        echo "   WebSocket connections may not work. See FIX_WEBSOCKET_NGINX.md"
+    fi
+fi
+
 # Reload nginx to serve new frontend build
 echo "🌐 Reloading nginx..."
 sudo systemctl reload nginx || sudo systemctl restart nginx
