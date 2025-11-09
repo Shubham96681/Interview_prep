@@ -51,8 +51,6 @@ jobs:
         command_timeout: 300s
         script_stop: true
         debug: true
-        retry: 3
-        retry_interval: 10s
         script: |
           set -e
           
@@ -139,8 +137,6 @@ jobs:
         port: 22
         timeout: 300s
         debug: true
-        retry: 2
-        retry_interval: 5s
         script: |
           set -e
           
