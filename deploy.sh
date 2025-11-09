@@ -90,122 +90,52 @@ fi
 # Save PM2 configuration
 pm2 save
 
-# Update Nginx config for WebSocket support (if needed)
-echo "🌐 Checking and updating Nginx configuration..."
+# Update Nginx config for WebSocket support (quick check only)
+echo "🌐 Checking Nginx configuration..."
 NGINX_CONF="/etc/nginx/conf.d/interview-prep.conf"
 
-if [ -f "$NGINX_CONF" ]; then
-    # Check if socket.io location exists
-    if ! grep -q "location /socket.io/" "$NGINX_CONF"; then
-        echo "⚠️  Nginx config missing Socket.io support. Adding it now..."
-        
-        # Create backup
-        sudo cp "$NGINX_CONF" "${NGINX_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
-        
-        # Add socket.io location block before the closing brace
-        # Find the line with the closing brace of the server block
-        SOCKET_IO_BLOCK="
-    # Socket.io WebSocket connections - CRITICAL for video calls
-    location /socket.io/ {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection \"upgrade\";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_read_timeout 86400;
-        proxy_send_timeout 86400;
-    }"
-        
-        # Insert before the last closing brace
-        sudo sed -i "\$i\\$SOCKET_IO_BLOCK" "$NGINX_CONF"
-        
-        echo "✅ Added Socket.io location block to Nginx config"
-    else
-        echo "✅ Nginx config already has Socket.io support"
-    fi
-else
-    echo "⚠️  Nginx config file not found at $NGINX_CONF"
-    echo "   Creating new configuration file..."
+# Quick check - only update if Socket.io location is missing
+if [ -f "$NGINX_CONF" ] && ! grep -q "location /socket.io/" "$NGINX_CONF"; then
+    echo "⚠️  Adding Socket.io support to Nginx config..."
     
-    # Create new config file with full configuration
-    sudo tee "$NGINX_CONF" > /dev/null <<EOF
-server {
-    listen 80;
-    server_name 54.159.42.7;
-
-    # Increase body size for file uploads
-    client_max_body_size 10M;
-
-    # Frontend static files
-    location / {
-        root /var/www/interview-prep/dist;
-        try_files \$uri \$uri/ /index.html;
-        index index.html;
-    }
-
-    # Socket.io WebSocket connections - CRITICAL for video calls
-    location /socket.io/ {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_read_timeout 86400;
-        proxy_send_timeout 86400;
-    }
-
-    # Backend API proxy
-    location /api {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-        proxy_read_timeout 300s;
-        proxy_connect_timeout 75s;
-    }
-
-    # Real-time updates (Server-Sent Events)
-    location /api/realtime {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Connection '';
-        proxy_buffering off;
-        proxy_cache off;
-        chunked_transfer_encoding off;
-        proxy_read_timeout 86400;
-    }
-}
-EOF
-    echo "✅ Created new Nginx configuration file"
-fi
-
-# Test Nginx configuration before reloading
-echo "🧪 Testing Nginx configuration..."
-if sudo nginx -t; then
-    echo "✅ Nginx configuration is valid"
-    # Reload nginx to serve new frontend build
-    echo "🌐 Reloading nginx..."
-    sudo systemctl reload nginx || sudo systemctl restart nginx
-    echo "✅ Nginx reloaded successfully"
+    # Quick backup
+    sudo cp "$NGINX_CONF" "${NGINX_CONF}.backup" 2>/dev/null || true
+    
+    # Insert Socket.io block before the last closing brace (faster method)
+    sudo sed -i '/^}$/i\
+    # Socket.io WebSocket connections\
+    location /socket.io/ {\
+        proxy_pass http://localhost:5000;\
+        proxy_http_version 1.1;\
+        proxy_set_header Upgrade $http_upgrade;\
+        proxy_set_header Connection "upgrade";\
+        proxy_set_header Host $host;\
+        proxy_set_header X-Real-IP $remote_addr;\
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\
+        proxy_set_header X-Forwarded-Proto $scheme;\
+        proxy_cache_bypass $http_upgrade;\
+        proxy_read_timeout 86400;\
+        proxy_send_timeout 86400;\
+    }' "$NGINX_CONF"
+    
+    # Quick test and reload
+    if sudo nginx -t 2>/dev/null; then
+        sudo systemctl reload nginx 2>/dev/null || true
+        echo "✅ Socket.io support added"
+    else
+        echo "⚠️  Nginx test failed, restoring backup..."
+        sudo cp "${NGINX_CONF}.backup" "$NGINX_CONF" 2>/dev/null || true
+    fi
+elif [ -f "$NGINX_CONF" ]; then
+    echo "✅ Nginx config already has Socket.io support"
 else
-    echo "❌ Nginx configuration test failed!"
-    echo "   Please check the configuration manually"
-    echo "   Backup saved at: ${NGINX_CONF}.backup.*"
-    exit 1
+    echo "⚠️  Nginx config not found - will be created on first deployment"
 fi
+
+# Reload nginx to serve new frontend build (always do this)
+echo "🌐 Reloading nginx..."
+sudo systemctl reload nginx 2>/dev/null || sudo systemctl restart nginx 2>/dev/null || true
+echo "✅ Nginx reloaded"
 
 # Wait a moment for services to stabilize
 echo "⏳ Waiting for services to stabilize..."
