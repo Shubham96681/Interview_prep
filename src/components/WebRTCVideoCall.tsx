@@ -719,7 +719,6 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
             setError(null);
             setIsInitializing(true);
             socketInitializedRef.current = false;
-            socketInitializedRef.current = false;
             if (onEndCall) {
               onEndCall();
             }
