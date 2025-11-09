@@ -4,6 +4,7 @@ const config = require('./config/server');
 const databaseService = require('./services/database');
 const realtimeService = require('./services/realtime');
 const videoService = require('./services/videoService');
+const webrtcService = require('./services/webrtcService');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -42,6 +43,9 @@ class RobustServer {
         console.log(`✅ Health check: http://localhost:${this.port}/api/health`);
         console.log(`✅ Real-time: http://localhost:${this.port}/api/realtime`);
         console.log(`✅ CORS enabled for: ${config.cors.origin}`);
+        
+        // Initialize WebRTC signaling service
+        webrtcService.initialize(this.server);
         
         // Update frontend configuration
         this.updateFrontendConfig();

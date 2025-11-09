@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Video, Users, Clock, Calendar } from 'lucide-react';
 import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
+import WebRTCVideoCall from '@/components/WebRTCVideoCall';
 
 export default function Meeting() {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -12,6 +13,7 @@ export default function Meeting() {
   const { user } = useAuth();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isInCall, setIsInCall] = useState(false);
 
   useEffect(() => {
     if (!meetingId) {
@@ -88,6 +90,21 @@ export default function Meeting() {
   const isUpcoming = meetingDate > new Date();
   const isNow = Math.abs(meetingDate.getTime() - Date.now()) < 15 * 60 * 1000; // Within 15 minutes
 
+  // Check if this is a WebRTC meeting (custom video system)
+  const isWebRTCMeeting = session.meetingLink && session.meetingLink.includes('/meeting/');
+
+  // If in call, show video component
+  if (isInCall && isWebRTCMeeting) {
+    return (
+      <div className="fixed inset-0 z-50">
+        <WebRTCVideoCall
+          meetingId={meetingId || ''}
+          onEndCall={() => setIsInCall(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
@@ -148,26 +165,43 @@ export default function Meeting() {
                       : "The session time has arrived. Click below to join the meeting."}
                   </p>
                   {session.meetingLink && (
-                    <Button 
-                      size="lg" 
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => {
-                        // Open the actual meeting link (Zoom, Google Meet, or custom)
-                        if (session.meetingLink.startsWith('http')) {
-                          window.open(session.meetingLink, '_blank');
-                        } else {
-                          // If it's a relative path, navigate to it
-                          window.location.href = session.meetingLink;
-                        }
-                      }}
-                    >
-                      <Video className="h-5 w-5 mr-2" />
-                      Join Meeting Room
-                    </Button>
+                    <>
+                      {isWebRTCMeeting ? (
+                        <Button 
+                          size="lg" 
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => setIsInCall(true)}
+                        >
+                          <Video className="h-5 w-5 mr-2" />
+                          Start Video Call
+                        </Button>
+                      ) : (
+                        <Button 
+                          size="lg" 
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => {
+                            // Open the actual meeting link (Zoom, Google Meet)
+                            if (session.meetingLink.startsWith('http')) {
+                              window.open(session.meetingLink, '_blank');
+                            } else {
+                              window.location.href = session.meetingLink;
+                            }
+                          }}
+                        >
+                          <Video className="h-5 w-5 mr-2" />
+                          Join Meeting Room
+                        </Button>
+                      )}
+                    </>
                   )}
                   <p className="text-xs text-gray-500">
                     Meeting ID: {session.meetingId}
                   </p>
+                  {isWebRTCMeeting && (
+                    <p className="text-xs text-blue-600">
+                      Using built-in video calling system
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="text-center space-y-4">

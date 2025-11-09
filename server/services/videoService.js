@@ -3,7 +3,7 @@ require('dotenv').config();
 
 class VideoService {
   constructor() {
-    this.provider = process.env.VIDEO_PROVIDER || 'zoom'; // 'zoom' or 'google_meet'
+    this.provider = process.env.VIDEO_PROVIDER || 'webrtc'; // 'zoom', 'google_meet', or 'webrtc'
     this.zoomApiKey = process.env.ZOOM_API_KEY;
     this.zoomApiSecret = process.env.ZOOM_API_SECRET;
     this.zoomAccountId = process.env.ZOOM_ACCOUNT_ID; // For Server-to-Server OAuth
@@ -187,24 +187,43 @@ class VideoService {
   }
 
   /**
+   * Create a WebRTC meeting (custom video system)
+   */
+  createWebRTCMeeting(sessionData) {
+    const meetingId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    
+    return {
+      meetingId: meetingId,
+      meetingLink: `${baseUrl}/meeting/${meetingId}`,
+      startUrl: `${baseUrl}/meeting/${meetingId}`,
+      password: null,
+      recordingUrl: null
+    };
+  }
+
+  /**
    * Create a meeting based on configured provider
    */
   async createMeeting(sessionData) {
     try {
-      if (this.provider === 'zoom' && this.zoomApiKey && this.zoomApiSecret) {
+      if (this.provider === 'webrtc') {
+        console.log('Creating WebRTC meeting (custom video system)...');
+        return this.createWebRTCMeeting(sessionData);
+      } else if (this.provider === 'zoom' && this.zoomApiKey && this.zoomApiSecret) {
         console.log('Creating Zoom meeting...');
         return await this.createZoomMeeting(sessionData);
       } else if (this.provider === 'google_meet' && this.googleClientId && this.googleClientSecret) {
         console.log('Creating Google Meet meeting...');
         return await this.createGoogleMeetMeeting(sessionData);
       } else {
-        console.log('No video provider configured, using fallback meeting link...');
-        return this.createFallbackMeeting(sessionData);
+        console.log('No video provider configured, using WebRTC (custom) meeting...');
+        return this.createWebRTCMeeting(sessionData);
       }
     } catch (error) {
       console.error('Error creating meeting:', error);
-      // Always fallback to simple meeting link
-      return this.createFallbackMeeting(sessionData);
+      // Always fallback to WebRTC meeting
+      return this.createWebRTCMeeting(sessionData);
     }
   }
 
