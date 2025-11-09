@@ -35,6 +35,8 @@ jobs:
       run: |
         echo "🔍 Checking EC2 instance connectivity..."
         echo "Instance IP: 54.159.42.7"
+        echo "⚠️  IMPORTANT: Security group must allow SSH (port 22) from 0.0.0.0/0"
+        echo "   (Not just your IP: 13.221.81.1, because GitHub Actions uses different IPs)"
         echo "Testing connectivity..."
         timeout 5 bash -c 'cat < /dev/null > /dev/tcp/54.159.42.7/22' && echo "✅ Port 22 is open" || echo "⚠️  Port 22 might be closed or instance is down"
     

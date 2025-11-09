@@ -41,7 +41,9 @@ This error occurs when GitHub Actions cannot SSH into your EC2 instance. Here ar
 | HTTP | TCP | 80 | 0.0.0.0/0 | Web access |
 | Custom TCP | TCP | 5000 | 127.0.0.1 | Backend (local only) |
 
-**⚠️ IMPORTANT:** GitHub Actions runs from different IP addresses. You MUST allow SSH (port 22) from `0.0.0.0/0` or GitHub's IP ranges.
+**⚠️ CRITICAL:** GitHub Actions runs from different IP addresses (not your IP: 13.221.81.1). 
+- ❌ **WRONG:** Allowing SSH only from your IP (13.221.81.1) will cause connection failures
+- ✅ **CORRECT:** You MUST allow SSH (port 22) from `0.0.0.0/0` to allow GitHub Actions to connect
 
 ### If SSH is restricted to your IP:
 1. Click **Edit inbound rules**
