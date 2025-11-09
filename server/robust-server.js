@@ -102,30 +102,55 @@ class RobustServer {
         // In production, you'd verify the password hash
         const user = await databaseService.getUserByEmail(email);
         
-        if (user && password) {
-          console.log('Login successful for:', email);
-          res.json({
-            success: true,
-            user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              userType: user.userType
-            },
-            token: 'jwt-token-' + Date.now()
-          });
-        } else {
-          console.log('Login failed for:', email);
-          res.status(401).json({
+        if (!user) {
+          console.log('Login failed: User not found for:', email);
+          return res.status(401).json({
             success: false,
-            message: 'Invalid credentials'
+            message: 'Invalid credentials',
+            error: 'User not found'
           });
         }
+        
+        if (!password) {
+          console.log('Login failed: No password provided for:', email);
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid credentials',
+            error: 'Password required'
+          });
+        }
+        
+        console.log('Login successful for:', email);
+        
+        // Return full user data (excluding password)
+        const { password: _, ...userWithoutPassword } = user;
+        
+        res.json({
+          success: true,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            userType: user.userType,
+            bio: user.bio,
+            experience: user.experience,
+            skills: user.skills ? JSON.parse(user.skills) : [],
+            rating: user.rating,
+            totalSessions: user.totalSessions,
+            hourlyRate: user.hourlyRate,
+            isVerified: user.isVerified,
+            avatar: user.avatar,
+            company: user.company,
+            title: user.title
+          },
+          token: 'jwt-token-' + Date.now()
+        });
       } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({
           success: false,
-          message: 'Internal server error'
+          message: 'Internal server error',
+          error: error.message
         });
       }
     });
