@@ -208,15 +208,24 @@ else
 fi
 
 # Wait a moment for services to stabilize
-sleep 3
+echo "⏳ Waiting for services to stabilize..."
+sleep 5
 
-# Verify backend is running
+# Verify backend is running (with timeout)
 echo "🏥 Verifying backend health..."
-if curl -f http://localhost:5000/api/health > /dev/null 2>&1; then
-    echo "✅ Backend is healthy!"
-else
-    echo "⚠️  Backend health check failed, but continuing..."
-fi
+for i in {1..6}; do
+    if curl -f -s --max-time 5 http://localhost:5000/api/health > /dev/null 2>&1; then
+        echo "✅ Backend is healthy!"
+        break
+    else
+        if [ $i -eq 6 ]; then
+            echo "⚠️  Backend health check failed after 30 seconds, but continuing..."
+        else
+            echo "   Waiting for backend... ($i/6)"
+            sleep 5
+        fi
+    fi
+done
 
 echo ""
 echo "=== Deployment Completed Successfully ==="
