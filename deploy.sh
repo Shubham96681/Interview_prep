@@ -12,13 +12,22 @@ cd /var/www/interview-prep
 git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
-echo "📦 Installing frontend dependencies..."
-npm install --legacy-peer-deps
+# Only install if node_modules doesn't exist or package.json changed
+if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
+    echo "📦 Installing frontend dependencies..."
+    npm install --legacy-peer-deps --prefer-offline --no-audit
+else
+    echo "✅ Frontend dependencies already installed, skipping..."
+fi
 
 # Install server dependencies (production only)
 echo "📦 Installing backend dependencies..."
 cd server
-npm install --production --legacy-peer-deps
+if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
+    npm install --production --legacy-peer-deps --prefer-offline --no-audit
+else
+    echo "✅ Backend dependencies already installed, skipping..."
+fi
 cd ..
 
 # Build frontend
@@ -47,12 +56,14 @@ fi
 # Run database migrations
 echo "🗄️  Running database migrations..."
 cd server
-npx prisma generate
-npx prisma db push --skip-generate --accept-data-loss
+echo "   Generating Prisma client..."
+npx prisma generate --silent
+echo "   Pushing database schema..."
+npx prisma db push --skip-generate --accept-data-loss --skip-seed
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
-node -e "
+timeout 30 node -e "
 const db = require('./services/database');
 db.initialize()
   .then(() => {
@@ -63,7 +74,7 @@ db.initialize()
     console.error('❌ Database seeding failed:', err);
     process.exit(1);
   });
-"
+" || echo "⚠️  Database seeding timed out or failed, continuing..."
 cd ..
 
 # Restart backend server
