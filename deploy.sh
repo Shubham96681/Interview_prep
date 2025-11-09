@@ -134,19 +134,81 @@ else
     pm2 logs interview-prep-backend --lines 20 --nostream
 fi
 
-# Ensure nginx is configured for WebSocket support
-echo "🌐 Checking nginx configuration..."
-if [ -f /etc/nginx/conf.d/interview-prep.conf ]; then
-    # Check if socket.io location exists
-    if ! grep -q "location /socket.io/" /etc/nginx/conf.d/interview-prep.conf; then
-        echo "⚠️  Warning: nginx config missing /socket.io/ location block"
-        echo "   WebSocket connections may not work. See FIX_WEBSOCKET_NGINX.md"
-    fi
+# Configure nginx for WebSocket support
+echo "🌐 Configuring nginx..."
+NGINX_CONFIG="/etc/nginx/conf.d/interview-prep.conf"
+NGINX_CONFIG_DIR="/etc/nginx/conf.d"
+
+# Create nginx config directory if it doesn't exist
+sudo mkdir -p "$NGINX_CONFIG_DIR"
+
+# Create or update nginx configuration
+echo "   Creating/updating nginx configuration..."
+sudo tee "$NGINX_CONFIG" > /dev/null <<EOF
+server {
+    listen 80 default_server;
+    server_name 54.91.53.228;
+
+    # Frontend static files
+    location / {
+        root /var/www/interview-prep/dist;
+        try_files \$uri \$uri/ /index.html;
+        index index.html;
+    }
+
+    # Backend API proxy
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 86400;
+    }
+
+    # Socket.io WebSocket proxy
+    location /socket.io/ {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 86400;
+    }
+}
+EOF
+
+echo "✅ Nginx configuration updated"
+
+# Test nginx configuration
+echo "   Testing nginx configuration..."
+if sudo nginx -t; then
+    echo "✅ Nginx configuration is valid"
+else
+    echo "❌ Nginx configuration test failed!"
+    exit 1
 fi
 
 # Reload nginx to serve new frontend build
 echo "🌐 Reloading nginx..."
 sudo systemctl reload nginx || sudo systemctl restart nginx
+
+# Verify nginx is running
+if sudo systemctl is-active --quiet nginx; then
+    echo "✅ Nginx is running"
+else
+    echo "⚠️  Warning: Nginx might not be running"
+    sudo systemctl start nginx
+fi
 
 # Wait a moment for services to stabilize
 sleep 3
