@@ -49,6 +49,21 @@ echo "🗄️  Running database migrations..."
 cd server
 npx prisma generate
 npx prisma db push --skip-generate --accept-data-loss
+
+# Seed database if needed (ensure demo users exist)
+echo "🌱 Seeding database with demo users..."
+node -e "
+const db = require('./services/database');
+db.initialize()
+  .then(() => {
+    console.log('✅ Database seeding completed');
+    process.exit(0);
+  })
+  .catch(err => {
+    console.error('❌ Database seeding failed:', err);
+    process.exit(1);
+  });
+"
 cd ..
 
 # Restart backend server
