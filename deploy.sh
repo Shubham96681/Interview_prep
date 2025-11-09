@@ -1,37 +1,9 @@
 #!/bin/bash
 
-# Ensure output is unbuffered for real-time logging
-export PYTHONUNBUFFERED=1
-# Note: stdbuf exec wrapper removed to avoid recursion issues
-
-# Don't use set -e, handle errors manually for better control
-set +e
-
-# Function to print progress heartbeat
-heartbeat() {
-  while true; do
-    sleep 60
-    echo "[HEARTBEAT] Still running... $(date)"
-  done
-}
-
-# Start heartbeat in background (will be killed when script exits)
-heartbeat &
-HEARTBEAT_PID=$!
-trap "kill $HEARTBEAT_PID 2>/dev/null" EXIT
-
-# Ensure we're in the right directory
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$SCRIPT_DIR" || {
-  echo "❌ Failed to change to script directory: $SCRIPT_DIR"
-  exit 1
-}
+set -e  # Exit on any error
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
-echo "PID: $$"
-echo "Script directory: $SCRIPT_DIR"
-echo "Working directory: $(pwd)"
 
 # Navigate to project directory
 cd /var/www/interview-prep
@@ -40,81 +12,18 @@ cd /var/www/interview-prep
 git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
-# Only install if node_modules doesn't exist or package.json changed
-if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
-    echo "📦 Installing frontend dependencies..."
-    echo "   Starting at: $(date)"
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 300 npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
-        INSTALL_EXIT=$?
-        if [ $INSTALL_EXIT -eq 124 ]; then
-            echo "❌ npm install timed out after 5 minutes"
-            exit 1
-        elif [ $INSTALL_EXIT -ne 0 ]; then
-            echo "❌ npm install failed with exit code $INSTALL_EXIT"
-            exit 1
-        fi
-    else
-        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
-        if [ $? -ne 0 ]; then
-            echo "❌ npm install failed"
-            exit 1
-        fi
-    fi
-    echo "   Completed at: $(date)"
-else
-    echo "✅ Frontend dependencies already installed, skipping..."
-fi
+echo "📦 Installing frontend dependencies..."
+npm install --legacy-peer-deps
 
 # Install server dependencies (production only)
 echo "📦 Installing backend dependencies..."
 cd server
-if [ ! -d "node_modules" ] || [ "package.json" -nt "node_modules" ]; then
-    echo "   Starting at: $(date)"
-    if command -v timeout >/dev/null 2>&1; then
-        timeout 300 npm install --production --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
-        INSTALL_EXIT=$?
-        if [ $INSTALL_EXIT -eq 124 ]; then
-            echo "❌ npm install timed out after 5 minutes"
-            exit 1
-        elif [ $INSTALL_EXIT -ne 0 ]; then
-            echo "❌ npm install failed with exit code $INSTALL_EXIT"
-            exit 1
-        fi
-    else
-        npm install --production --legacy-peer-deps --prefer-offline --no-audit --progress=false 2>&1 | tail -20
-        if [ $? -ne 0 ]; then
-            echo "❌ npm install failed"
-            exit 1
-        fi
-    fi
-    echo "   Completed at: $(date)"
-else
-    echo "✅ Backend dependencies already installed, skipping..."
-fi
+npm install --production --legacy-peer-deps
 cd ..
 
 # Build frontend
 echo "🔨 Building frontend application..."
-echo "   Starting at: $(date)"
-if command -v timeout >/dev/null 2>&1; then
-    timeout 300 npm run build
-    BUILD_EXIT=$?
-    if [ $BUILD_EXIT -eq 124 ]; then
-        echo "❌ Frontend build timed out after 5 minutes"
-        exit 1
-    elif [ $BUILD_EXIT -ne 0 ]; then
-        echo "❌ Frontend build failed with exit code $BUILD_EXIT"
-        exit 1
-    fi
-else
-    npm run build
-    if [ $? -ne 0 ]; then
-        echo "❌ Frontend build failed"
-        exit 1
-    fi
-fi
-echo "   Completed at: $(date)"
+npm run build
 
 # Verify build succeeded
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
@@ -138,66 +47,23 @@ fi
 # Run database migrations
 echo "🗄️  Running database migrations..."
 cd server
-echo "   Generating Prisma client at: $(date)"
-if command -v timeout >/dev/null 2>&1; then
-    timeout 60 npx prisma generate --silent
-    if [ $? -ne 0 ]; then
-        echo "❌ Prisma generate failed or timed out"
-        exit 1
-    fi
-else
-    npx prisma generate --silent
-    if [ $? -ne 0 ]; then
-        echo "❌ Prisma generate failed"
-        exit 1
-    fi
-fi
-echo "   Pushing database schema at: $(date)"
-if command -v timeout >/dev/null 2>&1; then
-    timeout 30 npx prisma db push --skip-generate --accept-data-loss --skip-seed
-    if [ $? -ne 0 ]; then
-        echo "❌ Database push failed or timed out"
-        exit 1
-    fi
-else
-    npx prisma db push --skip-generate --accept-data-loss --skip-seed
-    if [ $? -ne 0 ]; then
-        echo "❌ Database push failed"
-        exit 1
-    fi
-fi
+npx prisma generate
+npx prisma db push --skip-generate --accept-data-loss
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
-echo "   Starting at: $(date)"
-if command -v timeout >/dev/null 2>&1; then
-    timeout 20 node -e "
-    const db = require('./services/database');
-    db.initialize()
-      .then(() => {
-        console.log('✅ Database seeding completed');
-        process.exit(0);
-      })
-      .catch(err => {
-        console.error('❌ Database seeding failed:', err);
-        process.exit(1);
-      });
-    " 2>&1 || echo "⚠️  Database seeding timed out or failed, continuing..."
-else
-    node -e "
-    const db = require('./services/database');
-    db.initialize()
-      .then(() => {
-        console.log('✅ Database seeding completed');
-        process.exit(0);
-      })
-      .catch(err => {
-        console.error('❌ Database seeding failed:', err);
-        process.exit(1);
-      });
-    " 2>&1 || echo "⚠️  Database seeding failed, continuing..."
-fi
-echo "   Completed at: $(date)"
+node -e "
+const db = require('./services/database');
+db.initialize()
+  .then(() => {
+    console.log('✅ Database seeding completed');
+    process.exit(0);
+  })
+  .catch(err => {
+    console.error('❌ Database seeding failed:', err);
+    process.exit(1);
+  });
+"
 cd ..
 
 # Restart backend server
@@ -215,28 +81,18 @@ pm2 save
 
 # Reload nginx to serve new frontend build
 echo "🌐 Reloading nginx..."
-sudo systemctl reload nginx 2>/dev/null || sudo systemctl restart nginx 2>/dev/null || true
-echo "✅ Nginx reloaded"
+sudo systemctl reload nginx || sudo systemctl restart nginx
 
 # Wait a moment for services to stabilize
-echo "⏳ Waiting for services to stabilize..."
-sleep 5
+sleep 3
 
-# Verify backend is running (with timeout)
+# Verify backend is running
 echo "🏥 Verifying backend health..."
-for i in {1..6}; do
-    if curl -f -s --max-time 5 http://localhost:5000/api/health > /dev/null 2>&1; then
-        echo "✅ Backend is healthy!"
-        break
-    else
-        if [ $i -eq 6 ]; then
-            echo "⚠️  Backend health check failed after 30 seconds, but continuing..."
-        else
-            echo "   Waiting for backend... ($i/6)"
-            sleep 5
-        fi
-    fi
-done
+if curl -f http://localhost:5000/api/health > /dev/null 2>&1; then
+    echo "✅ Backend is healthy!"
+else
+    echo "⚠️  Backend health check failed, but continuing..."
+fi
 
 echo ""
 echo "=== Deployment Completed Successfully ==="

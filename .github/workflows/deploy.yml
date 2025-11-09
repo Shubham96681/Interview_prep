@@ -38,64 +38,41 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
-        timeout: 900s
-        command_timeout: 900s
+        timeout: 300s
+        command_timeout: 300s
         script_stop: true
         script: |
           set -e
           
-          # Function to run command with timeout and progress
-          run_with_timeout() {
-            local timeout_seconds=$1
-            shift
-            local cmd="$@"
-            
-            if command -v timeout >/dev/null 2>&1; then
-              timeout $timeout_seconds $cmd
-            else
-              echo "⚠️  timeout command not available, running without timeout..."
-              $cmd
-            fi
-          }
-          
           echo "🚀 Starting automated deployment..."
-          echo "Timestamp: $(date)"
           echo "Current user: $(whoami)"
           echo "Current directory: $(pwd)"
           echo "Home directory: $HOME"
           
           # Test sudo access
-          echo "[1/8] Testing sudo access..."
+          echo "Testing sudo access..."
           sudo -n true || echo "Warning: sudo may require password"
           
           # Ensure /var/www exists and has correct permissions
-          echo "[2/8] Setting up /var/www directory..."
+          echo "Setting up /var/www directory..."
           sudo mkdir -p /var/www || { echo "Failed to create /var/www"; exit 1; }
           sudo chown ec2-user:ec2-user /var/www || { echo "Failed to chown /var/www"; exit 1; }
           echo "✅ /var/www directory ready"
           
           # Check if git is available
-          echo "[3/8] Checking git availability..."
+          echo "Checking git availability..."
           git --version || { echo "Git is not installed!"; exit 1; }
           
           # Check if directory exists
-          echo "[4/8] Checking if project directory exists..."
+          echo "Checking if project directory exists..."
           if [ -d /var/www/interview-prep ]; then
             echo "📁 Project directory exists"
             echo "🔄 Pulling latest changes..."
             cd /var/www/interview-prep || { echo "Failed to cd to /var/www/interview-prep"; exit 1; }
-            echo "Current directory: $(pwd)"
-            
-            # Set git config to avoid prompts
-            git config --global --add safe.directory /var/www/interview-prep || true
-            
-            # Fetch with timeout
-            echo "   Fetching from origin..."
-            run_with_timeout 60 git fetch origin main || { echo "Failed to fetch from origin"; exit 1; }
-            echo "   Resetting to origin/main..."
-            run_with_timeout 30 git reset --hard origin/main || { echo "Failed to reset to origin/main"; exit 1; }
-            echo "   Cleaning untracked files..."
-            run_with_timeout 30 git clean -fd || { echo "Failed to clean untracked files"; exit 1; }
+            echo "Current directory after cd: $(pwd)"
+            git fetch origin main || { echo "Failed to fetch from origin"; exit 1; }
+            git reset --hard origin/main || { echo "Failed to reset to origin/main"; exit 1; }
+            git clean -fd || { echo "Failed to clean untracked files"; exit 1; }
             echo "✅ Repository updated"
           else
             echo "📦 Project directory does not exist, cloning repository..."
@@ -103,91 +80,30 @@ jobs:
             echo "Current directory: $(pwd)"
             echo "Listing /var/www contents:"
             ls -la /var/www || true
-            
-            # Clone with timeout
-            echo "   Cloning repository..."
-            run_with_timeout 120 git clone https://github.com/Shubham96681/Interview_prep.git interview-prep || { echo "Failed to clone repository"; exit 1; }
+            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep || { echo "Failed to clone repository"; exit 1; }
             cd interview-prep || { echo "Failed to cd to interview-prep"; exit 1; }
             echo "✅ Repository cloned"
           fi
           
-          echo "[5/8] Verifying repository..."
           echo "Final directory: $(pwd)"
+          echo "Verifying we're in the right place..."
           ls -la || { echo "Failed to list directory contents"; exit 1; }
           
-          # Ensure correct ownership (skip if already correct to save time)
-          echo "[6/8] Setting ownership..."
-          if [ "$(stat -c '%U:%G' /var/www/interview-prep 2>/dev/null)" != "ec2-user:ec2-user" ]; then
-            echo "   Changing ownership..."
-            run_with_timeout 60 sudo chown -R ec2-user:ec2-user /var/www/interview-prep || { echo "Failed to chown project directory"; exit 1; }
-            echo "✅ Ownership set"
-          else
-            echo "✅ Ownership already correct, skipping..."
-          fi
+          # Ensure correct ownership
+          echo "Setting ownership..."
+          sudo chown -R ec2-user:ec2-user /var/www/interview-prep || { echo "Failed to chown project directory"; exit 1; }
+          echo "✅ Ownership set"
           
           # Make deploy script executable
-          echo "[7/8] Making deploy.sh executable..."
+          echo "Making deploy.sh executable..."
           chmod +x deploy.sh || { echo "Failed to chmod deploy.sh"; exit 1; }
           echo "✅ deploy.sh is executable"
           
-          # Run deployment script with timeout
-          echo "[8/8] Running deployment script..."
-          echo "   Starting at: $(date)"
-          echo "   This may take several minutes..."
-          echo "   Working directory: $(pwd)"
-          echo "   Deploy script exists: $([ -f ./deploy.sh ] && echo 'yes' || echo 'no')"
-          echo "   Deploy script executable: $([ -x ./deploy.sh ] && echo 'yes' || echo 'no')"
+          # Run deployment script
+          echo "📦 Running deployment script..."
+          ./deploy.sh || { echo "Deployment script failed"; exit 1; }
           
-          # Ensure script is executable
-          chmod +x ./deploy.sh
-          
-          # Run with explicit bash and unbuffered output
-          if command -v timeout >/dev/null 2>&1; then
-            echo "   Using timeout wrapper (10 minutes max)..."
-            echo "   Starting deploy.sh at: $(date)"
-            
-            # Run the script and capture exit code properly
-            DEPLOY_EXIT=0
-            if command -v stdbuf >/dev/null 2>&1; then
-              timeout 600 stdbuf -oL -eL bash ./deploy.sh 2>&1
-              DEPLOY_EXIT=$?
-            else
-              timeout 600 bash ./deploy.sh 2>&1
-              DEPLOY_EXIT=$?
-            fi
-            
-            echo "   Deploy script finished at: $(date)"
-            echo "   Exit code: $DEPLOY_EXIT"
-            
-            # Check exit code
-            if [ $DEPLOY_EXIT -eq 124 ]; then
-              echo "❌ Deployment script timed out after 10 minutes"
-              echo "   Last activity was at: $(date)"
-              exit 1
-            elif [ $DEPLOY_EXIT -ne 0 ]; then
-              echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
-              exit 1
-            else
-              echo "✅ Deployment script completed successfully (exit code: $DEPLOY_EXIT)"
-            fi
-          else
-            echo "⚠️  timeout command not available, running without timeout..."
-            echo "   WARNING: No timeout protection - script may hang indefinitely!"
-            echo "   Starting deploy.sh at: $(date)"
-            
-            bash ./deploy.sh 2>&1
-            DEPLOY_EXIT=$?
-            
-            echo "   Deploy script finished at: $(date)"
-            echo "   Exit code: $DEPLOY_EXIT"
-            
-            if [ $DEPLOY_EXIT -ne 0 ]; then
-              echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
-              exit 1
-            else
-              echo "✅ Deployment script completed successfully (exit code: $DEPLOY_EXIT)"
-            fi
-          fi
+          echo "✅ Deployment script completed successfully"
       
     - name: Verify deployment
       uses: appleboy/ssh-action@v1.0.3
