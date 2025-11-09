@@ -27,6 +27,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const localStreamRef = useRef<MediaStream | null>(null);
 
   // STUN/TURN servers configuration
   const rtcConfiguration: RTCConfiguration = {
@@ -46,13 +47,31 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   useEffect(() => {
     if (localStream && localVideoRef.current) {
       localVideoRef.current.srcObject = localStream;
+      // Ensure video plays
+      localVideoRef.current.play().catch(err => {
+        console.error('Error playing local video:', err);
+      });
     }
+    return () => {
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null;
+      }
+    };
   }, [localStream]);
 
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = remoteStream;
+      // Ensure video plays
+      remoteVideoRef.current.play().catch(err => {
+        console.error('Error playing remote video:', err);
+      });
     }
+    return () => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = null;
+      }
+    };
   }, [remoteStream]);
 
   const initializeSocket = async () => {
@@ -62,9 +81,13 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         transports: ['websocket', 'polling']
       });
 
-      socketInstance.on('connect', () => {
+      socketInstance.on('connect', async () => {
         console.log('✅ Connected to signaling server');
         setIsConnected(true);
+        
+        // Start local stream immediately
+        await startLocalStream();
+        
         socketInstance.emit('join-meeting', {
           meetingId,
           userId: user?.id || 'anonymous'
@@ -73,7 +96,12 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
       socketInstance.on('joined-meeting', async ({ otherUsers }) => {
         console.log('✅ Joined meeting, other users:', otherUsers);
-        await startLocalStream();
+        
+        // Ensure local stream is started
+        if (!localStream) {
+          await startLocalStream();
+        }
+        
         if (otherUsers.length > 0) {
           await createPeerConnection();
         }
@@ -117,27 +145,94 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
   const startLocalStream = async () => {
     try {
+      console.log('🎥 Requesting camera and microphone access...');
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user'
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
       });
+      
+      console.log('✅ Media stream obtained:', {
+        videoTracks: stream.getVideoTracks().length,
+        audioTracks: stream.getAudioTracks().length,
+        videoEnabled: stream.getVideoTracks()[0]?.enabled,
+        audioEnabled: stream.getAudioTracks()[0]?.enabled
+      });
+      
+      // Ensure tracks are enabled
+      stream.getVideoTracks().forEach(track => {
+        track.enabled = true;
+        console.log('Video track:', track.label, 'enabled:', track.enabled);
+      });
+      stream.getAudioTracks().forEach(track => {
+        track.enabled = true;
+        console.log('Audio track:', track.label, 'enabled:', track.enabled);
+      });
+      
       setLocalStream(stream);
-    } catch (error) {
-      console.error('Error accessing media devices:', error);
-      alert('Could not access camera/microphone. Please check permissions.');
+      localStreamRef.current = stream; // Also store in ref for immediate access
+      setIsVideoEnabled(true);
+      setIsAudioEnabled(true);
+    } catch (error: any) {
+      console.error('❌ Error accessing media devices:', error);
+      let errorMessage = 'Could not access camera/microphone. ';
+      if (error.name === 'NotAllowedError') {
+        errorMessage += 'Please allow camera and microphone permissions in your browser settings.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage += 'No camera or microphone found.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage += 'Camera or microphone is being used by another application.';
+      } else {
+        errorMessage += error.message || 'Unknown error.';
+      }
+      alert(errorMessage);
     }
   };
 
   const createPeerConnection = async () => {
     try {
+      // Get local stream from ref (most up-to-date) or state
+      let currentStream = localStreamRef.current || localStream;
+      
+      // If still no stream, try to get from video element
+      if (!currentStream && localVideoRef.current?.srcObject) {
+        currentStream = localVideoRef.current.srcObject as MediaStream;
+        console.log('✅ Got stream from video element');
+      }
+      
+      // If still no stream, start it
+      if (!currentStream) {
+        console.log('⚠️ No local stream, starting it now...');
+        await startLocalStream();
+        // Wait for stream to be set
+        await new Promise(resolve => setTimeout(resolve, 300));
+        currentStream = localStreamRef.current || localStream;
+      }
+      
+      if (!currentStream) {
+        console.error('❌ Cannot create peer connection: no local stream available');
+        return;
+      }
+      
+      // Close existing peer connection if any
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.close();
+      }
+      
       const pc = new RTCPeerConnection(rtcConfiguration);
       
       // Add local stream tracks
-      if (localStream) {
-        localStream.getTracks().forEach(track => {
-          pc.addTrack(track, localStream);
-        });
-      }
+      currentStream.getTracks().forEach(track => {
+        console.log('Adding track to peer connection:', track.kind, track.enabled, track.label);
+        pc.addTrack(track, currentStream!);
+      });
 
       // Handle remote stream
       pc.ontrack = (event) => {
@@ -365,25 +460,29 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
         {/* Local Video */}
         <div className="relative bg-black rounded-lg overflow-hidden">
-          {localStream ? (
-            <video
-              ref={localVideoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-white">
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+            style={{ display: localStream && isVideoEnabled ? 'block' : 'none' }}
+          />
+          {(!localStream || !isVideoEnabled) && (
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white bg-gray-900">
               <div className="text-center">
-                <Video className="h-16 w-16 mx-auto mb-4 opacity-50" />
-                <p>Loading your video...</p>
+                {!localStream ? (
+                  <>
+                    <Video className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <p>Loading your video...</p>
+                  </>
+                ) : (
+                  <>
+                    <VideoOff className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                    <p>Camera is off</p>
+                  </>
+                )}
               </div>
-            </div>
-          )}
-          {!isVideoEnabled && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-              <VideoOff className="h-12 w-12 text-white opacity-50" />
             </div>
           )}
         </div>
@@ -453,7 +552,19 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       {/* Connection Status */}
       <div className="bg-gray-800 px-4 py-2 text-center text-sm text-white">
         {isConnected ? (
-          <span className="text-green-400">● Connected</span>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <span className="text-green-400">● Connected</span>
+            {localStream && (
+              <span className="text-green-400">
+                • Video: {isVideoEnabled ? 'On' : 'Off'} • Audio: {isAudioEnabled ? 'On' : 'Off'}
+              </span>
+            )}
+            {peerConnectionRef.current && (
+              <span className="text-blue-400">
+                • {peerConnectionRef.current.connectionState}
+              </span>
+            )}
+          </div>
         ) : (
           <span className="text-red-400">● Connecting...</span>
         )}
