@@ -15,7 +15,7 @@ import RegistrationForm from './RegistrationForm';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLogin: (userType: 'candidate' | 'expert', userData: UserType) => void;
+  onLogin: (userType: 'candidate' | 'expert' | 'admin', userData: UserType) => void;
   defaultRole?: 'candidate' | 'expert';
 }
 

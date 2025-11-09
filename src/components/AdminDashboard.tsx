@@ -4,14 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, BarChart3, UserCheck, X } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, BarChart3 } from 'lucide-react';
 
 interface Session {
   id: string;
@@ -80,7 +79,7 @@ interface AdminDashboardProps {
   };
 }
 
-export default function AdminDashboard({ user }: AdminDashboardProps) {
+export default function AdminDashboard({}: AdminDashboardProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);

@@ -156,7 +156,7 @@ export default function ExpertProfile() {
   }
 
 
-  const handleLogin = (userType: 'candidate' | 'expert', userData: User) => {
+  const handleLogin = (userType: 'candidate' | 'expert' | 'admin', userData: User) => {
     // Store token if available
     if (userData.token) {
       localStorage.setItem('token', userData.token);

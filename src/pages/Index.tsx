@@ -25,7 +25,7 @@ export default function Index() {
     );
     }
 
-  const handleLogin = (_userType: 'candidate' | 'expert', userData: any) => {
+  const handleLogin = (_userType: 'candidate' | 'expert' | 'admin', userData: any) => {
     login(userData);
     setShowAuthModal(false);
   };
