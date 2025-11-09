@@ -13,11 +13,17 @@ class BackendDetector {
   }
 
   async detectBackendPort(): Promise<number> {
+    // In production, don't try to detect ports - use relative URLs instead
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      console.log('⚠️  Port detection skipped in production - using relative URLs');
+      return 5000; // Default, but won't be used in production
+    }
+
     if (this.detectedPort) {
       return this.detectedPort;
     }
 
-    console.log('🔍 Detecting backend port...');
+    console.log('🔍 Detecting backend port (development mode)...');
 
     for (const port of this.possiblePorts) {
       try {

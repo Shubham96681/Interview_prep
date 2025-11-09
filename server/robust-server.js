@@ -37,9 +37,10 @@ class RobustServer {
       // Find available port
       this.port = await config.getPort();
       
-      // Start server
-      this.server = this.app.listen(this.port, () => {
-        console.log(`✅ Server running on http://localhost:${this.port}`);
+      // Start server (listen on all interfaces for production)
+      const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+      this.server = this.app.listen(this.port, host, () => {
+        console.log(`✅ Server running on http://${host}:${this.port}`);
         console.log(`✅ Health check: http://localhost:${this.port}/api/health`);
         console.log(`✅ Real-time: http://localhost:${this.port}/api/realtime`);
         console.log(`✅ CORS enabled for: ${config.cors.origin}`);

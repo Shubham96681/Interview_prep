@@ -31,8 +31,16 @@ class RealtimeService {
     }
 
     try {
-      const port = await backendDetector.detectBackendPort();
-      const url = `http://localhost:${port}/api/realtime?userId=${userId}`;
+      // Use relative URL in production (nginx will proxy), localhost in development
+      let url: string;
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        // Development: detect port
+        const port = await backendDetector.detectBackendPort();
+        url = `http://localhost:${port}/api/realtime?userId=${userId}`;
+      } else {
+        // Production: use relative URL (nginx will proxy /api/realtime to backend)
+        url = `/api/realtime?userId=${userId}`;
+      }
       
       console.log('🔄 Connecting to real-time service...', url);
       
