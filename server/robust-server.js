@@ -823,16 +823,32 @@ class RobustServer {
       }
     });
 
-    // Get analytics/stats (admin only)
+    // Get analytics/stats (admin only) - Enhanced
     this.app.get('/api/admin/analytics', checkAdmin, async (req, res) => {
       try {
+        const { period = 'month' } = req.query; // week, month, quarter
+        
+        // Calculate date ranges
+        const now = new Date();
+        let startDate = new Date();
+        if (period === 'week') {
+          startDate.setDate(now.getDate() - 7);
+        } else if (period === 'month') {
+          startDate.setMonth(now.getMonth() - 1);
+        } else if (period === 'quarter') {
+          startDate.setMonth(now.getMonth() - 3);
+        }
+
         const [
           totalUsers,
           totalSessions,
           totalReviews,
           activeUsers,
           sessionsByStatus,
-          usersByType
+          usersByType,
+          allSessions,
+          allUsers,
+          allReviews
         ] = await Promise.all([
           prisma.user.count(),
           prisma.session.count(),
@@ -845,24 +861,113 @@ class RobustServer {
           prisma.user.groupBy({
             by: ['userType'],
             _count: true
+          }),
+          prisma.session.findMany({
+            include: {
+              candidate: { select: { name: true, email: true } },
+              expert: { select: { name: true, email: true } }
+            }
+          }),
+          prisma.user.findMany({
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              userType: true,
+              isActive: true,
+              createdAt: true,
+              totalSessions: true,
+              rating: true
+            }
+          }),
+          prisma.review.findMany({
+            include: {
+              session: true,
+              reviewer: { select: { name: true, email: true } },
+              reviewee: { select: { name: true, email: true } }
+            }
           })
         ]);
 
         // Calculate average rating
         const avgRatingResult = await prisma.review.aggregate({
-          _avg: {
-            rating: true
-          }
+          _avg: { rating: true }
         });
+
+        // Calculate revenue
+        const totalRevenue = allSessions.reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+        const completedRevenue = allSessions
+          .filter(s => s.paymentStatus === 'completed')
+          .reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+
+        // Calculate new signups in period
+        const newCandidates = allUsers.filter(u => 
+          u.userType === 'candidate' && new Date(u.createdAt) >= startDate
+        ).length;
+        const newExperts = allUsers.filter(u => 
+          u.userType === 'expert' && new Date(u.createdAt) >= startDate
+        ).length;
+
+        // Calculate interviews in period
+        const periodSessions = allSessions.filter(s => 
+          new Date(s.scheduledDate) >= startDate
+        );
+
+        // Calculate platform utilization (expert slots filled)
+        const expertSessions = allSessions.filter(s => s.status === 'scheduled' || s.status === 'completed');
+        const uniqueExperts = new Set(expertSessions.map(s => s.expertId)).size;
+        const totalExperts = allUsers.filter(u => u.userType === 'expert' && u.isActive).length;
+        const utilizationRate = totalExperts > 0 ? (uniqueExperts / totalExperts) * 100 : 0;
+
+        // Group sessions by date for time series
+        const sessionsOverTime = periodSessions.reduce((acc, s) => {
+          const date = new Date(s.scheduledDate).toISOString().split('T')[0];
+          acc[date] = (acc[date] || 0) + 1;
+          return acc;
+        }, {});
+
+        // Revenue over time
+        const revenueOverTime = periodSessions.reduce((acc, s) => {
+          const date = new Date(s.scheduledDate).toISOString().split('T')[0];
+          acc[date] = (acc[date] || 0) + (s.paymentAmount || 0);
+          return acc;
+        }, {});
+
+        // Popular expertise areas (session types)
+        const sessionTypesCount = allSessions.reduce((acc, s) => {
+          acc[s.sessionType] = (acc[s.sessionType] || 0) + 1;
+          return acc;
+        }, {});
+
+        // Expert performance (average ratings)
+        const expertRatings = allUsers
+          .filter(u => u.userType === 'expert' && u.rating)
+          .map(u => u.rating)
+          .filter(r => r > 0);
+        const avgExpertRating = expertRatings.length > 0
+          ? expertRatings.reduce((a, b) => a + b, 0) / expertRatings.length
+          : 0;
 
         res.json({
           success: true,
           analytics: {
+            // Key metrics
             totalUsers,
             activeUsers,
             totalSessions,
             totalReviews,
             averageRating: avgRatingResult._avg.rating || 0,
+            totalRevenue,
+            completedRevenue,
+            newSignups: {
+              candidates: newCandidates,
+              experts: newExperts,
+              total: newCandidates + newExperts
+            },
+            periodInterviews: periodSessions.length,
+            platformUtilizationRate: Math.round(utilizationRate),
+            
+            // Breakdowns
             sessionsByStatus: sessionsByStatus.reduce((acc, item) => {
               acc[item.status] = item._count;
               return acc;
@@ -870,7 +975,33 @@ class RobustServer {
             usersByType: usersByType.reduce((acc, item) => {
               acc[item.userType] = item._count;
               return acc;
-            }, {})
+            }, {}),
+            
+            // Time series data
+            sessionsOverTime: Object.entries(sessionsOverTime).map(([date, count]) => ({
+              date,
+              count
+            })).sort((a, b) => a.date.localeCompare(b.date)),
+            
+            revenueOverTime: Object.entries(revenueOverTime).map(([date, amount]) => ({
+              date,
+              amount
+            })).sort((a, b) => a.date.localeCompare(b.date)),
+            
+            // Popular areas
+            popularExpertiseAreas: Object.entries(sessionTypesCount)
+              .map(([type, count]) => ({ type, count }))
+              .sort((a, b) => b.count - a.count),
+            
+            // Expert performance
+            averageExpertRating: avgExpertRating,
+            
+            // System health (mock data for now)
+            systemHealth: {
+              apiLatency: Math.floor(Math.random() * 50) + 10, // ms
+              serverUptime: 99.9,
+              videoIntegrationStatus: 'operational'
+            }
           }
         });
       } catch (error) {
@@ -878,6 +1009,277 @@ class RobustServer {
         res.status(500).json({
           success: false,
           error: 'Failed to fetch analytics',
+          message: error.message
+        });
+      }
+    });
+
+    // Reschedule/Cancel session (admin only)
+    this.app.post('/api/admin/sessions/:id/reschedule', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { date, time, reason } = req.body;
+
+        if (!date || !time) {
+          return res.status(400).json({
+            success: false,
+            message: 'Date and time are required'
+          });
+        }
+
+        const [year, month, day] = date.split('-').map(Number);
+        const [hours, minutes] = time.split(':').map(Number);
+        const newScheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+        const updatedSession = await prisma.session.update({
+          where: { id },
+          data: {
+            scheduledDate: newScheduledDate,
+            status: 'rescheduled'
+          },
+          include: {
+            candidate: { select: { name: true, email: true } },
+            expert: { select: { name: true, email: true } }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedSession,
+          message: 'Session rescheduled successfully'
+        });
+      } catch (error) {
+        console.error('Error rescheduling session:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to reschedule session',
+          message: error.message
+        });
+      }
+    });
+
+    // Cancel session (admin only)
+    this.app.post('/api/admin/sessions/:id/cancel', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        const updatedSession = await prisma.session.update({
+          where: { id },
+          data: {
+            status: 'cancelled'
+          },
+          include: {
+            candidate: { select: { name: true, email: true } },
+            expert: { select: { name: true, email: true } }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedSession,
+          message: 'Session cancelled successfully'
+        });
+      } catch (error) {
+        console.error('Error cancelling session:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to cancel session',
+          message: error.message
+        });
+      }
+    });
+
+    // Get user details with full history (admin only)
+    this.app.get('/api/admin/users/:id', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        
+        const user = await prisma.user.findUnique({
+          where: { id },
+          include: {
+            candidateSessions: {
+              include: {
+                expert: { select: { name: true, email: true } }
+              },
+              orderBy: { scheduledDate: 'desc' }
+            },
+            expertSessions: {
+              include: {
+                candidate: { select: { name: true, email: true } }
+              },
+              orderBy: { scheduledDate: 'desc' }
+            },
+            reviewsReceived: {
+              include: {
+                reviewer: { select: { name: true, email: true } },
+                session: { select: { title: true, sessionType: true } }
+              },
+              orderBy: { createdAt: 'desc' }
+            }
+          }
+        });
+
+        if (!user) {
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+        }
+
+        res.json({
+          success: true,
+          data: user
+        });
+      } catch (error) {
+        console.error('Error fetching user details:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch user details',
+          message: error.message
+        });
+      }
+    });
+
+    // Approve/Reject expert (admin only)
+    this.app.post('/api/admin/users/:id/approve-expert', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { approved, reason } = req.body;
+
+        const user = await prisma.user.findUnique({
+          where: { id }
+        });
+
+        if (!user || user.userType !== 'expert') {
+          return res.status(400).json({
+            success: false,
+            message: 'User is not an expert'
+          });
+        }
+
+        const updatedUser = await prisma.user.update({
+          where: { id },
+          data: {
+            isVerified: approved === true,
+            isActive: approved === true
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedUser,
+          message: approved ? 'Expert approved successfully' : 'Expert rejected'
+        });
+      } catch (error) {
+        console.error('Error approving expert:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to approve expert',
+          message: error.message
+        });
+      }
+    });
+
+    // Get financial transactions (admin only)
+    this.app.get('/api/admin/financial/transactions', checkAdmin, async (req, res) => {
+      try {
+        const sessions = await prisma.session.findMany({
+          where: {
+            paymentAmount: { not: null }
+          },
+          include: {
+            candidate: { select: { name: true, email: true } },
+            expert: { select: { name: true, email: true } }
+          },
+          orderBy: { scheduledDate: 'desc' }
+        });
+
+        const transactions = sessions.map(s => ({
+          id: s.id,
+          sessionId: s.id,
+          candidate: s.candidate.name,
+          candidateEmail: s.candidate.email,
+          expert: s.expert.name,
+          expertEmail: s.expert.email,
+          amount: s.paymentAmount,
+          platformCommission: (s.paymentAmount || 0) * 0.2, // 20% commission
+          expertPayout: (s.paymentAmount || 0) * 0.8, // 80% to expert
+          status: s.paymentStatus,
+          date: s.scheduledDate,
+          sessionType: s.sessionType
+        }));
+
+        const totalRevenue = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+        const totalCommission = transactions.reduce((sum, t) => sum + t.platformCommission, 0);
+        const totalPayouts = transactions.reduce((sum, t) => sum + t.expertPayout, 0);
+
+        res.json({
+          success: true,
+          transactions,
+          summary: {
+            totalRevenue,
+            totalCommission,
+            totalPayouts,
+            transactionCount: transactions.length
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching transactions:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch transactions',
+          message: error.message
+        });
+      }
+    });
+
+    // Get expert payouts (admin only)
+    this.app.get('/api/admin/financial/payouts', checkAdmin, async (req, res) => {
+      try {
+        const sessions = await prisma.session.findMany({
+          where: {
+            paymentStatus: 'completed',
+            paymentAmount: { not: null }
+          },
+          include: {
+            expert: { select: { id: true, name: true, email: true } }
+          }
+        });
+
+        const payoutsByExpert = sessions.reduce((acc, s) => {
+          const expertId = s.expertId;
+          if (!acc[expertId]) {
+            acc[expertId] = {
+              expertId: expertId,
+              expertName: s.expert.name,
+              expertEmail: s.expert.email,
+              totalEarnings: 0,
+              platformCommission: 0,
+              payoutAmount: 0,
+              sessionCount: 0
+            };
+          }
+          const amount = s.paymentAmount || 0;
+          acc[expertId].totalEarnings += amount;
+          acc[expertId].platformCommission += amount * 0.2;
+          acc[expertId].payoutAmount += amount * 0.8;
+          acc[expertId].sessionCount += 1;
+          return acc;
+        }, {});
+
+        const payouts = Object.values(payoutsByExpert);
+
+        res.json({
+          success: true,
+          payouts,
+          totalPendingPayouts: payouts.reduce((sum, p) => sum + p.payoutAmount, 0)
+        });
+      } catch (error) {
+        console.error('Error fetching payouts:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch payouts',
           message: error.message
         });
       }

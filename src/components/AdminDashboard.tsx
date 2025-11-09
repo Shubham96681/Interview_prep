@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, BarChart3, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
 
 interface Session {
@@ -69,6 +69,24 @@ interface Analytics {
   averageRating: number;
   sessionsByStatus: Record<string, number>;
   usersByType: Record<string, number>;
+  totalRevenue?: number;
+  completedRevenue?: number;
+  newSignups?: {
+    candidates: number;
+    experts: number;
+    total: number;
+  };
+  periodInterviews?: number;
+  platformUtilizationRate?: number;
+  sessionsOverTime?: Array<{ date: string; count: number }>;
+  revenueOverTime?: Array<{ date: string; amount: number }>;
+  popularExpertiseAreas?: Array<{ type: string; count: number }>;
+  averageExpertRating?: number;
+  systemHealth?: {
+    apiLatency: number;
+    serverUptime: number;
+    videoIntegrationStatus: string;
+  };
 }
 
 interface AdminDashboardProps {
@@ -94,6 +112,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<'week' | 'month' | 'quarter'>('month');
+  const [userFilters, setUserFilters] = useState({ type: 'all', status: 'all', search: '' });
+  const [sessionFilters, setSessionFilters] = useState({ status: 'all', expert: 'all', candidate: 'all' });
+  const [selectedUserDetail, setSelectedUserDetail] = useState<any>(null);
+  const [userDetailOpen, setUserDetailOpen] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [financialSummary, setFinancialSummary] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -102,11 +128,13 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [sessionsRes, usersRes, reviewsRes, analyticsRes] = await Promise.all([
+      const [sessionsRes, usersRes, reviewsRes, analyticsRes, transactionsRes, payoutsRes] = await Promise.all([
         apiService.getAllSessions(),
         apiService.getAllUsers(),
         apiService.getAllReviews(),
-        apiService.getAnalytics()
+        apiService.getAnalytics(analyticsPeriod),
+        apiService.getTransactions(),
+        apiService.getPayouts()
       ]);
 
       if (sessionsRes.success) {
@@ -121,6 +149,13 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       if (analyticsRes.success) {
         setAnalytics(analyticsRes.data?.analytics || null);
       }
+      if (transactionsRes.success) {
+        setTransactions(transactionsRes.data?.transactions || []);
+        setFinancialSummary(transactionsRes.data?.summary || null);
+      }
+      if (payoutsRes.success) {
+        setPayouts(payoutsRes.data?.payouts || []);
+      }
     } catch (error) {
       console.error('Error loading admin data:', error);
       toast.error('Failed to load admin data');
@@ -128,6 +163,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadData();
+  }, [analyticsPeriod]);
 
   const handleUpdateSession = async (sessionId: string, data: any) => {
     try {
@@ -287,61 +326,131 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
         <TabsContent value="overview" className="space-y-4">
           {analytics && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalUsers}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {analytics.activeUsers} active
-                  </p>
-                </CardContent>
-              </Card>
+            <>
+              {/* Period Selector */}
+              <div className="flex justify-between items-center">
+                <CardTitle>Platform Overview</CardTitle>
+                <Select value={analyticsPeriod} onValueChange={(v: 'week' | 'month' | 'quarter') => setAnalyticsPeriod(v)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">Last Week</SelectItem>
+                    <SelectItem value="month">Last Month</SelectItem>
+                    <SelectItem value="quarter">Last Quarter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalSessions}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {Object.values(analytics.sessionsByStatus).reduce((a, b) => a + b, 0)} total
-                  </p>
-                </CardContent>
-              </Card>
+              {/* Key Metrics Cards */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Interviews Booked</CardTitle>
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{analytics.periodInterviews || analytics.totalSessions}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {analyticsPeriod === 'week' ? 'This week' : analyticsPeriod === 'month' ? 'This month' : 'This quarter'}
+                    </p>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Reviews</CardTitle>
-                  <Star className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{analytics.totalReviews}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Avg rating: {analytics.averageRating.toFixed(1)}/5
-                  </p>
-                </CardContent>
-              </Card>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">${(analytics.totalRevenue || 0).toFixed(2)}</div>
+                    <p className="text-xs text-muted-foreground">
+                      ${(analytics.completedRevenue || 0).toFixed(2)} completed
+                    </p>
+                  </CardContent>
+                </Card>
 
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">User Types</CardTitle>
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {analytics.usersByType.candidate || 0} / {analytics.usersByType.expert || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Candidates / Experts
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Platform Utilization</CardTitle>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{analytics.platformUtilizationRate || 0}%</div>
+                    <p className="text-xs text-muted-foreground">
+                      Expert slots filled
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">New Sign-ups</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{analytics.newSignups?.total || 0}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.newSignups?.candidates || 0} candidates, {analytics.newSignups?.experts || 0} experts
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{analytics.activeUsers}</div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.totalUsers} total users
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{analytics.totalSessions}</div>
+                    <p className="text-xs text-muted-foreground">
+                      All time sessions
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Avg Expert Rating</CardTitle>
+                    <Star className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">{analytics.averageExpertRating?.toFixed(1) || analytics.averageRating.toFixed(1)}</div>
+                    <p className="text-xs text-muted-foreground">
+                      Out of 5.0 stars
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">System Health</CardTitle>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">
+                      {analytics.systemHealth?.serverUptime || 99.9}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      API: {analytics.systemHealth?.apiLatency || 0}ms
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
           )}
 
           {analytics && (
@@ -384,6 +493,138 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         <TabsContent value="analytics" className="space-y-4">
           {analytics && (
             <>
+              {/* Period Selector */}
+              <div className="flex justify-between items-center">
+                <CardTitle>Advanced Analytics</CardTitle>
+                <Select value={analyticsPeriod} onValueChange={(v: 'week' | 'month' | 'quarter') => setAnalyticsPeriod(v)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="week">Last Week</SelectItem>
+                    <SelectItem value="month">Last Month</SelectItem>
+                    <SelectItem value="quarter">Last Quarter</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Charts Section */}
+              <div className="grid gap-4 md:grid-cols-2">
+                {/* Interviews Over Time Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Interviews Over Time</CardTitle>
+                    <CardDescription>Bookings per day</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.sessionsOverTime && analytics.sessionsOverTime.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="h-64 flex items-end gap-1">
+                          {analytics.sessionsOverTime.map((item, idx) => {
+                            const maxCount = Math.max(...analytics.sessionsOverTime!.map(i => i.count));
+                            const height = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
+                            return (
+                              <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                                <div
+                                  className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition-colors"
+                                  style={{ height: `${height}%`, minHeight: item.count > 0 ? '4px' : '0' }}
+                                  title={`${item.date}: ${item.count} interviews`}
+                                />
+                                <span className="text-xs text-gray-500 transform -rotate-45 origin-top-left whitespace-nowrap">
+                                  {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="text-center text-sm text-gray-600">
+                          Total: {analytics.sessionsOverTime.reduce((sum, item) => sum + item.count, 0)} interviews
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-64 flex items-center justify-center text-gray-400">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Revenue Over Time Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Revenue Over Time</CardTitle>
+                    <CardDescription>Earnings per day</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.revenueOverTime && analytics.revenueOverTime.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="h-64 flex items-end gap-1">
+                          {analytics.revenueOverTime.map((item, idx) => {
+                            const maxAmount = Math.max(...analytics.revenueOverTime!.map(i => i.amount));
+                            const height = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0;
+                            return (
+                              <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                                <div
+                                  className="w-full bg-green-500 rounded-t hover:bg-green-600 transition-colors"
+                                  style={{ height: `${height}%`, minHeight: item.amount > 0 ? '4px' : '0' }}
+                                  title={`${item.date}: $${item.amount.toFixed(2)}`}
+                                />
+                                <span className="text-xs text-gray-500 transform -rotate-45 origin-top-left whitespace-nowrap">
+                                  {new Date(item.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="text-center text-sm text-gray-600">
+                          Total: ${analytics.revenueOverTime.reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-64 flex items-center justify-center text-gray-400">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Popular Expertise Areas Chart */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Popular Expertise Areas</CardTitle>
+                    <CardDescription>Most booked interview types</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {analytics.popularExpertiseAreas && analytics.popularExpertiseAreas.length > 0 ? (
+                      <div className="space-y-3">
+                        {analytics.popularExpertiseAreas.slice(0, 8).map((area) => {
+                          const maxCount = Math.max(...analytics.popularExpertiseAreas!.map(a => a.count));
+                          const width = maxCount > 0 ? (area.count / maxCount) * 100 : 0;
+                          return (
+                            <div key={area.type} className="space-y-1">
+                              <div className="flex justify-between text-sm">
+                                <span className="capitalize">{area.type.replace('_', ' ')}</span>
+                                <span className="font-semibold">{area.count}</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-2">
+                                <div
+                                  className="bg-purple-500 h-2 rounded-full transition-all"
+                                  style={{ width: `${width}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="h-64 flex items-center justify-center text-gray-400">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -658,8 +899,30 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         <TabsContent value="sessions" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>All Sessions</CardTitle>
-              <CardDescription>Manage all interview sessions</CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>All Sessions</CardTitle>
+                  <CardDescription>Manage all interview sessions</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Select value={sessionFilters.status} onValueChange={(v) => setSessionFilters({...sessionFilters, status: v})}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="sm" onClick={() => exportData('sessions')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -704,6 +967,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                               setSelectedSession(session);
                               setEditSessionOpen(true);
                             }}
+                            title="Edit Session"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -711,6 +975,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteSession(session.id)}
+                            title="Delete Session"
                           >
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
@@ -727,8 +992,42 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         <TabsContent value="users" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>All Users</CardTitle>
-              <CardDescription>Manage all users in the system</CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>User Management</CardTitle>
+                  <CardDescription>Manage all users in the system</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search users..."
+                    value={userFilters.search}
+                    onChange={(e) => setUserFilters({...userFilters, search: e.target.value})}
+                    className="w-48"
+                  />
+                  <Select value={userFilters.type} onValueChange={(v) => setUserFilters({...userFilters, type: v})}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="candidate">Candidates</SelectItem>
+                      <SelectItem value="expert">Experts</SelectItem>
+                      <SelectItem value="admin">Admins</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={userFilters.status} onValueChange={(v) => setUserFilters({...userFilters, status: v})}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                      <SelectItem value="unverified">Unverified</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
@@ -740,11 +1039,21 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                     <TableHead>Status</TableHead>
                     <TableHead>Rating</TableHead>
                     <TableHead>Sessions</TableHead>
+                    <TableHead>Sign-up Date</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((u) => (
+                  {users
+                    .filter(u => {
+                      if (userFilters.type !== 'all' && u.userType !== userFilters.type) return false;
+                      if (userFilters.status === 'active' && !u.isActive) return false;
+                      if (userFilters.status === 'inactive' && u.isActive) return false;
+                      if (userFilters.status === 'unverified' && u.userType === 'expert' && u.isVerified) return false;
+                      if (userFilters.search && !u.name.toLowerCase().includes(userFilters.search.toLowerCase()) && !u.email.toLowerCase().includes(userFilters.search.toLowerCase())) return false;
+                      return true;
+                    })
+                    .map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>{u.name}</TableCell>
                       <TableCell>{u.email}</TableCell>
@@ -761,16 +1070,54 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       </TableCell>
                       <TableCell>{u.totalSessions || 0}</TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedUser(u);
-                            setEditUserOpen(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        {new Date(u.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={async () => {
+                              const response = await apiService.getUserDetails(u.id);
+                              if (response.success) {
+                                setSelectedUserDetail(response.data?.data || response.data);
+                                setUserDetailOpen(true);
+                              }
+                            }}
+                            title="View Details"
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(u);
+                              setEditUserOpen(true);
+                            }}
+                            title="Edit User"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {u.userType === 'expert' && !u.isVerified && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={async () => {
+                                if (confirm(`Approve expert ${u.name}?`)) {
+                                  const response = await apiService.approveExpert(u.id, true);
+                                  if (response.success) {
+                                    toast.success('Expert approved');
+                                    loadData();
+                                  }
+                                }
+                              }}
+                              title="Approve Expert"
+                            >
+                              <Star className="h-4 w-4 text-green-600" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -886,6 +1233,376 @@ export default function AdminDashboard({}: AdminDashboardProps) {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="financial" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${financialSummary?.totalRevenue?.toFixed(2) || '0.00'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  All transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Platform Commission</CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${financialSummary?.totalCommission?.toFixed(2) || '0.00'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  20% commission rate
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Payouts</CardTitle>
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  ${financialSummary?.totalPayouts?.toFixed(2) || '0.00'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  To experts
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Transactions</CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {financialSummary?.transactionCount || 0}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Total transactions
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Transaction History</CardTitle>
+                <Button variant="outline" size="sm" onClick={() => exportData('payments')}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Candidate</TableHead>
+                    <TableHead>Expert</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Commission</TableHead>
+                    <TableHead>Payout</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {transactions.map((t) => (
+                    <TableRow key={t.id}>
+                      <TableCell>{new Date(t.date).toLocaleDateString()}</TableCell>
+                      <TableCell>{t.candidate}</TableCell>
+                      <TableCell>{t.expert}</TableCell>
+                      <TableCell>${t.amount?.toFixed(2)}</TableCell>
+                      <TableCell>${t.platformCommission?.toFixed(2)}</TableCell>
+                      <TableCell>${t.expertPayout?.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge variant={t.status === 'completed' ? 'default' : 'secondary'}>
+                          {t.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Expert Payouts</CardTitle>
+                <Button variant="outline" size="sm" onClick={() => {
+                  const csv = [
+                    'Expert,Email,Total Earnings,Platform Commission,Payout Amount,Sessions',
+                    ...payouts.map(p => `"${p.expertName}","${p.expertEmail}",${p.totalEarnings},${p.platformCommission},${p.payoutAmount},${p.sessionCount}`)
+                  ].join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'payouts-export.csv';
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  toast.success('Payouts exported');
+                }}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Payouts
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Expert</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Total Earnings</TableHead>
+                    <TableHead>Commission</TableHead>
+                    <TableHead>Payout Amount</TableHead>
+                    <TableHead>Sessions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payouts.map((p) => (
+                    <TableRow key={p.expertId}>
+                      <TableCell>{p.expertName}</TableCell>
+                      <TableCell>{p.expertEmail}</TableCell>
+                      <TableCell>${p.totalEarnings?.toFixed(2)}</TableCell>
+                      <TableCell>${p.platformCommission?.toFixed(2)}</TableCell>
+                      <TableCell className="font-semibold">${p.payoutAmount?.toFixed(2)}</TableCell>
+                      <TableCell>{p.sessionCount}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="content" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Expertise Areas Management</CardTitle>
+              <CardDescription>Manage available interview types and skills</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid gap-2">
+                  <Label>Available Session Types</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {['technical', 'behavioral', 'system_design', 'resume', 'mock_interview', 'coding_challenge'].map((type) => (
+                      <Badge key={type} variant="outline" className="px-3 py-1">
+                        {type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Session types are currently managed in the database schema. To add new types, update the SessionType enum in the Prisma schema.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Featured Experts</CardTitle>
+              <CardDescription>Manage featured experts on the platform</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Expert</TableHead>
+                    <TableHead>Rating</TableHead>
+                    <TableHead>Sessions</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users
+                    .filter(u => u.userType === 'expert')
+                    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+                    .slice(0, 10)
+                    .map((expert) => (
+                      <TableRow key={expert.id}>
+                        <TableCell>{expert.name}</TableCell>
+                        <TableCell>
+                          {expert.rating ? `${expert.rating.toFixed(1)} ⭐` : '-'}
+                        </TableCell>
+                        <TableCell>{expert.totalSessions || 0}</TableCell>
+                        <TableCell>
+                          <Badge variant={expert.isVerified ? 'default' : 'secondary'}>
+                            {expert.isVerified ? 'Verified' : 'Unverified'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedUser(expert);
+                              setEditUserOpen(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="settings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Platform Configuration</CardTitle>
+              <CardDescription>Manage platform settings and policies</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                <div>
+                  <Label className="text-base font-semibold">Cancellation Policy</Label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Set rules for session cancellations
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="cancel24h" defaultChecked className="rounded" />
+                      <label htmlFor="cancel24h" className="text-sm">
+                        Allow cancellation up to 24 hours before session
+                      </label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="refundPolicy" defaultChecked className="rounded" />
+                      <label htmlFor="refundPolicy" className="text-sm">
+                        Automatic refund for cancellations within policy
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <Label className="text-base font-semibold">Rescheduling Policy</Label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Set rules for session rescheduling
+                  </p>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="reschedule48h" defaultChecked className="rounded" />
+                      <label htmlFor="reschedule48h" className="text-sm">
+                        Allow rescheduling up to 48 hours before session
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <Label className="text-base font-semibold">Commission Rates</Label>
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Platform commission percentage
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input type="number" defaultValue={20} className="w-24" />
+                    <span className="text-sm">%</span>
+                    <span className="text-sm text-muted-foreground">(Experts receive {100 - 20}%)</span>
+                  </div>
+                </div>
+
+                <div className="border-t pt-4">
+                  <Label className="text-base font-semibold">System Health</Label>
+                  <div className="mt-2 space-y-2">
+                    {analytics?.systemHealth && (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">API Latency</span>
+                          <Badge variant={analytics.systemHealth.apiLatency < 50 ? 'default' : 'secondary'}>
+                            {analytics.systemHealth.apiLatency}ms
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Server Uptime</span>
+                          <Badge variant="default">
+                            {analytics.systemHealth.serverUptime}%
+                          </Badge>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Video Integration</span>
+                          <Badge variant="default">
+                            {analytics.systemHealth.videoIntegrationStatus}
+                          </Badge>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Custom Reports</CardTitle>
+              <CardDescription>Generate custom reports and exports</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Button variant="outline" onClick={() => exportData('sessions')} className="justify-start">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export All Sessions
+                  </Button>
+                  <Button variant="outline" onClick={() => exportData('users')} className="justify-start">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export All Users
+                  </Button>
+                  <Button variant="outline" onClick={() => exportData('payments')} className="justify-start">
+                    <Download className="h-4 w-4 mr-2" />
+                    Export Financial Data
+                  </Button>
+                  <Button variant="outline" onClick={() => {
+                    const noShowSessions = sessions.filter(s => s.status === 'cancelled');
+                    const csv = [
+                      'Session ID,Candidate,Expert,Date,Status',
+                      ...noShowSessions.map(s => `"${s.id}","${s.candidateName}","${s.expertName}","${s.date}","${s.status}"`)
+                    ].join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'no-show-report.csv';
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    toast.success('No-show report exported');
+                  }} className="justify-start">
+                    <Download className="h-4 w-4 mr-2" />
+                    No-Show Report
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Edit Session Dialog */}
@@ -918,6 +1635,118 @@ export default function AdminDashboard({}: AdminDashboardProps) {
               onSave={(data) => handleUpdateUser(selectedUser.id, data)}
               onCancel={() => setEditUserOpen(false)}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* User Detail Dialog */}
+      <Dialog open={userDetailOpen} onOpenChange={setUserDetailOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>User Details</DialogTitle>
+            <DialogDescription>Complete user information and history</DialogDescription>
+          </DialogHeader>
+          {selectedUserDetail && (
+            <div className="space-y-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label className="text-sm font-semibold">Name</Label>
+                  <p className="text-sm">{selectedUserDetail.name}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">Email</Label>
+                  <p className="text-sm">{selectedUserDetail.email}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">User Type</Label>
+                  <Badge variant="outline">{selectedUserDetail.userType}</Badge>
+                </div>
+                <div>
+                  <Label className="text-sm font-semibold">Status</Label>
+                  <Badge variant={selectedUserDetail.isActive ? 'default' : 'secondary'}>
+                    {selectedUserDetail.isActive ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+                {selectedUserDetail.userType === 'expert' && (
+                  <>
+                    <div>
+                      <Label className="text-sm font-semibold">Verified</Label>
+                      <Badge variant={selectedUserDetail.isVerified ? 'default' : 'secondary'}>
+                        {selectedUserDetail.isVerified ? 'Verified' : 'Unverified'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-semibold">Rating</Label>
+                      <p className="text-sm">{selectedUserDetail.rating ? `${selectedUserDetail.rating.toFixed(1)} ⭐` : 'N/A'}</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {selectedUserDetail.userType === 'candidate' && selectedUserDetail.candidateSessions && (
+                <div>
+                  <Label className="text-sm font-semibold mb-2 block">Booking History</Label>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedUserDetail.candidateSessions.map((session: any) => (
+                      <div key={session.id} className="border rounded p-2">
+                        <div className="flex justify-between">
+                          <span className="font-medium">{session.sessionType}</span>
+                          <Badge variant="outline">{session.status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(session.scheduledDate).toLocaleString()} with {session.expert?.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedUserDetail.userType === 'expert' && selectedUserDetail.expertSessions && (
+                <div>
+                  <Label className="text-sm font-semibold mb-2 block">Session History</Label>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedUserDetail.expertSessions.map((session: any) => (
+                      <div key={session.id} className="border rounded p-2">
+                        <div className="flex justify-between">
+                          <span className="font-medium">{session.sessionType}</span>
+                          <Badge variant="outline">{session.status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(session.scheduledDate).toLocaleString()} with {session.candidate?.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedUserDetail.reviewsReceived && selectedUserDetail.reviewsReceived.length > 0 && (
+                <div>
+                  <Label className="text-sm font-semibold mb-2 block">Reviews Received</Label>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedUserDetail.reviewsReceived.map((review: any) => (
+                      <div key={review.id} className="border rounded p-2">
+                        <div className="flex justify-between">
+                          <span className="font-medium">{review.reviewer?.name}</span>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star
+                                key={i}
+                                className={`h-4 w-4 ${i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        {review.comment && (
+                          <p className="text-sm text-muted-foreground mt-1">{review.comment}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </DialogContent>
       </Dialog>

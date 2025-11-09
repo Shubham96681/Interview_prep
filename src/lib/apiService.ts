@@ -273,9 +273,48 @@ class ApiService {
     });
   }
 
-  async getAnalytics() {
+  async getAnalytics(period: string = 'month') {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
-    return this.request(`/api/admin/analytics?email=${encodeURIComponent(user.email || '')}`);
+    return this.request(`/api/admin/analytics?email=${encodeURIComponent(user.email || '')}&period=${period}`);
+  }
+
+  async rescheduleSession(sessionId: string, date: string, time: string, reason?: string) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/sessions/${sessionId}/reschedule?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'POST',
+      body: JSON.stringify({ date, time, reason }),
+    });
+  }
+
+  async cancelSession(sessionId: string, reason?: string) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/sessions/${sessionId}/cancel?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getUserDetails(userId: string) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/users/${userId}?email=${encodeURIComponent(user.email || '')}`);
+  }
+
+  async approveExpert(userId: string, approved: boolean, reason?: string) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/users/${userId}/approve-expert?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'POST',
+      body: JSON.stringify({ approved, reason }),
+    });
+  }
+
+  async getTransactions() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/financial/transactions?email=${encodeURIComponent(user.email || '')}`);
+  }
+
+  async getPayouts() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/financial/payouts?email=${encodeURIComponent(user.email || '')}`);
   }
 }
 
