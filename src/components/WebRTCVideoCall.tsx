@@ -456,6 +456,13 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     };
   }, [remoteStream]);
 
+  // Update refs when memoized functions are defined (runs after functions are declared)
+  useEffect(() => {
+    createPeerConnectionRef.current = createPeerConnection;
+    handleOfferRef.current = handleOffer;
+    handleAnswerRef.current = handleAnswer;
+    handleIceCandidateRef.current = handleIceCandidate;
+  }, [createPeerConnection, handleOffer, handleAnswer, handleIceCandidate]);
 
   const startLocalStream = async () => {
     try {
