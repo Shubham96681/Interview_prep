@@ -520,8 +520,13 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
             muted
             className="w-full h-full object-cover"
             style={{ 
-              display: localStream && isVideoEnabled ? 'block' : 'none',
-              backgroundColor: '#000'
+              opacity: localStream && isVideoEnabled ? 1 : 0,
+              backgroundColor: '#000',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%'
             }}
             onLoadedMetadata={() => {
               console.log('✅ Video metadata loaded');
@@ -531,6 +536,9 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
             }}
             onCanPlay={() => {
               console.log('✅ Video can play');
+            }}
+            onPlaying={() => {
+              console.log('✅ Video is playing');
             }}
             onError={(e) => {
               console.error('❌ Video element error:', e);
