@@ -10,14 +10,21 @@ import WebRTCVideoCall from '@/components/WebRTCVideoCall';
 export default function Meeting() {
   const { meetingId } = useParams<{ meetingId: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [isInCall, setIsInCall] = useState(false);
 
   useEffect(() => {
     if (!meetingId) {
-      navigate('/dashboard');
+      setError('Meeting ID is required');
+      setLoading(false);
+      return;
+    }
+
+    // Wait for auth to load before fetching session
+    if (authLoading) {
       return;
     }
 
@@ -25,6 +32,7 @@ export default function Meeting() {
     const fetchSession = async () => {
       try {
         console.log('Fetching session for meetingId:', meetingId);
+        setError(null);
         const response = await apiService.getSessionByMeetingId(meetingId);
         console.log('Session response:', response);
         if (response.success && response.data) {
@@ -49,6 +57,7 @@ export default function Meeting() {
         } else {
           console.error('Session not found for meeting ID:', meetingId);
           console.error('Response:', response);
+          setError('Session not found');
         }
       } catch (error: any) {
         console.error('Error fetching session:', error);
@@ -60,7 +69,9 @@ export default function Meeting() {
         });
         // If 404, session not found - will show error message
         if (error?.response?.status === 404) {
-          console.error('Session not found for meeting ID:', meetingId);
+          setError('Session not found. The meeting link may be invalid or the session has been cancelled.');
+        } else {
+          setError(error?.message || 'Failed to load meeting session. Please try again.');
         }
       } finally {
         setLoading(false);
@@ -68,24 +79,59 @@ export default function Meeting() {
     };
 
     fetchSession();
-  }, [meetingId, navigate]);
+  }, [meetingId, navigate, authLoading]);
 
-  if (loading) {
+  // Show loading state - check auth first
+  if (authLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading authentication...</p>
+        </div>
       </div>
     );
   }
 
-  if (!session) {
+  // If user is not loaded yet, show loading
+  // Note: ProtectedRoute should handle auth, but we check here too
+  if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="max-w-md">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading user information...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state while fetching session
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading meeting...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state - only if we're done loading and have an error or no session
+  if (error || !session) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-6">
+        <Card className="max-w-md w-full">
           <CardContent className="p-6 text-center">
-            <h2 className="text-xl font-semibold mb-2">Meeting Not Found</h2>
-            <p className="text-gray-600 mb-4">The meeting link is invalid or the session has been cancelled.</p>
-            <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
+            <h2 className="text-xl font-semibold mb-2 text-red-600">Error</h2>
+            <p className="text-gray-600 mb-4">
+              {error || 'The meeting link is invalid or the session has been cancelled.'}
+            </p>
+            <div className="flex gap-2 justify-center">
+              <Button onClick={() => navigate('/dashboard')}>Go to Dashboard</Button>
+              <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -140,14 +186,6 @@ export default function Meeting() {
     });
   }
 
-  // If user is not loaded yet, show loading
-  if (!user && loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
 
   // Parse meeting date - handle both ISO string and date/time format
   let meetingDate: Date;
