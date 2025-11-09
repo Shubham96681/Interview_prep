@@ -91,6 +91,12 @@ model Session {
   // Additional participants (stored as JSON array of user IDs)
   additionalParticipants String? // JSON string of participant IDs array
 
+  // Meeting information
+  meetingLink String? // Meeting URL for video conference
+  meetingId String? // Unique meeting ID
+  recordingUrl String? // URL to recorded meeting
+  isRecordingEnabled Boolean @default(true) // Whether recording is enabled for this session
+
   // Reviews
   reviews Review[]
 

@@ -8,6 +8,7 @@ import Index from './pages/Index';
 import ExpertDirectory from './pages/ExpertDirectory';
 import ExpertProfile from './pages/ExpertProfile';
 import Dashboard from './pages/Dashboard';
+import Meeting from './pages/Meeting';
 import NotFound from './pages/NotFound';
 import ConnectionStatus from './components/ConnectionStatus';
 
@@ -30,6 +31,7 @@ const App = () => (
           <Route path="/experts" element={<ExpertDirectory />} />
           <Route path="/expert/:id" element={<ExpertProfile />} />
             <Route path="/dashboard" element={<ProtectedRoute requireAuth={true}><Dashboard /></ProtectedRoute>} />
+          <Route path="/meeting/:meetingId" element={<ProtectedRoute requireAuth={true}><Meeting /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </AuthProvider>

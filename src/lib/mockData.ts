@@ -36,6 +36,9 @@ export interface Session {
   feedbackRating?: number;
   feedbackComment?: string;
   meetingLink?: string;
+  meetingId?: string;
+  recordingUrl?: string;
+  isRecordingEnabled?: boolean;
   // Legacy fields for backward compatibility
   type?: string;
   legacyDate?: string;

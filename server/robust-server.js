@@ -251,6 +251,10 @@ class RobustServer {
             status: session.status,
             paymentAmount: session.paymentAmount,
             paymentStatus: session.paymentStatus,
+            meetingLink: session.meetingLink,
+            meetingId: session.meetingId,
+            recordingUrl: session.recordingUrl,
+            isRecordingEnabled: session.isRecordingEnabled,
             createdAt: session.createdAt.toISOString()
           };
         });
@@ -327,6 +331,10 @@ class RobustServer {
         const [hours, minutes] = time.split(':').map(Number);
         const scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
         
+        // Generate unique meeting ID and link
+        const meetingId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        const meetingLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/meeting/${meetingId}`;
+        
         const sessionData = {
           title: `${sessionType || 'Technical'} Interview Session`,
           description: `Interview session scheduled for ${date} at ${time}`,
@@ -337,7 +345,10 @@ class RobustServer {
           candidateId: actualCandidateId,
           expertId: actualExpertId,
           paymentAmount: 75,
-          paymentStatus: 'pending'
+          paymentStatus: 'pending',
+          meetingLink: meetingLink,
+          meetingId: meetingId,
+          isRecordingEnabled: true
         };
 
         const newSession = await databaseService.createSession(sessionData);
@@ -368,6 +379,10 @@ class RobustServer {
           status: newSession.status,
           paymentAmount: newSession.paymentAmount,
           paymentStatus: newSession.paymentStatus,
+          meetingLink: newSession.meetingLink,
+          meetingId: newSession.meetingId,
+          recordingUrl: newSession.recordingUrl,
+          isRecordingEnabled: newSession.isRecordingEnabled,
           createdAt: newSession.createdAt.toISOString()
         };
         
@@ -486,6 +501,10 @@ class RobustServer {
             status: session.status,
             paymentAmount: session.paymentAmount,
             paymentStatus: session.paymentStatus,
+            meetingLink: session.meetingLink,
+            meetingId: session.meetingId,
+            recordingUrl: session.recordingUrl,
+            isRecordingEnabled: session.isRecordingEnabled,
             feedbackRating: session.feedbackRating,
             feedbackComment: session.feedbackComment,
             additionalParticipants: session.additionalParticipants ? JSON.parse(session.additionalParticipants) : [],
@@ -1339,6 +1358,45 @@ class RobustServer {
         res.status(500).json({
           success: false,
           error: 'Failed to fetch payouts',
+          message: error.message
+        });
+      }
+    });
+
+    // Update recording URL for a session (admin or expert only)
+    this.app.put('/api/sessions/:id/recording', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { recordingUrl } = req.body;
+
+        if (!recordingUrl) {
+          return res.status(400).json({
+            success: false,
+            message: 'Recording URL is required'
+          });
+        }
+
+        const updatedSession = await prisma.session.update({
+          where: { id },
+          data: {
+            recordingUrl: recordingUrl
+          },
+          include: {
+            candidate: { select: { name: true, email: true } },
+            expert: { select: { name: true, email: true } }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedSession,
+          message: 'Recording URL updated successfully'
+        });
+      } catch (error) {
+        console.error('Error updating recording URL:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update recording URL',
           message: error.message
         });
       }

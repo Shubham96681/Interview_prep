@@ -195,16 +195,48 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                               <span>{session.duration} minutes</span>
                               <span className="text-green-600 font-medium">${session.paymentAmount}</span>
                             </div>
+                            {session.meetingLink && (
+                              <div className="mt-2">
+                                <a 
+                                  href={session.meetingLink} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                                >
+                                  <Video className="h-3 w-3" />
+                                  Meeting Link
+                                </a>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            Reschedule
-                          </Button>
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                            <Video className="h-4 w-4 mr-2" />
-                            Join Session
-                          </Button>
+                          {session.meetingLink && (
+                            <Button 
+                              size="sm" 
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => window.open(session.meetingLink, '_blank')}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              Join Meeting
+                            </Button>
+                          )}
+                          {session.recordingUrl && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => window.open(session.recordingUrl, '_blank')}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              View Recording
+                            </Button>
+                          )}
+                          {session.isRecordingEnabled && !session.recordingUrl && (
+                            <span className="text-xs text-gray-500 flex items-center">
+                              <Video className="h-3 w-3 mr-1" />
+                              Recording enabled
+                            </span>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -251,12 +283,21 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          View Feedback
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Download Recording
-                        </Button>
+                        {session.recordingUrl && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => window.open(session.recordingUrl, '_blank')}
+                          >
+                            <Video className="h-4 w-4 mr-2" />
+                            View Recording
+                          </Button>
+                        )}
+                        {!session.recordingUrl && session.isRecordingEnabled && (
+                          <span className="text-xs text-gray-500 flex items-center">
+                            Recording processing...
+                          </span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
@@ -274,13 +315,58 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
           </TabsContent>
 
           <TabsContent value="recordings" className="space-y-4 p-6">
-            <Card className="border-0 shadow-md">
-              <CardContent className="p-12 text-center">
-                <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-600 mb-2">No recordings available</h3>
-                <p className="text-gray-500">Session recordings and detailed feedback will appear here after your sessions.</p>
-              </CardContent>
-            </Card>
+            {completedSessions.filter(s => s.recordingUrl || s.isRecordingEnabled).length > 0 ? (
+              completedSessions
+                .filter(s => s.recordingUrl || s.isRecordingEnabled)
+                .map(session => (
+                  <Card key={session.id} className="border-0 shadow-md">
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-12 w-12">
+                            <AvatarImage src="https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face" />
+                            <AvatarFallback>JS</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{session.expertName || 'Expert'}</h3>
+                            <p className="text-sm text-gray-600 capitalize">{session.sessionType || session.type}</p>
+                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
+                              <span>{formatDate(session.scheduledDate || session.date || '', session.time)}</span>
+                              {session.isRecordingEnabled && (
+                                <span className="text-green-600">Recording Enabled</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {session.recordingUrl ? (
+                            <Button 
+                              size="sm" 
+                              className="bg-blue-600 hover:bg-blue-700"
+                              onClick={() => window.open(session.recordingUrl, '_blank')}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              Watch Recording
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-gray-500 flex items-center">
+                              Processing recording...
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+            ) : (
+              <Card className="border-0 shadow-md">
+                <CardContent className="p-12 text-center">
+                  <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">No recordings available</h3>
+                  <p className="text-gray-500">Session recordings will appear here after your sessions are completed.</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>

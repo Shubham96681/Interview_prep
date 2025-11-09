@@ -319,16 +319,48 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                               <span>{session.duration} minutes</span>
                               <span className="text-green-600 font-medium">${session.paymentAmount}</span>
                             </div>
+                            {session.meetingLink && (
+                              <div className="mt-2">
+                                <a 
+                                  href={session.meetingLink} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                                >
+                                  <Video className="h-3 w-3" />
+                                  Meeting Link
+                                </a>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <Button variant="outline" size="sm">
-                            Reschedule
-                          </Button>
-                          <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                            <Video className="h-4 w-4 mr-2" />
-                            Start Session
-                          </Button>
+                          {session.meetingLink && (
+                            <Button 
+                              size="sm" 
+                              className="bg-green-600 hover:bg-green-700"
+                              onClick={() => window.open(session.meetingLink, '_blank')}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              Join Meeting
+                            </Button>
+                          )}
+                          {session.recordingUrl && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => window.open(session.recordingUrl, '_blank')}
+                            >
+                              <Video className="h-4 w-4 mr-2" />
+                              View Recording
+                            </Button>
+                          )}
+                          {session.isRecordingEnabled && !session.recordingUrl && (
+                            <span className="text-xs text-gray-500 flex items-center">
+                              <Video className="h-3 w-3 mr-1" />
+                              Recording enabled
+                            </span>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -370,12 +402,21 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                         </div>
                       </div>
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm">
-                          View Details
-                        </Button>
-                        <Button variant="outline" size="sm">
-                          Add Feedback
-                        </Button>
+                        {session.recordingUrl && (
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => window.open(session.recordingUrl, '_blank')}
+                          >
+                            <Video className="h-4 w-4 mr-2" />
+                            View Recording
+                          </Button>
+                        )}
+                        {!session.recordingUrl && session.isRecordingEnabled && (
+                          <span className="text-xs text-gray-500 flex items-center">
+                            Recording processing...
+                          </span>
+                        )}
                       </div>
                     </div>
                   </CardContent>
