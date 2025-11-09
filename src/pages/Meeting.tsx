@@ -154,7 +154,10 @@ export default function Meeting() {
   const isNow = isValidDate && Math.abs(meetingDate.getTime() - Date.now()) < 15 * 60 * 1000; // Within 15 minutes
 
   // Check if this is a WebRTC meeting (custom video system)
-  const isWebRTCMeeting = session.meetingLink && session.meetingLink.includes('/meeting/');
+  // WebRTC meetings have meetingLink containing '/meeting/' or we have a meetingId from URL
+  const isWebRTCMeeting = (session.meetingLink && session.meetingLink.includes('/meeting/')) || 
+                          (meetingId && meetingId.startsWith('meet-')) ||
+                          (session.meetingId && session.meetingId.startsWith('meet-'));
 
   // If in call, show video component
   if (isInCall && isWebRTCMeeting) {
@@ -232,7 +235,8 @@ export default function Meeting() {
                       ? "It's time for your session! Click below to join the meeting."
                       : "The session time has arrived. Click below to join the meeting."}
                   </p>
-                  {session.meetingLink && (
+                  {/* Always show button if we have meetingId or meetingLink */}
+                  {(session.meetingLink || session.meetingId || meetingId) && (
                     <>
                       {isWebRTCMeeting ? (
                         <Button 
@@ -243,7 +247,7 @@ export default function Meeting() {
                           <Video className="h-5 w-5 mr-2" />
                           Start Video Call
                         </Button>
-                      ) : (
+                      ) : session.meetingLink ? (
                         <Button 
                           size="lg" 
                           className="bg-green-600 hover:bg-green-700"
@@ -258,6 +262,16 @@ export default function Meeting() {
                         >
                           <Video className="h-5 w-5 mr-2" />
                           Join Meeting Room
+                        </Button>
+                      ) : (
+                        // Fallback: if no meetingLink but we have meetingId, use WebRTC
+                        <Button 
+                          size="lg" 
+                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => setIsInCall(true)}
+                        >
+                          <Video className="h-5 w-5 mr-2" />
+                          Start Video Call
                         </Button>
                       )}
                     </>
