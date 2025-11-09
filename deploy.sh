@@ -135,12 +135,6 @@ server {
         proxy_read_timeout 86400;
     }
 }
-
-# Map for WebSocket upgrade
-map $http_upgrade $connection_upgrade {
-    default upgrade;
-    '' close;
-}
 NGINX_EOF
 
 # Add the map block to nginx.conf if not present
