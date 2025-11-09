@@ -147,18 +147,24 @@ export default function Meeting() {
                       ? "It's time for your session! Click below to join the meeting."
                       : "The session time has arrived. Click below to join the meeting."}
                   </p>
-                  <Button 
-                    size="lg" 
-                    className="bg-green-600 hover:bg-green-700"
-                    onClick={() => {
-                      // In production, this would open the actual video conference
-                      // For now, we'll show a message
-                      alert('Meeting room would open here. In production, this would integrate with Zoom, Google Meet, or a WebRTC solution.');
-                    }}
-                  >
-                    <Video className="h-5 w-5 mr-2" />
-                    Join Meeting Room
-                  </Button>
+                  {session.meetingLink && (
+                    <Button 
+                      size="lg" 
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => {
+                        // Open the actual meeting link (Zoom, Google Meet, or custom)
+                        if (session.meetingLink.startsWith('http')) {
+                          window.open(session.meetingLink, '_blank');
+                        } else {
+                          // If it's a relative path, navigate to it
+                          window.location.href = session.meetingLink;
+                        }
+                      }}
+                    >
+                      <Video className="h-5 w-5 mr-2" />
+                      Join Meeting Room
+                    </Button>
+                  )}
                   <p className="text-xs text-gray-500">
                     Meeting ID: {session.meetingId}
                   </p>

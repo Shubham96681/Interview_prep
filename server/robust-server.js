@@ -3,6 +3,7 @@ const cors = require('cors');
 const config = require('./config/server');
 const databaseService = require('./services/database');
 const realtimeService = require('./services/realtime');
+const videoService = require('./services/videoService');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -331,9 +332,13 @@ class RobustServer {
         const [hours, minutes] = time.split(':').map(Number);
         const scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
         
-        // Generate unique meeting ID and link
-        const meetingId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-        const meetingLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/meeting/${meetingId}`;
+        // Create video meeting (Zoom or Google Meet)
+        const meetingInfo = await videoService.createMeeting({
+          title: `${sessionType || 'Technical'} Interview Session`,
+          description: `Interview session scheduled for ${date} at ${time}`,
+          scheduledDate: scheduledDate,
+          duration: duration || 60
+        });
         
         const sessionData = {
           title: `${sessionType || 'Technical'} Interview Session`,
@@ -346,8 +351,8 @@ class RobustServer {
           expertId: actualExpertId,
           paymentAmount: 75,
           paymentStatus: 'pending',
-          meetingLink: meetingLink,
-          meetingId: meetingId,
+          meetingLink: meetingInfo.meetingLink,
+          meetingId: meetingInfo.meetingId,
           isRecordingEnabled: true
         };
 
@@ -1397,6 +1402,86 @@ class RobustServer {
         res.status(500).json({
           success: false,
           error: 'Failed to update recording URL',
+          message: error.message
+        });
+      }
+    });
+
+    // Zoom webhook endpoint for recording completion
+    this.app.post('/api/webhooks/zoom/recording', express.raw({ type: 'application/json' }), async (req, res) => {
+      try {
+        // Verify webhook (in production, verify the signature)
+        const payload = JSON.parse(req.body.toString());
+        
+        if (payload.event === 'recording.completed') {
+          const meetingId = payload.payload.object.id.toString();
+          const recordingUrl = payload.payload.object.recording_files?.[0]?.play_url || 
+                              payload.payload.object.recording_files?.[0]?.download_url;
+
+          if (recordingUrl) {
+            // Find session by meetingId and update recording URL
+            const session = await prisma.session.findFirst({
+              where: { meetingId: meetingId }
+            });
+
+            if (session) {
+              await prisma.session.update({
+                where: { id: session.id },
+                data: { recordingUrl: recordingUrl }
+              });
+              console.log(`Recording URL updated for session ${session.id}: ${recordingUrl}`);
+            }
+          }
+        }
+
+        res.status(200).send('OK');
+      } catch (error) {
+        console.error('Error processing Zoom webhook:', error);
+        res.status(200).send('OK'); // Always return 200 to Zoom
+      }
+    });
+
+    // Get recording from Zoom (manual trigger)
+    this.app.post('/api/sessions/:id/fetch-recording', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        
+        const session = await prisma.session.findUnique({
+          where: { id }
+        });
+
+        if (!session || !session.meetingId) {
+          return res.status(404).json({
+            success: false,
+            message: 'Session or meeting ID not found'
+          });
+        }
+
+        // Try to fetch recording from Zoom
+        const recordingUrl = await videoService.getZoomRecording(session.meetingId);
+
+        if (recordingUrl) {
+          const updatedSession = await prisma.session.update({
+            where: { id },
+            data: { recordingUrl: recordingUrl }
+          });
+
+          res.json({
+            success: true,
+            data: updatedSession,
+            message: 'Recording URL fetched and updated successfully'
+          });
+        } else {
+          res.json({
+            success: false,
+            message: 'Recording not yet available'
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching recording:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch recording',
           message: error.message
         });
       }
