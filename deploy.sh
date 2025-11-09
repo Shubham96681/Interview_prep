@@ -143,18 +143,35 @@ fi
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
-timeout 20 node -e "
-const db = require('./services/database');
-db.initialize()
-  .then(() => {
-    console.log('✅ Database seeding completed');
-    process.exit(0);
-  })
-  .catch(err => {
-    console.error('❌ Database seeding failed:', err);
-    process.exit(1);
-  });
-" 2>&1 || echo "⚠️  Database seeding timed out or failed, continuing..."
+echo "   Starting at: $(date)"
+if command -v timeout >/dev/null 2>&1; then
+    timeout 20 node -e "
+    const db = require('./services/database');
+    db.initialize()
+      .then(() => {
+        console.log('✅ Database seeding completed');
+        process.exit(0);
+      })
+      .catch(err => {
+        console.error('❌ Database seeding failed:', err);
+        process.exit(1);
+      });
+    " 2>&1 || echo "⚠️  Database seeding timed out or failed, continuing..."
+else
+    node -e "
+    const db = require('./services/database');
+    db.initialize()
+      .then(() => {
+        console.log('✅ Database seeding completed');
+        process.exit(0);
+      })
+      .catch(err => {
+        console.error('❌ Database seeding failed:', err);
+        process.exit(1);
+      });
+    " 2>&1 || echo "⚠️  Database seeding failed, continuing..."
+fi
+echo "   Completed at: $(date)"
 cd ..
 
 # Restart backend server
