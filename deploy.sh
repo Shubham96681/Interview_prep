@@ -32,7 +32,7 @@ cd ..
 
 # Build frontend
 echo "🔨 Building frontend application..."
-npm run build
+timeout 300 npm run build || { echo "❌ Frontend build failed or timed out"; exit 1; }
 
 # Verify build succeeded
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
@@ -57,9 +57,9 @@ fi
 echo "🗄️  Running database migrations..."
 cd server
 echo "   Generating Prisma client..."
-npx prisma generate --silent
+timeout 60 npx prisma generate --silent || { echo "❌ Prisma generate failed"; exit 1; }
 echo "   Pushing database schema..."
-npx prisma db push --skip-generate --accept-data-loss --skip-seed
+timeout 30 npx prisma db push --skip-generate --accept-data-loss --skip-seed || { echo "❌ Database push failed"; exit 1; }
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
