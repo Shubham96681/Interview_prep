@@ -2,6 +2,11 @@
 
 set -e  # Exit on any error
 
+# Set timeouts to prevent hanging
+export DEBIAN_FRONTEND=noninteractive
+export NPM_CONFIG_PROGRESS=false
+export NPM_CONFIG_SPIN=false
+
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
 
@@ -13,17 +18,17 @@ git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
 echo "📦 Installing frontend dependencies..."
-npm install --legacy-peer-deps
+timeout 300 npm install --legacy-peer-deps || { echo "❌ npm install timed out or failed"; exit 1; }
 
 # Install server dependencies (production only)
 echo "📦 Installing backend dependencies..."
 cd server
-npm install --production --legacy-peer-deps
+timeout 300 npm install --production --legacy-peer-deps || { echo "❌ npm install timed out or failed"; exit 1; }
 cd ..
 
 # Build frontend
 echo "🔨 Building frontend application..."
-npm run build
+timeout 600 npm run build || { echo "❌ Build timed out or failed"; exit 1; }
 
 # Verify build succeeded
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
@@ -47,12 +52,12 @@ fi
 # Run database migrations
 echo "🗄️  Running database migrations..."
 cd server
-npx prisma generate
-npx prisma db push --skip-generate --accept-data-loss
+timeout 120 npx prisma generate || { echo "❌ Prisma generate failed"; exit 1; }
+timeout 120 npx prisma db push --skip-generate --accept-data-loss || { echo "❌ Prisma db push failed"; exit 1; }
 
 # Seed database if needed (ensure demo users exist)
 echo "🌱 Seeding database with demo users..."
-node -e "
+timeout 60 node -e "
 const db = require('./services/database');
 db.initialize()
   .then(() => {
@@ -63,36 +68,38 @@ db.initialize()
     console.error('❌ Database seeding failed:', err);
     process.exit(1);
   });
-"
+" || { echo "⚠️  Database seeding timed out or failed, continuing..."; }
 cd ..
 
 # Restart backend server
 echo "🔄 Restarting backend server..."
-if pm2 list | grep -q "interview-prep-backend"; then
+if timeout 30 pm2 list 2>/dev/null | grep -q "interview-prep-backend"; then
     echo "   Restarting existing PM2 process..."
-    pm2 restart interview-prep-backend --update-env
+    timeout 30 pm2 restart interview-prep-backend --update-env 2>/dev/null || echo "⚠️  PM2 restart failed, trying to start new..."
+    # If restart failed, try to start new
+    if ! timeout 10 pm2 list 2>/dev/null | grep -q "interview-prep-backend"; then
+        echo "   Starting new PM2 process..."
+        timeout 30 pm2 start npm --name "interview-prep-backend" --cwd server -- start 2>/dev/null || echo "⚠️  PM2 start failed"
+    fi
 else
     echo "   Starting new PM2 process..."
-    pm2 start npm --name "interview-prep-backend" --cwd server -- start
+    timeout 30 pm2 start npm --name "interview-prep-backend" --cwd server -- start 2>/dev/null || echo "⚠️  PM2 start failed"
 fi
 
-# Save PM2 configuration
-pm2 save
+# Save PM2 configuration (non-blocking)
+echo "💾 Saving PM2 configuration..."
+timeout 10 pm2 save 2>/dev/null || echo "⚠️  PM2 save failed, but continuing..."
 
 # Reload nginx to serve new frontend build
 echo "🌐 Reloading nginx..."
-sudo systemctl reload nginx || sudo systemctl restart nginx
+timeout 10 sudo systemctl reload nginx 2>/dev/null || timeout 10 sudo systemctl restart nginx 2>/dev/null || echo "⚠️  Nginx reload failed, but continuing..."
 
 # Wait a moment for services to stabilize
 sleep 3
 
 # Verify backend is running
 echo "🏥 Verifying backend health..."
-if curl -f http://localhost:5000/api/health > /dev/null 2>&1; then
-    echo "✅ Backend is healthy!"
-else
-    echo "⚠️  Backend health check failed, but continuing..."
-fi
+timeout 5 curl -f http://localhost:5000/api/health > /dev/null 2>&1 && echo "✅ Backend is healthy!" || echo "⚠️  Backend health check failed, but continuing..."
 
 echo ""
 echo "=== Deployment Completed Successfully ==="

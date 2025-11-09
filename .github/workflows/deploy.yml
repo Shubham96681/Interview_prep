@@ -38,8 +38,8 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
-        timeout: 300s
-        command_timeout: 300s
+        timeout: 600s
+        command_timeout: 600s
         script_stop: true
         script: |
           set -e
