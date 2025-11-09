@@ -65,6 +65,9 @@ jobs:
         script_stop: true
         debug: true
         fingerprint: false
+        use_insecure_cipher: false
+        cipher: []
+        args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
         script: |
           set -e
           
@@ -151,6 +154,8 @@ jobs:
         port: 22
         timeout: 300s
         debug: true
+        fingerprint: false
+        args: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
         script: |
           set -e
           
