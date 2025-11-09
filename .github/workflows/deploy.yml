@@ -188,9 +188,6 @@ jobs:
               echo "✅ Deployment script completed successfully (exit code: $DEPLOY_EXIT)"
             fi
           fi
-          
-          echo "   Completed at: $(date)"
-          echo "✅ Deployment script completed successfully"
       
     - name: Verify deployment
       uses: appleboy/ssh-action@v1.0.3
