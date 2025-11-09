@@ -36,6 +36,7 @@ jobs:
       run: |
         echo "🔍 Pre-flight connectivity check (non-blocking)..."
         echo "Instance IP: 54.159.42.7"
+        echo "Note: Security group allows SSH from 0.0.0.0/0 (anywhere), so your IP doesn't matter for deployment."
         echo ""
         echo "Note: This check may fail even if SSH works. The actual SSH connection will be attempted regardless."
         echo ""
