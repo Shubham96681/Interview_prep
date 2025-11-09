@@ -84,6 +84,20 @@ if [ ! -f server/.env ]; then
     fi
 fi
 
+# Update FRONTEND_URL to use the correct IP (HTTPS)
+echo "📝 Updating FRONTEND_URL in server/.env..."
+cd server
+if grep -q "^FRONTEND_URL=" .env; then
+    # Update existing FRONTEND_URL
+    sed -i 's|^FRONTEND_URL=.*|FRONTEND_URL=https://54.91.53.228|' .env
+    echo "   ✅ Updated FRONTEND_URL to https://54.91.53.228"
+else
+    # Add FRONTEND_URL if it doesn't exist
+    echo "FRONTEND_URL=https://54.91.53.228" >> .env
+    echo "   ✅ Added FRONTEND_URL=https://54.91.53.228"
+fi
+cd ..
+
 # Run database migrations
 echo "🗄️  Running database migrations..."
 cd server
