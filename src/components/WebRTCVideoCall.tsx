@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Video, VideoOff, Mic, MicOff, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
@@ -456,90 +456,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     };
   }, [remoteStream]);
 
-  // Update refs when memoized functions are defined (runs after functions are declared)
-  useEffect(() => {
-    createPeerConnectionRef.current = createPeerConnection;
-    handleOfferRef.current = handleOffer;
-    handleAnswerRef.current = handleAnswer;
-    handleIceCandidateRef.current = handleIceCandidate;
-  }, [createPeerConnection, handleOffer, handleAnswer, handleIceCandidate]);
-
-  const startLocalStream = async () => {
-    try {
-      console.log('🎥 Requesting camera and microphone access...');
-      
-      // Check if mediaDevices API is available
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        const errorMsg = 'MediaDevices API is not available. This usually requires HTTPS in production.';
-        console.error('❌', errorMsg);
-        alert('Camera and microphone access requires HTTPS. Please access the site via HTTPS (https://54.91.53.228) or use a secure connection.');
-        throw new Error(errorMsg);
-      }
-      
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-      
-      console.log('✅ Media stream obtained:', {
-        videoTracks: stream.getVideoTracks().length,
-        audioTracks: stream.getAudioTracks().length,
-        videoEnabled: stream.getVideoTracks()[0]?.enabled,
-        audioEnabled: stream.getAudioTracks()[0]?.enabled
-      });
-      
-      // Ensure tracks are enabled
-      stream.getVideoTracks().forEach(track => {
-        track.enabled = true;
-        console.log('Video track:', track.label, 'enabled:', track.enabled);
-      });
-      stream.getAudioTracks().forEach(track => {
-        track.enabled = true;
-        console.log('Audio track:', track.label, 'enabled:', track.enabled);
-      });
-      
-      // Store in ref first for immediate access
-      localStreamRef.current = stream;
-      
-      // Also assign directly to video element if it exists
-      if (localVideoRef.current) {
-        console.log('📹 Directly assigning stream to video element');
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(err => {
-          console.error('Direct play failed:', err);
-        });
-      }
-      
-      setLocalStream(stream);
-      setIsVideoEnabled(true);
-      setIsAudioEnabled(true);
-      
-      console.log('✅ Local stream set in state and ref');
-    } catch (error: any) {
-      console.error('❌ Error accessing media devices:', error);
-      let errorMessage = 'Could not access camera/microphone. ';
-      if (error.name === 'NotAllowedError') {
-        errorMessage += 'Please allow camera and microphone permissions in your browser settings.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage += 'No camera or microphone found.';
-      } else if (error.name === 'NotReadableError') {
-        errorMessage += 'Camera or microphone is being used by another application.';
-      } else {
-        errorMessage += error.message || 'Unknown error.';
-      }
-      alert(errorMessage);
-    }
-  };
-
-  const createPeerConnection = async () => {
+  const createPeerConnection = useCallback(async () => {
     try {
       // Get local stream from ref (most up-to-date) or state
       let currentStream = localStreamRef.current || localStream;
@@ -553,7 +470,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       // If still no stream, start it
       if (!currentStream) {
         console.log('⚠️ No local stream, starting it now...');
-        await startLocalStream();
+        await startLocalStreamMemo();
         // Wait for stream to be set
         await new Promise(resolve => setTimeout(resolve, 300));
         currentStream = localStreamRef.current || localStream;
@@ -587,7 +504,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       pc.onicecandidate = (event) => {
         if (event.candidate && socket) {
           socket.emit('ice-candidate', {
-            meetingId,
+            meetingId: meetingIdRef.current,
             candidate: event.candidate,
             targetSocketId: null // Will be set by server
           });
@@ -606,7 +523,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         socket.emit('offer', {
-          meetingId,
+          meetingId: meetingIdRef.current,
           offer,
           targetSocketId: null
         });
@@ -614,7 +531,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     } catch (error) {
       console.error('Error creating peer connection:', error);
     }
-  }, [localStream, socket, meetingId]);
+  }, [localStream, socket, startLocalStreamMemo]);
 
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, senderSocketId: string) => {
     if (!peerConnectionRef.current) {
@@ -629,12 +546,12 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
     if (socket) {
       socket.emit('answer', {
-        meetingId,
+        meetingId: meetingIdRef.current,
         answer,
         targetSocketId: senderSocketId
       });
     }
-  }, [socket, meetingId]);
+  }, [socket, createPeerConnection]);
 
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
     if (peerConnectionRef.current) {
@@ -647,6 +564,14 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
     }
   }, []);
+
+  // Update refs when memoized functions are defined (runs after functions are declared)
+  useEffect(() => {
+    createPeerConnectionRef.current = createPeerConnection;
+    handleOfferRef.current = handleOffer;
+    handleAnswerRef.current = handleAnswer;
+    handleIceCandidateRef.current = handleIceCandidate;
+  }, [createPeerConnection, handleOffer, handleAnswer, handleIceCandidate]);
 
   const toggleVideo = () => {
     if (localStream) {
