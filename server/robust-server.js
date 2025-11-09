@@ -206,6 +206,85 @@ class RobustServer {
       }
     });
 
+    // Get session by meeting ID (for meeting page access)
+    this.app.get('/api/sessions/meeting/:meetingId', async (req, res) => {
+      try {
+        const { meetingId } = req.params;
+        
+        console.log('Fetching session by meetingId:', meetingId);
+        
+        const session = await prisma.session.findFirst({
+          where: { meetingId: meetingId },
+          include: {
+            candidate: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            expert: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        });
+
+        if (!session) {
+          return res.status(404).json({
+            success: false,
+            message: 'Session not found for this meeting ID'
+          });
+        }
+
+        // Format session to match frontend expectations
+        const localDate = new Date(session.scheduledDate);
+        const year = localDate.getFullYear();
+        const month = String(localDate.getMonth() + 1).padStart(2, '0');
+        const day = String(localDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+        const hours = String(localDate.getHours()).padStart(2, '0');
+        const minutes = String(localDate.getMinutes()).padStart(2, '0');
+        const timeStr = `${hours}:${minutes}`;
+
+        const formattedSession = {
+          id: session.id,
+          expertId: session.expertId,
+          candidateId: session.candidateId,
+          expertName: session.expert.name,
+          candidateName: session.candidate.name,
+          date: dateStr,
+          time: timeStr,
+          scheduledDate: session.scheduledDate.toISOString(),
+          duration: session.duration,
+          sessionType: session.sessionType,
+          status: session.status,
+          paymentAmount: session.paymentAmount,
+          paymentStatus: session.paymentStatus,
+          meetingLink: session.meetingLink,
+          meetingId: session.meetingId,
+          recordingUrl: session.recordingUrl,
+          isRecordingEnabled: session.isRecordingEnabled,
+          createdAt: session.createdAt.toISOString()
+        };
+
+        res.json({
+          success: true,
+          data: formattedSession
+        });
+      } catch (error) {
+        console.error('Error fetching session by meetingId:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch session',
+          message: error.message
+        });
+      }
+    });
+
     // Sessions endpoints
     this.app.get('/api/sessions', async (req, res) => {
       try {

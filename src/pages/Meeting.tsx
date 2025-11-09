@@ -24,19 +24,18 @@ export default function Meeting() {
     // Fetch session by meeting ID
     const fetchSession = async () => {
       try {
-        const response = await apiService.getSessions(100);
-        if (response.success && response.data?.sessions) {
-          const foundSession = response.data.sessions.find(
-            (s: any) => s.meetingId === meetingId
-          );
-          if (foundSession) {
-            setSession(foundSession);
-          } else {
-            console.error('Session not found for meeting ID:', meetingId);
-          }
+        const response = await apiService.getSessionByMeetingId(meetingId);
+        if (response.success && response.data) {
+          setSession(response.data);
+        } else {
+          console.error('Session not found for meeting ID:', meetingId);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching session:', error);
+        // If 404, session not found - will show error message
+        if (error?.response?.status === 404) {
+          console.error('Session not found for meeting ID:', meetingId);
+        }
       } finally {
         setLoading(false);
       }

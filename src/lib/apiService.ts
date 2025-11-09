@@ -186,6 +186,10 @@ class ApiService {
     return this.request(`/api/sessions?${params.toString()}`);
   }
 
+  async getSessionByMeetingId(meetingId: string) {
+    return this.request(`/api/sessions/meeting/${meetingId}`);
+  }
+
   async createSession(sessionData: {
     expertId: string;
     candidateId: string;
