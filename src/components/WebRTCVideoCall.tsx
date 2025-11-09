@@ -45,18 +45,49 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   }, [meetingId]);
 
   useEffect(() => {
-    if (localStream && localVideoRef.current) {
-      localVideoRef.current.srcObject = localStream;
+    const videoElement = localVideoRef.current;
+    if (localStream && videoElement) {
+      console.log('📹 Assigning local stream to video element');
+      videoElement.srcObject = localStream;
+      
       // Ensure video plays
-      localVideoRef.current.play().catch(err => {
-        console.error('Error playing local video:', err);
-      });
-    }
-    return () => {
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = null;
+      const playPromise = videoElement.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('✅ Local video is playing');
+          })
+          .catch(err => {
+            console.error('❌ Error playing local video:', err);
+            // Try again after a short delay
+            setTimeout(() => {
+              if (videoElement && videoElement.srcObject) {
+                videoElement.play().catch(e => console.error('Retry play failed:', e));
+              }
+            }, 500);
+          });
       }
-    };
+      
+      // Listen for loadedmetadata event
+      const handleLoadedMetadata = () => {
+        console.log('✅ Local video metadata loaded');
+        videoElement.play().catch(err => console.error('Play after metadata failed:', err));
+      };
+      
+      videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+      
+      return () => {
+        videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+        if (videoElement) {
+          videoElement.srcObject = null;
+        }
+      };
+    } else if (localStreamRef.current && videoElement) {
+      // Fallback: try to use stream from ref
+      console.log('📹 Using stream from ref');
+      videoElement.srcObject = localStreamRef.current;
+      videoElement.play().catch(err => console.error('Error playing from ref:', err));
+    }
   }, [localStream]);
 
   useEffect(() => {
@@ -86,7 +117,11 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         setIsConnected(true);
         
         // Start local stream immediately
+        console.log('🎥 Starting local stream...');
         await startLocalStream();
+        
+        // Wait a moment for stream to be set
+        await new Promise(resolve => setTimeout(resolve, 200));
         
         socketInstance.emit('join-meeting', {
           meetingId,
@@ -176,10 +211,23 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         console.log('Audio track:', track.label, 'enabled:', track.enabled);
       });
       
+      // Store in ref first for immediate access
+      localStreamRef.current = stream;
+      
+      // Also assign directly to video element if it exists
+      if (localVideoRef.current) {
+        console.log('📹 Directly assigning stream to video element');
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(err => {
+          console.error('Direct play failed:', err);
+        });
+      }
+      
       setLocalStream(stream);
-      localStreamRef.current = stream; // Also store in ref for immediate access
       setIsVideoEnabled(true);
       setIsAudioEnabled(true);
+      
+      console.log('✅ Local stream set in state and ref');
     } catch (error: any) {
       console.error('❌ Error accessing media devices:', error);
       let errorMessage = 'Could not access camera/microphone. ';
@@ -464,22 +512,38 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         </div>
 
         {/* Local Video */}
-        <div className="relative bg-black rounded-lg overflow-hidden">
+        <div className="relative bg-black rounded-lg overflow-hidden w-full h-full">
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
             className="w-full h-full object-cover"
-            style={{ display: localStream && isVideoEnabled ? 'block' : 'none' }}
+            style={{ 
+              display: localStream && isVideoEnabled ? 'block' : 'none',
+              backgroundColor: '#000'
+            }}
+            onLoadedMetadata={() => {
+              console.log('✅ Video metadata loaded');
+              if (localVideoRef.current) {
+                localVideoRef.current.play().catch(err => console.error('Auto-play failed:', err));
+              }
+            }}
+            onCanPlay={() => {
+              console.log('✅ Video can play');
+            }}
+            onError={(e) => {
+              console.error('❌ Video element error:', e);
+            }}
           />
           {(!localStream || !isVideoEnabled) && (
-            <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white bg-gray-900">
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center text-white bg-gray-900 z-10">
               <div className="text-center">
                 {!localStream ? (
                   <>
                     <Video className="h-16 w-16 mx-auto mb-4 opacity-50" />
                     <p>Loading your video...</p>
+                    <p className="text-xs mt-2 opacity-75">Please allow camera access</p>
                   </>
                 ) : (
                   <>
