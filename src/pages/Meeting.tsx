@@ -189,16 +189,15 @@ export default function Meeting() {
     );
   }
 
-  // Cleanup effect: ensure video call is ended when component unmounts or user navigates away
+  // Cleanup effect: ensure video call is ended when component unmounts
   useEffect(() => {
     return () => {
-      // This cleanup runs when the component unmounts or when dependencies change
-      if (isInCall) {
-        console.log('🧹 Meeting component unmounting, ensuring call is ended...');
-        setIsInCall(false);
-      }
+      // This cleanup runs only when the component unmounts
+      console.log('🧹 Meeting component unmounting, ensuring call is ended...');
+      setIsInCall(false);
     };
-  }, [isInCall]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run cleanup on unmount
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

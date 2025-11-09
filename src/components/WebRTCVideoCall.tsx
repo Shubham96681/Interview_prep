@@ -43,6 +43,8 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   };
 
   // Memoize cleanup function to avoid stale closures
+  const cleanupRef = useRef<() => void>();
+  
   const cleanup = useCallback(() => {
     console.log('🧹 Cleaning up video call resources...');
     
@@ -141,6 +143,11 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     
     console.log('✅ Cleanup complete - all camera and microphone access should be released');
   }, [meetingId]);
+
+  // Update cleanup ref when cleanup function changes
+  useEffect(() => {
+    cleanupRef.current = cleanup;
+  }, [cleanup]);
 
   const socketInitializedRef = useRef(false);
   const meetingIdRef = useRef(meetingId);
@@ -242,7 +249,10 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       return;
     }
     
+    // Mark as initialized immediately to prevent re-runs
     socketInitializedRef.current = true;
+    
+    // Set initial state - this will cause a re-render but the guard prevents re-initialization
     setIsInitializing(true);
     setError(null);
     
@@ -365,7 +375,10 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     // Handle page unload (browser close, navigation away, etc.)
     const handleBeforeUnload = () => {
       console.log('⚠️ Page unloading, cleaning up video call...');
-      cleanup();
+      // Use ref to avoid dependency issues
+      if (cleanupRef.current) {
+        cleanupRef.current();
+      }
     };
     
     // Handle visibility change (tab switch, minimize, etc.)
@@ -382,12 +395,12 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     return () => {
       console.log('🧹 WebRTCVideoCall component unmounting, cleaning up...');
       socketInitializedRef.current = false;
-      cleanup();
+      // Cleanup will be handled by component unmount
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meetingId, startLocalStreamMemo]); // Depend on meetingId and memoized function
+  }, [meetingId]); // Only depend on meetingId - startLocalStreamMemo is stable with empty deps
 
   useEffect(() => {
     const videoElement = localVideoRef.current;
