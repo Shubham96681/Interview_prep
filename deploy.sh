@@ -113,11 +113,26 @@ if pm2 list | grep -q "interview-prep-backend"; then
     pm2 restart interview-prep-backend --update-env
 else
     echo "   Starting new PM2 process..."
-    pm2 start npm --name "interview-prep-backend" --cwd server -- start
+    cd server
+    pm2 start npm --name "interview-prep-backend" -- start
+    cd ..
 fi
 
 # Save PM2 configuration
 pm2 save
+
+# Wait a moment for server to start
+sleep 3
+
+# Verify backend is running
+echo "🔍 Verifying backend is running..."
+if pm2 list | grep -q "interview-prep-backend.*online"; then
+    echo "✅ Backend is running!"
+    pm2 logs interview-prep-backend --lines 10 --nostream
+else
+    echo "⚠️  Backend might not be running. Check logs:"
+    pm2 logs interview-prep-backend --lines 20 --nostream
+fi
 
 # Reload nginx to serve new frontend build
 echo "🌐 Reloading nginx..."
