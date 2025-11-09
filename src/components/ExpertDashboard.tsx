@@ -362,7 +362,7 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                             >
                               <Video className="h-4 w-4 mr-2" />
                               Join Meeting
-                            </Button>
+                          </Button>
                           )}
                           {session.recordingUrl && (
                             <Button 
@@ -370,9 +370,9 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                               size="sm"
                               onClick={() => window.open(session.recordingUrl, '_blank')}
                             >
-                              <Video className="h-4 w-4 mr-2" />
+                            <Video className="h-4 w-4 mr-2" />
                               View Recording
-                            </Button>
+                          </Button>
                           )}
                           {session.isRecordingEnabled && !session.recordingUrl && (
                             <span className="text-xs text-gray-500 flex items-center">
@@ -429,7 +429,7 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                           >
                             <Video className="h-4 w-4 mr-2" />
                             View Recording
-                          </Button>
+                        </Button>
                         )}
                         {!session.recordingUrl && session.isRecordingEnabled && (
                           <span className="text-xs text-gray-500 flex items-center">

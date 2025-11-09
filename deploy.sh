@@ -5,20 +5,60 @@ set -e  # Exit on any error
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
 
+# Check disk space before starting
+echo "💾 Checking disk space..."
+df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)"}'
+
 # Navigate to project directory
 cd /var/www/interview-prep
+
+# Cleanup old files to free up space
+echo "🧹 Cleaning up old files to free disk space..."
+
+# Remove old node_modules to save space (we'll reinstall)
+if [ -d "node_modules" ]; then
+    echo "   Removing old frontend node_modules..."
+    rm -rf node_modules
+fi
+
+if [ -d "server/node_modules" ]; then
+    echo "   Removing old backend node_modules..."
+    rm -rf server/node_modules
+fi
+
+# Remove old build artifacts
+if [ -d "dist" ]; then
+    echo "   Removing old dist build..."
+    rm -rf dist
+fi
+
+# Clean npm cache
+echo "   Cleaning npm cache..."
+npm cache clean --force 2>/dev/null || true
+
+# Clean PM2 logs (keep last 100 lines)
+echo "   Cleaning PM2 logs..."
+pm2 flush 2>/dev/null || true
+
+# Clean old git objects
+echo "   Cleaning git objects..."
+git gc --prune=now --aggressive 2>/dev/null || true
+
+# Check disk space after cleanup
+echo "💾 Disk space after cleanup:"
+df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)"}'
 
 # Ensure we're on the main branch
 git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
 echo "📦 Installing frontend dependencies..."
-npm install --legacy-peer-deps
+npm install --legacy-peer-deps --prefer-offline --no-audit
 
 # Install server dependencies (production only)
 echo "📦 Installing backend dependencies..."
 cd server
-npm install --production --legacy-peer-deps
+npm install --production --legacy-peer-deps --prefer-offline --no-audit
 cd ..
 
 # Build frontend
@@ -93,6 +133,11 @@ if curl -f http://localhost:5000/api/health > /dev/null 2>&1; then
 else
     echo "⚠️  Backend health check failed, but continuing..."
 fi
+
+# Final disk space check
+echo ""
+echo "💾 Final disk space:"
+df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)"}'
 
 echo ""
 echo "=== Deployment Completed Successfully ==="

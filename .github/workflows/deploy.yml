@@ -49,6 +49,10 @@ jobs:
           echo "Current directory: $(pwd)"
           echo "Home directory: $HOME"
           
+          # Check disk space first
+          echo "💾 Current disk space:"
+          df -h / | tail -1
+          
           # Test sudo access
           echo "Testing sudo access..."
           sudo -n true || echo "Warning: sudo may require password"
