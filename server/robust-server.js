@@ -141,9 +141,28 @@ class RobustServer {
           });
         }
 
-        // For demo purposes, just return success if token exists
+        // For demo purposes, try to get user from email stored in localStorage
         // In production, you'd verify the JWT token and get the user from it
-        // For now, return 401 so the frontend knows to show login
+        // For now, we'll check if there's a user email in the request body or query
+        // This is a simplified version - in production use proper JWT verification
+        
+        // Try to get user from the most recent login (stored in a simple way)
+        // For now, return 401 - the frontend will handle login
+        // But we can also check if there's an email in the request
+        const email = req.query.email || req.body.email;
+        
+        if (email) {
+          const user = await databaseService.getUserByEmail(email);
+          if (user) {
+            const { password, ...userWithoutPassword } = user;
+            return res.json({
+              success: true,
+              data: userWithoutPassword
+            });
+          }
+        }
+
+        // If no email provided, return 401
         res.status(401).json({
           success: false,
           message: 'Please login'
@@ -364,6 +383,479 @@ class RobustServer {
           }
         ]
       });
+    });
+
+    // Admin endpoints - Simple admin check (in production, use proper JWT auth)
+    const checkAdmin = async (req, res, next) => {
+      try {
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        const email = req.query.email || req.body.email;
+        
+        if (email) {
+          const user = await databaseService.getUserByEmail(email);
+          if (user && user.userType === 'admin') {
+            req.adminUser = user;
+            return next();
+          }
+        }
+        
+        res.status(403).json({
+          success: false,
+          message: 'Admin access required'
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          message: 'Error checking admin access'
+        });
+      }
+    };
+
+    // Get all sessions (admin only)
+    this.app.get('/api/admin/sessions', checkAdmin, async (req, res) => {
+      try {
+        const sessions = await prisma.session.findMany({
+          include: {
+            candidate: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            expert: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            reviews: true
+          },
+          orderBy: {
+            scheduledDate: 'desc'
+          }
+        });
+
+        const formattedSessions = sessions.map(session => {
+          const localDate = new Date(session.scheduledDate);
+          const year = localDate.getFullYear();
+          const month = String(localDate.getMonth() + 1).padStart(2, '0');
+          const day = String(localDate.getDate()).padStart(2, '0');
+          const dateStr = `${year}-${month}-${day}`;
+          const hours = String(localDate.getHours()).padStart(2, '0');
+          const minutes = String(localDate.getMinutes()).padStart(2, '0');
+          const timeStr = `${hours}:${minutes}`;
+
+          return {
+            id: session.id,
+            expertId: session.expertId,
+            candidateId: session.candidateId,
+            expertName: session.expert.name,
+            candidateName: session.candidate.name,
+            date: dateStr,
+            time: timeStr,
+            scheduledDate: session.scheduledDate.toISOString(),
+            duration: session.duration,
+            sessionType: session.sessionType,
+            status: session.status,
+            paymentAmount: session.paymentAmount,
+            paymentStatus: session.paymentStatus,
+            feedbackRating: session.feedbackRating,
+            feedbackComment: session.feedbackComment,
+            additionalParticipants: session.additionalParticipants ? JSON.parse(session.additionalParticipants) : [],
+            reviews: session.reviews,
+            createdAt: session.createdAt.toISOString()
+          };
+        });
+
+        res.json({
+          success: true,
+          sessions: formattedSessions,
+          total: formattedSessions.length
+        });
+      } catch (error) {
+        console.error('Error fetching all sessions:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch sessions',
+          message: error.message
+        });
+      }
+    });
+
+    // Update session (admin only)
+    this.app.put('/api/admin/sessions/:id', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updateData = req.body;
+
+        // Parse date/time if provided
+        if (updateData.date && updateData.time) {
+          const [year, month, day] = updateData.date.split('-').map(Number);
+          const [hours, minutes] = updateData.time.split(':').map(Number);
+          updateData.scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+          delete updateData.date;
+          delete updateData.time;
+        }
+
+        // Handle additional participants
+        if (updateData.additionalParticipants && Array.isArray(updateData.additionalParticipants)) {
+          updateData.additionalParticipants = JSON.stringify(updateData.additionalParticipants);
+        }
+
+        const updatedSession = await prisma.session.update({
+          where: { id },
+          data: updateData,
+          include: {
+            candidate: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            expert: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedSession,
+          message: 'Session updated successfully'
+        });
+      } catch (error) {
+        console.error('Error updating session:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update session',
+          message: error.message
+        });
+      }
+    });
+
+    // Delete session (admin only)
+    this.app.delete('/api/admin/sessions/:id', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        await prisma.session.delete({
+          where: { id }
+        });
+
+        res.json({
+          success: true,
+          message: 'Session deleted successfully'
+        });
+      } catch (error) {
+        console.error('Error deleting session:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to delete session',
+          message: error.message
+        });
+      }
+    });
+
+    // Get all users (admin only)
+    this.app.get('/api/admin/users', checkAdmin, async (req, res) => {
+      try {
+        const users = await prisma.user.findMany({
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            userType: true,
+            phone: true,
+            company: true,
+            title: true,
+            avatar: true,
+            isActive: true,
+            rating: true,
+            totalSessions: true,
+            hourlyRate: true,
+            isVerified: true,
+            createdAt: true,
+            updatedAt: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        });
+
+        res.json({
+          success: true,
+          users,
+          total: users.length
+        });
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch users',
+          message: error.message
+        });
+      }
+    });
+
+    // Update user (admin only)
+    this.app.put('/api/admin/users/:id', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const updateData = req.body;
+
+        // Handle JSON fields
+        if (updateData.skills && Array.isArray(updateData.skills)) {
+          updateData.skills = JSON.stringify(updateData.skills);
+        }
+        if (updateData.daysAvailable && Array.isArray(updateData.daysAvailable)) {
+          updateData.daysAvailable = JSON.stringify(updateData.daysAvailable);
+        }
+
+        const updatedUser = await prisma.user.update({
+          where: { id },
+          data: updateData,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            userType: true,
+            phone: true,
+            company: true,
+            title: true,
+            avatar: true,
+            isActive: true,
+            rating: true,
+            totalSessions: true,
+            hourlyRate: true,
+            isVerified: true,
+            createdAt: true,
+            updatedAt: true
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedUser,
+          message: 'User updated successfully'
+        });
+      } catch (error) {
+        console.error('Error updating user:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to update user',
+          message: error.message
+        });
+      }
+    });
+
+    // Get all reviews/feedback (admin only)
+    this.app.get('/api/admin/reviews', checkAdmin, async (req, res) => {
+      try {
+        const reviews = await prisma.review.findMany({
+          include: {
+            session: {
+              include: {
+                candidate: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                },
+                expert: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true
+                  }
+                }
+              }
+            },
+            reviewer: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            reviewee: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        });
+
+        res.json({
+          success: true,
+          reviews,
+          total: reviews.length
+        });
+      } catch (error) {
+        console.error('Error fetching reviews:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch reviews',
+          message: error.message
+        });
+      }
+    });
+
+    // Add participants to session (admin only)
+    this.app.put('/api/admin/sessions/:id/participants', checkAdmin, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const { participantIds } = req.body; // Array of user IDs
+
+        if (!Array.isArray(participantIds)) {
+          return res.status(400).json({
+            success: false,
+            message: 'participantIds must be an array'
+          });
+        }
+
+        // Validate that all participant IDs exist
+        const participants = await prisma.user.findMany({
+          where: {
+            id: {
+              in: participantIds
+            }
+          }
+        });
+
+        if (participants.length !== participantIds.length) {
+          return res.status(400).json({
+            success: false,
+            message: 'Some participant IDs are invalid'
+          });
+        }
+
+        // Get current session
+        const session = await prisma.session.findUnique({
+          where: { id }
+        });
+
+        if (!session) {
+          return res.status(404).json({
+            success: false,
+            message: 'Session not found'
+          });
+        }
+
+        // Merge with existing participants
+        const existingParticipants = session.additionalParticipants 
+          ? JSON.parse(session.additionalParticipants) 
+          : [];
+        
+        const allParticipants = [...new Set([...existingParticipants, ...participantIds])];
+        
+        const updatedSession = await prisma.session.update({
+          where: { id },
+          data: {
+            additionalParticipants: JSON.stringify(allParticipants)
+          },
+          include: {
+            candidate: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            },
+            expert: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: updatedSession,
+          message: 'Participants added successfully'
+        });
+      } catch (error) {
+        console.error('Error adding participants:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to add participants',
+          message: error.message
+        });
+      }
+    });
+
+    // Get analytics/stats (admin only)
+    this.app.get('/api/admin/analytics', checkAdmin, async (req, res) => {
+      try {
+        const [
+          totalUsers,
+          totalSessions,
+          totalReviews,
+          activeUsers,
+          sessionsByStatus,
+          usersByType
+        ] = await Promise.all([
+          prisma.user.count(),
+          prisma.session.count(),
+          prisma.review.count(),
+          prisma.user.count({ where: { isActive: true } }),
+          prisma.session.groupBy({
+            by: ['status'],
+            _count: true
+          }),
+          prisma.user.groupBy({
+            by: ['userType'],
+            _count: true
+          })
+        ]);
+
+        // Calculate average rating
+        const avgRatingResult = await prisma.review.aggregate({
+          _avg: {
+            rating: true
+          }
+        });
+
+        res.json({
+          success: true,
+          analytics: {
+            totalUsers,
+            activeUsers,
+            totalSessions,
+            totalReviews,
+            averageRating: avgRatingResult._avg.rating || 0,
+            sessionsByStatus: sessionsByStatus.reduce((acc, item) => {
+              acc[item.status] = item._count;
+              return acc;
+            }, {}),
+            usersByType: usersByType.reduce((acc, item) => {
+              acc[item.userType] = item._count;
+              return acc;
+            }, {})
+          }
+        });
+      } catch (error) {
+        console.error('Error fetching analytics:', error);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch analytics',
+          message: error.message
+        });
+      }
     });
   }
 

@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import CandidateDashboard from '@/components/CandidateDashboard';
 import ExpertDashboard from '@/components/ExpertDashboard';
+import AdminDashboard from '@/components/AdminDashboard';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -81,23 +82,27 @@ export default function Dashboard() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {safeUser.userType === 'candidate' ? 'Candidate' : 'Expert'} Dashboard
+              {safeUser.userType === 'admin' ? 'Admin' : safeUser.userType === 'candidate' ? 'Candidate' : 'Expert'} Dashboard
             </h1>
             <p className="text-gray-600">
-              {safeUser.userType === 'candidate' 
+              {safeUser.userType === 'admin'
+                ? 'Manage all users, sessions, and system settings'
+                : safeUser.userType === 'candidate' 
                 ? 'Manage your interview sessions and progress' 
                 : 'Manage your availability and coaching sessions'
               }
             </p>
           </div>
           
-          <Badge variant={safeUser.userType === 'candidate' ? 'default' : 'secondary'} className="px-4 py-2">
-            {safeUser.userType === 'candidate' ? '🎯 Candidate' : '👨‍🏫 Expert'}
+          <Badge variant={safeUser.userType === 'admin' ? 'destructive' : safeUser.userType === 'candidate' ? 'default' : 'secondary'} className="px-4 py-2">
+            {safeUser.userType === 'admin' ? '👑 Admin' : safeUser.userType === 'candidate' ? '🎯 Candidate' : '👨‍🏫 Expert'}
           </Badge>
         </div>
 
         {/* Dashboard Content */}
-        {safeUser.userType === 'candidate' ? (
+        {safeUser.userType === 'admin' ? (
+          <AdminDashboard user={safeUser} />
+        ) : safeUser.userType === 'candidate' ? (
           <CandidateDashboard user={safeUser} onLogout={handleLogout} />
         ) : (
           <ExpertDashboard user={safeUser} onLogout={handleLogout} />

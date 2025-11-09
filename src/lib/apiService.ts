@@ -225,6 +225,58 @@ class ApiService {
   getBackendStatus(): boolean | null {
     return this.isBackendAvailable;
   }
+
+  // Admin API methods
+  async getAllSessions() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/sessions?email=${encodeURIComponent(user.email || '')}`);
+  }
+
+  async updateSession(sessionId: string, sessionData: any) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/sessions/${sessionId}?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'PUT',
+      body: JSON.stringify(sessionData),
+    });
+  }
+
+  async deleteSession(sessionId: string) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/sessions/${sessionId}?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getAllUsers() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/users?email=${encodeURIComponent(user.email || '')}`);
+  }
+
+  async updateUser(userId: string, userData: any) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/users/${userId}?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async getAllReviews() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/reviews?email=${encodeURIComponent(user.email || '')}`);
+  }
+
+  async addSessionParticipants(sessionId: string, participantIds: string[]) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/sessions/${sessionId}/participants?email=${encodeURIComponent(user.email || '')}`, {
+      method: 'PUT',
+      body: JSON.stringify({ participantIds }),
+    });
+  }
+
+  async getAnalytics() {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/analytics?email=${encodeURIComponent(user.email || '')}`);
+  }
 }
 
 // Create singleton instance

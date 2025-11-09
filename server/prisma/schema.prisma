@@ -88,6 +88,9 @@ model Session {
   feedbackComment String?
   feedbackDate    DateTime?
 
+  // Additional participants (stored as JSON array of user IDs)
+  additionalParticipants String? // JSON string of participant IDs array
+
   // Reviews
   reviews Review[]
 
@@ -133,6 +136,7 @@ model Notification {
 enum UserType {
   candidate
   expert
+  admin
 }
 
 enum SessionType {

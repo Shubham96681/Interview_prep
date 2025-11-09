@@ -23,7 +23,7 @@ export default function Index() {
         </div>
       </div>
     );
-  }
+    }
 
   const handleLogin = (_userType: 'candidate' | 'expert', userData: any) => {
     login(userData);

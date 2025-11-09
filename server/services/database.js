@@ -85,6 +85,19 @@ class DatabaseService {
             experience: '3+ years',
             skills: JSON.stringify(['JavaScript', 'React', 'Python', 'SQL'])
           }
+        }),
+        prisma.user.upsert({
+          where: { email: 'admin@interviewace.com' },
+          update: {},
+          create: {
+            email: 'admin@interviewace.com',
+            name: 'Admin User',
+            userType: 'admin',
+            password: 'hashed_password_123',
+            bio: 'System Administrator',
+            experience: 'Administrator',
+            skills: JSON.stringify(['System Administration', 'User Management', 'Session Management'])
+          }
         })
       ]);
 

@@ -1,7 +1,7 @@
 export interface User {
   email: string;
   name: string;
-  userType: 'candidate' | 'expert';
+  userType: 'candidate' | 'expert' | 'admin';
   company?: string;
   title?: string;
   avatar?: string;
