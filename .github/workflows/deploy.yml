@@ -144,37 +144,49 @@ jobs:
           # Run with explicit bash and unbuffered output
           if command -v timeout >/dev/null 2>&1; then
             echo "   Using timeout wrapper (10 minutes max)..."
-            # Use stdbuf to ensure unbuffered output
+            echo "   Starting deploy.sh at: $(date)"
+            
+            # Run the script and capture exit code properly
+            DEPLOY_EXIT=0
             if command -v stdbuf >/dev/null 2>&1; then
-              timeout 600 stdbuf -oL -eL bash ./deploy.sh 2>&1 || {
-                DEPLOY_EXIT=$?
-                if [ $DEPLOY_EXIT -eq 124 ]; then
-                  echo "❌ Deployment script timed out after 10 minutes"
-                  exit 1
-                else
-                  echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
-                  exit 1
-                fi
-              }
+              timeout 600 stdbuf -oL -eL bash ./deploy.sh 2>&1
+              DEPLOY_EXIT=$?
             else
-              timeout 600 bash ./deploy.sh 2>&1 || {
-                DEPLOY_EXIT=$?
-                if [ $DEPLOY_EXIT -eq 124 ]; then
-                  echo "❌ Deployment script timed out after 10 minutes"
-                  exit 1
-                else
-                  echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
-                  exit 1
-                fi
-              }
+              timeout 600 bash ./deploy.sh 2>&1
+              DEPLOY_EXIT=$?
+            fi
+            
+            echo "   Deploy script finished at: $(date)"
+            echo "   Exit code: $DEPLOY_EXIT"
+            
+            # Check exit code
+            if [ $DEPLOY_EXIT -eq 124 ]; then
+              echo "❌ Deployment script timed out after 10 minutes"
+              echo "   Last activity was at: $(date)"
+              exit 1
+            elif [ $DEPLOY_EXIT -ne 0 ]; then
+              echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
+              exit 1
+            else
+              echo "✅ Deployment script completed successfully (exit code: $DEPLOY_EXIT)"
             fi
           else
             echo "⚠️  timeout command not available, running without timeout..."
             echo "   WARNING: No timeout protection - script may hang indefinitely!"
-            bash ./deploy.sh 2>&1 || { 
-              echo "❌ Deployment script failed with exit code $?"
+            echo "   Starting deploy.sh at: $(date)"
+            
+            bash ./deploy.sh 2>&1
+            DEPLOY_EXIT=$?
+            
+            echo "   Deploy script finished at: $(date)"
+            echo "   Exit code: $DEPLOY_EXIT"
+            
+            if [ $DEPLOY_EXIT -ne 0 ]; then
+              echo "❌ Deployment script failed with exit code $DEPLOY_EXIT"
               exit 1
-            }
+            else
+              echo "✅ Deployment script completed successfully (exit code: $DEPLOY_EXIT)"
+            fi
           fi
           
           echo "   Completed at: $(date)"

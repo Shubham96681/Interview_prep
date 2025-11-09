@@ -2,19 +2,35 @@
 
 # Ensure output is unbuffered for real-time logging
 export PYTHONUNBUFFERED=1
-if command -v stdbuf >/dev/null 2>&1; then
-  exec stdbuf -oL -eL bash "$0" "$@"
-fi
+# Note: stdbuf exec wrapper removed to avoid recursion issues
 
 # Don't use set -e, handle errors manually for better control
 set +e
 
+# Function to print progress heartbeat
+heartbeat() {
+  while true; do
+    sleep 60
+    echo "[HEARTBEAT] Still running... $(date)"
+  done
+}
+
+# Start heartbeat in background (will be killed when script exits)
+heartbeat &
+HEARTBEAT_PID=$!
+trap "kill $HEARTBEAT_PID 2>/dev/null" EXIT
+
 # Ensure we're in the right directory
-cd "$(dirname "$0")" || exit 1
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR" || {
+  echo "❌ Failed to change to script directory: $SCRIPT_DIR"
+  exit 1
+}
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
 echo "PID: $$"
+echo "Script directory: $SCRIPT_DIR"
 echo "Working directory: $(pwd)"
 
 # Navigate to project directory
