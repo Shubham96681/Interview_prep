@@ -1618,60 +1618,6 @@ class RobustServer {
         });
       }
     });
-
-    // Webhook endpoint for deployment (alternative to SSH)
-    // Secured with a secret token
-    this.app.post('/api/webhooks/deploy', express.json(), async (req, res) => {
-      try {
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-        const path = require('path');
-        
-        // Check for deployment secret token
-        const deploymentToken = process.env.DEPLOYMENT_TOKEN || 'change-this-in-production';
-        const providedToken = req.headers['x-deployment-token'] || req.body.token;
-        
-        if (providedToken !== deploymentToken) {
-          console.log('Deployment webhook: Invalid token');
-          return res.status(401).json({
-            success: false,
-            message: 'Unauthorized: Invalid deployment token'
-          });
-        }
-
-        console.log('🚀 Deployment webhook triggered');
-        
-        // Run deployment script
-        const projectPath = path.join(__dirname, '..');
-        const deployScript = path.join(projectPath, 'deploy.sh');
-        
-        // Execute deployment script
-        const { stdout, stderr } = await execAsync(`cd ${projectPath} && bash ${deployScript}`, {
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-          timeout: 600000 // 10 minutes timeout
-        });
-
-        console.log('Deployment output:', stdout);
-        if (stderr) {
-          console.error('Deployment errors:', stderr);
-        }
-
-        res.json({
-          success: true,
-          message: 'Deployment triggered successfully',
-          output: stdout.substring(0, 1000) // First 1000 chars
-        });
-      } catch (error) {
-        console.error('Deployment webhook error:', error);
-        res.status(500).json({
-          success: false,
-          error: 'Deployment failed',
-          message: error.message,
-          output: error.stdout || error.stderr || ''
-        });
-      }
-    });
   }
 
   setupRealtime() {

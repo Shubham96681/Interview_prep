@@ -37,11 +37,11 @@ jobs:
         echo "🔍 Checking EC2 instance connectivity..."
         echo "Instance IP: 54.159.42.7"
         echo ""
-        echo "⚠️  CRITICAL: If connection times out, check AWS Security Group:"
-        echo "   1. Go to EC2 → Instances → Select your instance"
-        echo "   2. Security tab → Security group → Edit inbound rules"
-        echo "   3. SSH (port 22) must allow Source: 0.0.0.0/0"
-        echo "   4. NOT just your IP (13.221.81.1) - GitHub Actions uses different IPs!"
+        echo "⚠️  If connection times out, check these in AWS Console:"
+        echo "   1. Security Group: SSH (port 22) from 0.0.0.0/0 ✅ (Already confirmed)"
+        echo "   2. Network ACLs: VPC → Network ACLs → Check inbound rules for port 22"
+        echo "   3. Instance Status: EC2 → Instances → Check if running and healthy"
+        echo "   4. Route Tables: VPC → Route Tables → Check internet gateway route"
         echo ""
         echo "Testing connectivity to port 22..."
         for i in {1..3}; do
@@ -58,8 +58,11 @@ jobs:
           fi
         done
         echo "⚠️  WARNING: Could not connect to port 22 after 3 attempts"
-        echo "   This usually means the security group is blocking SSH"
-        echo "   The deployment will likely fail. Please fix the security group first."
+        echo "   Since security group is correct, check:"
+        echo "   - Network ACLs (VPC → Network ACLs)"
+        echo "   - Instance is running and healthy"
+        echo "   - Route tables have internet gateway"
+        echo "   The deployment will likely fail."
     
     - name: Deploy to EC2
       uses: appleboy/ssh-action@v1.0.3
