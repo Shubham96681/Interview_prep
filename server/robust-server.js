@@ -213,7 +213,8 @@ class RobustServer {
         
         console.log('Fetching session by meetingId:', meetingId);
         
-        const session = await prisma.session.findFirst({
+        // Try to find session by meetingId
+        let session = await prisma.session.findFirst({
           where: { meetingId: meetingId },
           include: {
             candidate: {
@@ -233,10 +234,58 @@ class RobustServer {
           }
         });
 
+        // If not found, try to find by meetingLink containing the meetingId
         if (!session) {
+          console.log('Session not found by meetingId, trying to find by meetingLink...');
+          const allSessions = await prisma.session.findMany({
+            where: {
+              meetingLink: {
+                contains: meetingId
+              }
+            },
+            include: {
+              candidate: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              },
+              expert: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              }
+            }
+          });
+          
+          if (allSessions.length > 0) {
+            session = allSessions[0];
+            console.log('Found session by meetingLink:', session.id);
+          }
+        }
+
+        if (!session) {
+          console.log('No session found for meetingId:', meetingId);
+          // Log all meetingIds in database for debugging
+          const allSessions = await prisma.session.findMany({
+            select: { id: true, meetingId: true, meetingLink: true }
+          });
+          console.log('All sessions in database:', allSessions.map(s => ({
+            id: s.id,
+            meetingId: s.meetingId,
+            meetingLink: s.meetingLink
+          })));
+          
           return res.status(404).json({
             success: false,
-            message: 'Session not found for this meeting ID'
+            message: 'Session not found for this meeting ID',
+            debug: {
+              requestedMeetingId: meetingId,
+              availableSessions: allSessions.length
+            }
           });
         }
 

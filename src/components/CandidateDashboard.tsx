@@ -215,7 +215,32 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                             <Button 
                               size="sm" 
                               className="bg-green-600 hover:bg-green-700"
-                              onClick={() => window.open(session.meetingLink, '_blank')}
+                              onClick={() => {
+                                // Extract meetingId from meetingLink or use session.meetingId
+                                if (session.meetingId) {
+                                  navigate(`/meeting/${session.meetingId}`);
+                                } else if (session.meetingLink) {
+                                  // Extract meetingId from URL if it's a full URL
+                                  try {
+                                    const url = new URL(session.meetingLink);
+                                    const meetingIdFromUrl = url.pathname.split('/meeting/')[1];
+                                    if (meetingIdFromUrl) {
+                                      navigate(`/meeting/${meetingIdFromUrl}`);
+                                    } else {
+                                      navigate(session.meetingLink);
+                                    }
+                                  } catch (e) {
+                                    // If it's not a full URL, treat it as a relative path
+                                    // Extract meetingId from relative path like "/meeting/meet-123"
+                                    const match = session.meetingLink.match(/\/meeting\/([^\/]+)/);
+                                    if (match && match[1]) {
+                                      navigate(`/meeting/${match[1]}`);
+                                    } else {
+                                      navigate(session.meetingLink);
+                                    }
+                                  }
+                                }
+                              }}
                             >
                               <Video className="h-4 w-4 mr-2" />
                               Join Meeting
