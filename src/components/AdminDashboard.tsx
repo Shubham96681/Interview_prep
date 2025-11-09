@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, BarChart3 } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, BarChart3, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import AdminCalendarView from './AdminCalendarView';
 
 interface Session {
   id: string;
@@ -91,6 +92,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [editUserOpen, setEditUserOpen] = useState(false);
   const [addParticipantsOpen, setAddParticipantsOpen] = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
 
   useEffect(() => {
     loadData();
@@ -195,6 +198,72 @@ export default function AdminDashboard({}: AdminDashboardProps) {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const exportData = (type: 'sessions' | 'users' | 'payments') => {
+    let data: any[] = [];
+    let filename = '';
+
+    switch (type) {
+      case 'sessions':
+        data = sessions.map(s => ({
+          id: s.id,
+          candidate: s.candidateName,
+          expert: s.expertName,
+          date: s.date,
+          time: s.time,
+          type: s.sessionType,
+          status: s.status,
+          payment: s.paymentAmount,
+          paymentStatus: s.paymentStatus
+        }));
+        filename = 'sessions-export.csv';
+        break;
+      case 'users':
+        data = users.map(u => ({
+          name: u.name,
+          email: u.email,
+          type: u.userType,
+          status: u.isActive ? 'Active' : 'Inactive',
+          rating: u.rating,
+          sessions: u.totalSessions
+        }));
+        filename = 'users-export.csv';
+        break;
+      case 'payments':
+        data = sessions
+          .filter(s => s.paymentAmount)
+          .map(s => ({
+            sessionId: s.id,
+            candidate: s.candidateName,
+            expert: s.expertName,
+            amount: s.paymentAmount,
+            status: s.paymentStatus,
+            date: s.date
+          }));
+        filename = 'payments-export.csv';
+        break;
+    }
+
+    if (data.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const headers = Object.keys(data[0]);
+    const csv = [
+      headers.join(','),
+      ...data.map(row => headers.map(header => `"${row[header] || ''}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    toast.success(`Exported ${data.length} records`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -206,8 +275,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
@@ -308,6 +379,280 @@ export default function AdminDashboard({}: AdminDashboardProps) {
               </Card>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-4">
+          {analytics && (
+            <>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      ${sessions.reduce((sum, s) => sum + (s.paymentAmount || 0), 0).toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      From {sessions.filter(s => s.paymentStatus === 'completed').length} completed payments
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Avg Session Duration</CardTitle>
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {sessions.length > 0 
+                        ? Math.round(sessions.reduce((sum, s) => sum + (s.duration || 0), 0) / sessions.length)
+                        : 0} min
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Average across all sessions
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {sessions.length > 0
+                        ? Math.round((analytics.sessionsByStatus.completed || 0) / sessions.length * 100)
+                        : 0}%
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {analytics.sessionsByStatus.completed || 0} completed sessions
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold">
+                      {analytics.sessionsByStatus.in_progress || 0}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Currently in progress
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <CardTitle>Session Types Distribution</CardTitle>
+                      <Button variant="outline" size="sm" onClick={() => exportData('sessions')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        sessions.reduce((acc, s) => {
+                          acc[s.sessionType] = (acc[s.sessionType] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      ).map(([type, count]) => (
+                        <div key={type} className="flex justify-between items-center">
+                          <span className="capitalize">{type.replace('_', ' ')}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-32 bg-gray-200 rounded-full h-2">
+                              <div
+                                className="bg-blue-600 h-2 rounded-full"
+                                style={{
+                                  width: `${(count / sessions.length) * 100}%`
+                                }}
+                              />
+                            </div>
+                            <Badge>{count}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <div className="flex justify-between items-center">
+                      <CardTitle>Payment Status</CardTitle>
+                      <Button variant="outline" size="sm" onClick={() => exportData('payments')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Export
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        sessions.reduce((acc, s) => {
+                          const status = s.paymentStatus || 'pending';
+                          acc[status] = (acc[status] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      ).map(([status, count]) => (
+                        <div key={status} className="flex justify-between items-center">
+                          <span className="capitalize">{status}</span>
+                          <Badge variant={status === 'completed' ? 'default' : 'secondary'}>
+                            {count}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <CardTitle>User Activity Summary</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => exportData('users')}>
+                      <Download className="h-4 w-4 mr-2" />
+                      Export Users
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Top Experts</p>
+                      <div className="space-y-1">
+                        {users
+                          .filter(u => u.userType === 'expert')
+                          .sort((a, b) => (b.totalSessions || 0) - (a.totalSessions || 0))
+                          .slice(0, 5)
+                          .map(u => (
+                            <div key={u.id} className="flex justify-between text-sm">
+                              <span>{u.name}</span>
+                              <Badge variant="outline">{u.totalSessions || 0} sessions</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Top Candidates</p>
+                      <div className="space-y-1">
+                        {users
+                          .filter(u => u.userType === 'candidate')
+                          .sort((a, b) => (b.totalSessions || 0) - (a.totalSessions || 0))
+                          .slice(0, 5)
+                          .map(u => (
+                            <div key={u.id} className="flex justify-between text-sm">
+                              <span>{u.name}</span>
+                              <Badge variant="outline">{u.totalSessions || 0} sessions</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Recent Activity</p>
+                      <div className="space-y-1 text-sm">
+                        <div>New users today: {users.filter(u => {
+                          const created = new Date(u.createdAt);
+                          const today = new Date();
+                          return created.toDateString() === today.toDateString();
+                        }).length}</div>
+                        <div>Sessions today: {sessions.filter(s => {
+                          const sessionDate = new Date(s.date);
+                          const today = new Date();
+                          return sessionDate.toDateString() === today.toDateString();
+                        }).length}</div>
+                        <div>Reviews today: {reviews.filter(r => {
+                          const reviewDate = new Date(r.createdAt);
+                          const today = new Date();
+                          return reviewDate.toDateString() === today.toDateString();
+                        }).length}</div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="calendar" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5" />
+                  Session Calendar
+                </CardTitle>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newDate = new Date(calendarDate);
+                      newDate.setMonth(newDate.getMonth() - 1);
+                      setCalendarDate(newDate);
+                    }}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCalendarDate(new Date())}
+                  >
+                    Today
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newDate = new Date(calendarDate);
+                      newDate.setMonth(newDate.getMonth() + 1);
+                      setCalendarDate(newDate);
+                    }}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Select value={calendarView} onValueChange={(v: 'month' | 'week') => setCalendarView(v)}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="month">Month</SelectItem>
+                      <SelectItem value="week">Week</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <CardDescription>
+                {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AdminCalendarView
+                sessions={sessions}
+                currentDate={calendarDate}
+                view={calendarView}
+                onSessionClick={(session: Session) => {
+                  setSelectedSession(session);
+                  setEditSessionOpen(true);
+                }}
+              />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="sessions" className="space-y-4">
