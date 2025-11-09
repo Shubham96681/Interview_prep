@@ -11,7 +11,12 @@ interface WebRTCVideoCallProps {
 }
 
 export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCallProps) {
+  // ALL HOOKS MUST BE CALLED IN THE SAME ORDER EVERY RENDER
+  // No conditional hook calls allowed!
+  
   const { user } = useAuth();
+  
+  // All state hooks - must be called in same order
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
@@ -24,6 +29,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   
+  // All refs - must be called in same order
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -32,7 +38,13 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const localStreamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isRecordingRef = useRef(false);
-  const isInitializedRef = useRef(false);
+  const socketInitializedRef = useRef(false);
+  const meetingIdRef = useRef(meetingId);
+  const createPeerConnectionRef = useRef<() => Promise<void>>();
+  const handleOfferRef = useRef<(offer: RTCSessionDescriptionInit, senderSocketId: string) => Promise<void>>();
+  const handleAnswerRef = useRef<(answer: RTCSessionDescriptionInit) => Promise<void>>();
+  const handleIceCandidateRef = useRef<(candidate: RTCIceCandidateInit) => Promise<void>>();
+  const cleanupRef = useRef<() => void>();
 
   // STUN/TURN servers configuration
   const rtcConfiguration: RTCConfiguration = {
@@ -43,8 +55,6 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   };
 
   // Memoize cleanup function to avoid stale closures
-  const cleanupRef = useRef<() => void>();
-  
   const cleanup = useCallback(() => {
     console.log('🧹 Cleaning up video call resources...');
     
@@ -144,22 +154,15 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
     console.log('✅ Cleanup complete - all camera and microphone access should be released');
   }, [meetingId]);
 
+  // Update meetingId ref when it changes - MUST be called before any conditional returns
+  useEffect(() => {
+    meetingIdRef.current = meetingId;
+  }, [meetingId]);
+
   // Update cleanup ref when cleanup function changes
   useEffect(() => {
     cleanupRef.current = cleanup;
   }, [cleanup]);
-
-  const socketInitializedRef = useRef(false);
-  const meetingIdRef = useRef(meetingId);
-  const createPeerConnectionRef = useRef<() => Promise<void>>();
-  const handleOfferRef = useRef<(offer: RTCSessionDescriptionInit, senderSocketId: string) => Promise<void>>();
-  const handleAnswerRef = useRef<(answer: RTCSessionDescriptionInit) => Promise<void>>();
-  const handleIceCandidateRef = useRef<(candidate: RTCIceCandidateInit) => Promise<void>>();
-
-  // Update meetingId ref when it changes
-  useEffect(() => {
-    meetingIdRef.current = meetingId;
-  }, [meetingId]);
 
   // Memoize functions to prevent infinite loops
   const startLocalStreamMemo = useCallback(async () => {
