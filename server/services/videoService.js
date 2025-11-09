@@ -191,12 +191,20 @@ class VideoService {
    */
   createWebRTCMeeting(sessionData) {
     const meetingId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    // Use relative URL so it works with any domain/IP
+    // The frontend will handle the full URL construction
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    
+    // If FRONTEND_URL is set, use it; otherwise use relative path
+    // This ensures meeting links work even if the IP changes
+    const meetingLink = baseUrl.includes('localhost') 
+      ? `${baseUrl}/meeting/${meetingId}`
+      : `/meeting/${meetingId}`;
     
     return {
       meetingId: meetingId,
-      meetingLink: `${baseUrl}/meeting/${meetingId}`,
-      startUrl: `${baseUrl}/meeting/${meetingId}`,
+      meetingLink: meetingLink,
+      startUrl: meetingLink,
       password: null,
       recordingUrl: null
     };
