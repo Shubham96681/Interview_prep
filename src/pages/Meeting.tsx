@@ -28,7 +28,16 @@ export default function Meeting() {
         const response = await apiService.getSessionByMeetingId(meetingId);
         console.log('Session response:', response);
         if (response.success && response.data) {
-          setSession(response.data);
+          const sessionData = response.data;
+          console.log('Session data received:', {
+            scheduledDate: sessionData.scheduledDate,
+            date: sessionData.date,
+            time: sessionData.time,
+            candidateName: sessionData.candidateName,
+            expertName: sessionData.expertName,
+            meetingId: sessionData.meetingId
+          });
+          setSession(sessionData);
         } else {
           console.error('Session not found for meeting ID:', meetingId);
           console.error('Response:', response);
@@ -125,9 +134,24 @@ export default function Meeting() {
     );
   }
 
-  const meetingDate = new Date(session.scheduledDate);
-  const isUpcoming = meetingDate > new Date();
-  const isNow = Math.abs(meetingDate.getTime() - Date.now()) < 15 * 60 * 1000; // Within 15 minutes
+  // Parse meeting date - handle both ISO string and date/time format
+  let meetingDate: Date;
+  if (session.scheduledDate) {
+    meetingDate = new Date(session.scheduledDate);
+  } else if (session.date && session.time) {
+    // Parse from separate date and time strings
+    const [year, month, day] = session.date.split('-').map(Number);
+    const [hours, minutes] = session.time.split(':').map(Number);
+    meetingDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  } else {
+    // Fallback to current date if no date available
+    meetingDate = new Date();
+  }
+
+  // Check if date is valid
+  const isValidDate = !isNaN(meetingDate.getTime());
+  const isUpcoming = isValidDate && meetingDate > new Date();
+  const isNow = isValidDate && Math.abs(meetingDate.getTime() - Date.now()) < 15 * 60 * 1000; // Within 15 minutes
 
   // Check if this is a WebRTC meeting (custom video system)
   const isWebRTCMeeting = session.meetingLink && session.meetingLink.includes('/meeting/');
@@ -161,24 +185,29 @@ export default function Meeting() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 text-gray-500" />
-                    <span>{meetingDate.toLocaleDateString('en-US', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}</span>
+                    <span>
+                      {isValidDate ? meetingDate.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      }) : (session.date || 'Date not available')}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-gray-500" />
-                    <span>{meetingDate.toLocaleTimeString('en-US', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })} ({session.duration} minutes)</span>
+                    <span>
+                      {isValidDate ? meetingDate.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      }) : (session.time || 'Time not available')} 
+                      {session.duration ? ` (${session.duration} minutes)` : ''}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-gray-500" />
                     <span>
-                      {session.candidateName} & {session.expertName}
+                      {session.candidateName || 'Candidate'} & {session.expertName || 'Expert'}
                     </span>
                   </div>
                 </div>
@@ -233,9 +262,11 @@ export default function Meeting() {
                       )}
                     </>
                   )}
-                  <p className="text-xs text-gray-500">
-                    Meeting ID: {session.meetingId}
-                  </p>
+                  {session.meetingId && (
+                    <p className="text-xs text-gray-500">
+                      Meeting ID: {session.meetingId}
+                    </p>
+                  )}
                   {isWebRTCMeeting && (
                     <p className="text-xs text-blue-600">
                       Using built-in video calling system
@@ -246,7 +277,7 @@ export default function Meeting() {
                 <div className="text-center space-y-4">
                   <h3 className="text-lg font-semibold">Meeting Scheduled</h3>
                   <p className="text-gray-600">
-                    Your meeting is scheduled for {meetingDate.toLocaleString('en-US')}.
+                    Your meeting is scheduled for {isValidDate ? meetingDate.toLocaleString('en-US') : (session.date && session.time ? `${session.date} at ${session.time}` : 'a future date')}.
                   </p>
                   <p className="text-sm text-gray-500">
                     The meeting link will be available when it's time to join.
