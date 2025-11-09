@@ -21,6 +21,8 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -154,11 +156,20 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       return;
     }
     
+    if (!meetingId) {
+      setError('Meeting ID is required');
+      setIsInitializing(false);
+      return;
+    }
+    
     isInitializedRef.current = true;
     socketInitializedRef.current = true;
+    setIsInitializing(true);
+    setError(null);
     
     const initializeSocket = async () => {
       try {
+        console.log('🔌 Initializing socket for meeting:', meetingId);
         const apiBaseUrl = window.location.origin;
         const socketInstance = io(apiBaseUrl, {
           transports: ['websocket', 'polling']
@@ -232,8 +243,11 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
 
         setSocket(socketInstance);
         socketRef.current = socketInstance;
-      } catch (error) {
+        setIsInitializing(false);
+      } catch (error: any) {
         console.error('Error initializing socket:', error);
+        setError(error?.message || 'Failed to initialize video call');
+        setIsInitializing(false);
       }
     };
     
@@ -646,6 +660,42 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       onEndCall();
     }
   };
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="w-full h-full flex flex-col bg-gray-900 items-center justify-center text-white p-8">
+        <div className="text-center max-w-md">
+          <h2 className="text-2xl font-bold mb-4 text-red-400">Error</h2>
+          <p className="mb-6">{error}</p>
+          <Button onClick={() => {
+            setError(null);
+            setIsInitializing(true);
+            isInitializedRef.current = false;
+            socketInitializedRef.current = false;
+            if (onEndCall) {
+              onEndCall();
+            }
+          }}>
+            Go Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state
+  if (isInitializing) {
+    return (
+      <div className="w-full h-full flex flex-col bg-gray-900 items-center justify-center text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Initializing video call...</p>
+          <p className="text-sm text-gray-400 mt-2">Meeting ID: {meetingId}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full flex flex-col bg-gray-900">
