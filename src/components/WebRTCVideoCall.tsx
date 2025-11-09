@@ -718,7 +718,7 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
           <Button onClick={() => {
             setError(null);
             setIsInitializing(true);
-            isInitializedRef.current = false;
+            socketInitializedRef.current = false;
             socketInitializedRef.current = false;
             if (onEndCall) {
               onEndCall();
