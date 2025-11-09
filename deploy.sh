@@ -141,7 +141,7 @@ df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)
 
 echo ""
 echo "=== Deployment Completed Successfully ==="
-echo "Backend: http://54.159.42.7:5000"
-echo "Frontend: http://54.159.42.7"
+echo "Backend: http://54.91.53.228:5000"
+echo "Frontend: http://54.91.53.228"
 echo "Timestamp: $(date)"
 

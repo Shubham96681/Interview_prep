@@ -35,13 +35,13 @@ jobs:
       continue-on-error: true
       run: |
         echo "🔍 Pre-flight connectivity check (non-blocking)..."
-        echo "Instance IP: 54.159.42.7"
+        echo "Instance IP: 54.91.53.228"
         echo "Note: Security group allows SSH from 0.0.0.0/0 (anywhere), so your IP doesn't matter for deployment."
         echo ""
         echo "Note: This check may fail even if SSH works. The actual SSH connection will be attempted regardless."
         echo ""
         echo "Testing connectivity to port 22..."
-        if timeout 5 bash -c 'cat < /dev/null > /dev/tcp/54.159.42.7/22' 2>/dev/null; then
+        if timeout 5 bash -c 'cat < /dev/null > /dev/tcp/54.91.53.228/22' 2>/dev/null; then
           echo "✅ Port 22 is reachable from GitHub Actions!"
         else
           echo "⚠️  Port 22 connectivity check failed, but continuing..."
@@ -56,7 +56,7 @@ jobs:
       continue-on-error: false
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: 54.159.42.7
+        host: 54.91.53.228
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
@@ -145,7 +145,7 @@ jobs:
     - name: Verify deployment
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: 54.159.42.7
+        host: 54.91.53.228
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
