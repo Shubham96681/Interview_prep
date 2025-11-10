@@ -109,7 +109,25 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
   const isSlotAvailable = (date: string, time: string) => {
     if (!availabilityData) return false;
     const slot = availabilityData.slots.find(s => s.date === date);
-    return slot ? slot.availableTimes.includes(time) : false;
+    if (!slot || !slot.availableTimes.includes(time)) return false;
+    
+    // Check if the time slot is in the past (for today's date)
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    if (date === todayStr) {
+      // Parse the time (e.g., "12:00" -> hours: 12, minutes: 0)
+      const [hours, minutes] = time.split(':').map(Number);
+      const slotDateTime = new Date(today);
+      slotDateTime.setHours(hours, minutes, 0, 0);
+      
+      // If the slot time is in the past, it's not available
+      if (slotDateTime < today) {
+        return false;
+      }
+    }
+    
+    return true;
   };
 
   const isSlotBooked = (date: string, time: string) => {
@@ -244,6 +262,16 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                 const isAvailable = isSlotAvailable(selectedDate, time);
                 const isBooked = isSlotBooked(selectedDate, time);
                 
+                // Check if this is a past time slot for today
+                const today = new Date();
+                const todayStr = today.toISOString().split('T')[0];
+                const isPastTime = selectedDate === todayStr && (() => {
+                  const [hours, minutes] = time.split(':').map(Number);
+                  const slotDateTime = new Date(today);
+                  slotDateTime.setHours(hours, minutes, 0, 0);
+                  return slotDateTime < today;
+                })();
+                
                 return (
                   <Button
                     key={time}
@@ -251,15 +279,17 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                     className={`flex items-center gap-2 relative transition-all duration-200 ${
                       isBooked 
                         ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400' 
+                        : isPastTime
+                        ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400'
                         : isAvailable
                         ? 'hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'
                         : 'opacity-60 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-500'
                     }`}
-                    onClick={() => isAvailable && setSelectedTime(time)}
-                    disabled={isBooked || !isAvailable}
+                    onClick={() => isAvailable && !isPastTime && setSelectedTime(time)}
+                    disabled={isBooked || !isAvailable || isPastTime}
                   >
                     <Clock className={`h-4 w-4 ${
-                      isBooked ? 'text-gray-400' : isAvailable ? 'text-blue-600' : 'text-gray-500'
+                      isBooked || isPastTime ? 'text-gray-400' : isAvailable ? 'text-blue-600' : 'text-gray-500'
                     }`} />
                     {time}
                     {isBooked && (
@@ -267,7 +297,12 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                         <div className="w-full h-0.5 bg-red-400 transform rotate-45"></div>
                       </div>
                     )}
-                    {!isAvailable && !isBooked && (
+                    {isPastTime && !isBooked && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
+                      </div>
+                    )}
+                    {!isAvailable && !isBooked && !isPastTime && (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
                       </div>
