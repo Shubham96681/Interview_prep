@@ -494,12 +494,29 @@ class RobustServer {
         const scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
         
         // Create video meeting (Zoom or Google Meet)
-        const meetingInfo = await videoService.createMeeting({
-          title: `${sessionType || 'Technical'} Interview Session`,
-          description: `Interview session scheduled for ${date} at ${time}`,
-          scheduledDate: scheduledDate,
-          duration: duration || 60
-        });
+        let meetingInfo;
+        try {
+          meetingInfo = await videoService.createMeeting({
+            title: `${sessionType || 'Technical'} Interview Session`,
+            description: `Interview session scheduled for ${date} at ${time}`,
+            scheduledDate: scheduledDate,
+            duration: duration || 60
+          });
+        } catch (error) {
+          console.error('Error creating meeting:', error);
+          // Fallback to WebRTC meeting if video service fails
+          meetingInfo = {
+            meetingId: `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            meetingLink: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/meeting/meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            startUrl: null,
+            password: null,
+            recordingUrl: null
+          };
+        }
+        
+        // Ensure meetingLink and meetingId are strings (not undefined)
+        const meetingLink = meetingInfo?.meetingLink || null;
+        const meetingId = meetingInfo?.meetingId || null;
         
         const sessionData = {
           title: `${sessionType || 'Technical'} Interview Session`,
@@ -512,8 +529,8 @@ class RobustServer {
           expertId: actualExpertId,
           paymentAmount: 75,
           paymentStatus: 'pending',
-          meetingLink: meetingInfo.meetingLink,
-          meetingId: meetingInfo.meetingId,
+          meetingLink: meetingLink,
+          meetingId: meetingId,
           isRecordingEnabled: true
         };
 
