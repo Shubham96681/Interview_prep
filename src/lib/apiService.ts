@@ -22,6 +22,7 @@ interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  status?: number;
 }
 
 class ApiService {
