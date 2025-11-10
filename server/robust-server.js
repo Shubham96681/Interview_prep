@@ -534,6 +534,8 @@ class RobustServer {
           isRecordingEnabled: true
         };
 
+        console.log('Attempting to create session with data:', JSON.stringify(sessionData, null, 2));
+        
         const newSession = await databaseService.createSession(sessionData);
         
         console.log('Session created in database:', newSession.id);
@@ -575,11 +577,18 @@ class RobustServer {
           message: 'Session created successfully'
         });
       } catch (error) {
-        console.error('Error creating session:', error);
+        console.error('❌ Error creating session:', error);
+        console.error('Error stack:', error.stack);
+        console.error('Error details:', {
+          message: error.message,
+          code: error.code,
+          meta: error.meta
+        });
         res.status(500).json({
           success: false,
           error: 'Failed to create session',
-          message: error.message
+          message: error.message || 'Unknown error occurred',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
       }
     });

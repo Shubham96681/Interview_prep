@@ -153,25 +153,47 @@ class DatabaseService {
   }
 
   async createSession(sessionData) {
-    return await prisma.session.create({
-      data: sessionData,
-      include: {
-        candidate: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        },
-        expert: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
+    try {
+      console.log('DatabaseService.createSession called with:', JSON.stringify(sessionData, null, 2));
+      
+      // Remove any undefined values to avoid Prisma errors
+      const cleanData = {};
+      for (const [key, value] of Object.entries(sessionData)) {
+        if (value !== undefined) {
+          cleanData[key] = value;
         }
       }
-    });
+      
+      console.log('Cleaned session data:', JSON.stringify(cleanData, null, 2));
+      
+      const result = await prisma.session.create({
+        data: cleanData,
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          expert: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+      
+      console.log('✅ Session created successfully:', result.id);
+      return result;
+    } catch (error) {
+      console.error('❌ DatabaseService.createSession error:', error);
+      console.error('Error code:', error.code);
+      console.error('Error meta:', error.meta);
+      throw error;
+    }
   }
 
   async getSessionsForUser(userId, userType) {

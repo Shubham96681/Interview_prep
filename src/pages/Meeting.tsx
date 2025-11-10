@@ -16,6 +16,17 @@ export default function Meeting() {
   const [error, setError] = useState<string | null>(null);
   const [isInCall, setIsInCall] = useState(false);
 
+  // Cleanup effect: ensure video call is ended when component unmounts
+  // MUST be called before any conditional returns to maintain hook order
+  useEffect(() => {
+    return () => {
+      // This cleanup runs only when the component unmounts
+      console.log('🧹 Meeting component unmounting, ensuring call is ended...');
+      setIsInCall(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run cleanup on unmount
+
   useEffect(() => {
     if (!meetingId) {
       setError('Meeting ID is required');
@@ -226,16 +237,6 @@ export default function Meeting() {
       </div>
     );
   }
-
-  // Cleanup effect: ensure video call is ended when component unmounts
-  useEffect(() => {
-    return () => {
-      // This cleanup runs only when the component unmounts
-      console.log('🧹 Meeting component unmounting, ensuring call is ended...');
-      setIsInCall(false);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - only run cleanup on unmount
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
