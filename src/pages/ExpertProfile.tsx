@@ -217,11 +217,31 @@ export default function ExpertProfile() {
         // Navigate to dashboard with a refresh parameter
         navigate('/dashboard?refresh=' + Date.now());
       } else {
-        toast.error(response.error || 'Failed to book session');
+        // Check if it's a scheduling conflict (409)
+        if (response.status === 409 || response.error === 'Scheduling conflict') {
+          const conflictMessage = response.message || response.error || 'This time slot is already booked';
+          toast.error('Time slot unavailable', {
+            description: conflictMessage,
+            duration: 5000
+          });
+        } else {
+          toast.error(response.error || 'Failed to book session');
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error booking session:', error);
-      toast.error('Failed to book session. Please try again.');
+      
+      // Handle conflict error from API
+      if (error?.response?.status === 409 || error?.status === 409) {
+        const conflictData = error?.response?.data || error?.data || {};
+        const conflictMessage = conflictData.message || 'This time slot is already booked. Please choose a different time.';
+        toast.error('Time slot unavailable', {
+          description: conflictMessage,
+          duration: 5000
+        });
+      } else {
+        toast.error('Failed to book session. Please try again.');
+      }
     }
   };
 

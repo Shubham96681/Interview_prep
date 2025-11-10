@@ -492,6 +492,48 @@ class RobustServer {
         const [year, month, day] = date.split('-').map(Number);
         const [hours, minutes] = time.split(':').map(Number);
         const scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+        const sessionDuration = duration || 60;
+        
+        // Check for scheduling conflicts before creating the session
+        console.log('🔍 Checking for scheduling conflicts...');
+        const conflict = await databaseService.checkSchedulingConflict(
+          actualExpertId,
+          scheduledDate,
+          sessionDuration
+        );
+        
+        if (conflict) {
+          const conflictSession = conflict.session;
+          const conflictStart = new Date(conflictSession.scheduledDate);
+          const conflictEnd = new Date(conflictStart.getTime() + conflictSession.duration * 60 * 1000);
+          
+          console.log('❌ Scheduling conflict detected:', {
+            expertId: actualExpertId,
+            requestedTime: scheduledDate.toISOString(),
+            conflictingSession: {
+              id: conflictSession.id,
+              start: conflictStart.toISOString(),
+              end: conflictEnd.toISOString(),
+              candidate: conflictSession.candidate?.name || 'Unknown'
+            }
+          });
+          
+          return res.status(409).json({
+            success: false,
+            error: 'Scheduling conflict',
+            message: `This time slot is already booked. The expert has a session from ${conflictStart.toLocaleString()} to ${conflictEnd.toLocaleString()}. Please choose a different time.`,
+            conflict: {
+              existingSessionId: conflictSession.id,
+              existingStartTime: conflictStart.toISOString(),
+              existingEndTime: conflictEnd.toISOString(),
+              existingCandidate: conflictSession.candidate?.name || 'Unknown',
+              requestedStartTime: scheduledDate.toISOString(),
+              requestedEndTime: new Date(scheduledDate.getTime() + sessionDuration * 60 * 1000).toISOString()
+            }
+          });
+        }
+        
+        console.log('✅ No scheduling conflicts found');
         
         // Create video meeting (Zoom or Google Meet)
         let meetingInfo;
@@ -522,7 +564,7 @@ class RobustServer {
           title: `${sessionType || 'Technical'} Interview Session`,
           description: `Interview session scheduled for ${date} at ${time}`,
           scheduledDate: scheduledDate,
-          duration: duration || 60,
+          duration: sessionDuration,
           sessionType: sessionType || 'technical',
           status: 'scheduled',
           candidateId: actualCandidateId,

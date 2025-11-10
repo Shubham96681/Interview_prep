@@ -132,7 +132,10 @@ class ApiService {
         console.log('Error response data:', errorData);
         return {
           success: false,
-          error: errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+          error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+          message: errorData.message,
+          status: response.status,
+          data: errorData
         };
       }
 

@@ -225,6 +225,66 @@ class DatabaseService {
     });
   }
 
+  /**
+   * Check if there's a scheduling conflict for an expert
+   * @param {string} expertId - The expert's ID
+   * @param {Date} startTime - Start time of the new session
+   * @param {number} duration - Duration in minutes
+   * @returns {Promise<Object|null>} - Returns conflicting session if found, null otherwise
+   */
+  async checkSchedulingConflict(expertId, startTime, duration) {
+    try {
+      // Calculate end time
+      const endTime = new Date(startTime.getTime() + duration * 60 * 1000);
+      
+      // Find all sessions for this expert that are scheduled or in progress
+      // We need to check all active sessions and calculate their end times
+      const activeSessions = await prisma.session.findMany({
+        where: {
+          expertId: expertId,
+          status: {
+            in: ['scheduled', 'in_progress'] // Only check active sessions (not cancelled or completed)
+          }
+        },
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+
+      // Check each session for actual overlap
+      for (const session of activeSessions) {
+        const sessionStart = new Date(session.scheduledDate);
+        const sessionEnd = new Date(sessionStart.getTime() + session.duration * 60 * 1000);
+        
+        // Check if sessions overlap
+        // Overlap occurs if: newStart < existingEnd AND newEnd > existingStart
+        // This covers all overlap scenarios:
+        // 1. New session starts during existing session
+        // 2. New session ends during existing session
+        // 3. New session completely contains existing session
+        // 4. Existing session completely contains new session
+        if (startTime < sessionEnd && endTime > sessionStart) {
+          return {
+            session: session,
+            conflictType: 'overlap',
+            message: `Expert is already booked from ${sessionStart.toLocaleString()} to ${sessionEnd.toLocaleString()}`
+          };
+        }
+      }
+
+      return null; // No conflict found
+    } catch (error) {
+      console.error('Error checking scheduling conflict:', error);
+      throw error;
+    }
+  }
+
   async disconnect() {
     await prisma.$disconnect();
   }
