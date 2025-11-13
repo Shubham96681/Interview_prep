@@ -325,32 +325,14 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
         socketInstance.on('user-joined', async ({ socketId }) => {
           console.log('👤 Another user joined:', socketId);
-          // When a new user joins, if we already have a peer connection, send offer
-          // Otherwise, wait for them to send offer
-          if (peerConnectionRef.current) {
-            console.log('👤 We have peer connection, sending offer to new user...');
-            try {
-              const offer = await peerConnectionRef.current.createOffer();
-              await peerConnectionRef.current.setLocalDescription(offer);
-              socketInstance.emit('offer', {
-                meetingId: meetingIdRef.current,
-                offer,
-                targetSocketId: socketId
-              });
-              console.log('✅ Offer sent to new user');
-            } catch (err) {
-              console.error('Error sending offer to new user:', err);
-            }
-          } else {
-            // Create peer connection and send offer
-            setTimeout(() => {
-              if (createPeerConnectionRef.current) {
-                createPeerConnectionRef.current().catch(err => {
-                  console.error('Error creating peer connection:', err);
-                });
-              }
-            }, 100);
-          }
+          // When a new user joins, we should wait for them to send an offer
+          // OR if we're the first user and already have a peer connection, 
+          // we can send them an offer, but we need to create a NEW peer connection
+          // for this specific user (or use the existing one if it's not connected yet)
+          
+          // For now, let's wait for the new user to send an offer
+          // This avoids race conditions
+          console.log('👤 Waiting for new user to send offer...');
         });
 
         socketInstance.on('offer', async ({ offer, senderSocketId }) => {
@@ -498,20 +480,61 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
       console.log('📹 Setting remote stream to video element. Tracks:', remoteStream.getTracks().length);
-      remoteVideoRef.current.srcObject = remoteStream;
-      // Ensure video plays
-      remoteVideoRef.current.play().catch(err => {
-        console.error('Error playing remote video:', err);
+      
+      // Log track details
+      remoteStream.getTracks().forEach(track => {
+        console.log(`📹 Track: ${track.kind}, enabled: ${track.enabled}, muted: ${track.muted}, readyState: ${track.readyState}`);
       });
       
-      // Log when video starts playing
-      remoteVideoRef.current.onloadedmetadata = () => {
-        console.log('✅ Remote video metadata loaded');
+      const videoElement = remoteVideoRef.current;
+      videoElement.srcObject = remoteStream;
+      
+      // Force video to play
+      const playVideo = async () => {
+        try {
+          await videoElement.play();
+          console.log('✅ Remote video playing');
+        } catch (err: any) {
+          console.error('❌ Error playing remote video:', err);
+          // Try again after a short delay
+          setTimeout(() => {
+            videoElement.play().catch(e => console.error('Retry play failed:', e));
+          }, 500);
+        }
       };
       
-      remoteVideoRef.current.onplay = () => {
+      // Try to play when metadata is loaded
+      videoElement.onloadedmetadata = () => {
+        console.log('✅ Remote video metadata loaded');
+        playVideo();
+      };
+      
+      // Try to play when video can play
+      videoElement.oncanplay = () => {
+        console.log('✅ Remote video can play');
+        playVideo();
+      };
+      
+      // Log when video actually starts playing
+      videoElement.onplay = () => {
         console.log('✅ Remote video started playing');
       };
+      
+      // Try to play immediately
+      playVideo();
+      
+      // Monitor track changes
+      remoteStream.getTracks().forEach(track => {
+        track.onmute = () => {
+          console.log(`📹 Remote ${track.kind} track muted`);
+        };
+        track.onunmute = () => {
+          console.log(`📹 Remote ${track.kind} track unmuted`);
+        };
+        track.onended = () => {
+          console.log(`📹 Remote ${track.kind} track ended`);
+        };
+      });
     } else if (!remoteStream && remoteVideoRef.current) {
       console.log('📹 Clearing remote video element');
       remoteVideoRef.current.srcObject = null;
@@ -617,7 +640,24 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
       // Handle connection state changes
       pc.onconnectionstatechange = () => {
-        console.log('Connection state:', pc.connectionState);
+        console.log('🔗 Connection state changed:', pc.connectionState);
+        if (pc.connectionState === 'connected') {
+          console.log('✅ Peer connection established!');
+        } else if (pc.connectionState === 'failed') {
+          console.error('❌ Peer connection failed');
+        } else if (pc.connectionState === 'disconnected') {
+          console.warn('⚠️ Peer connection disconnected');
+        }
+      };
+      
+      // Handle ICE connection state changes
+      pc.oniceconnectionstatechange = () => {
+        console.log('🧊 ICE connection state:', pc.iceConnectionState);
+        if (pc.iceConnectionState === 'connected') {
+          console.log('✅ ICE connection established!');
+        } else if (pc.iceConnectionState === 'failed') {
+          console.error('❌ ICE connection failed');
+        }
       };
 
       peerConnectionRef.current = pc;
@@ -697,22 +737,39 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       // Check current state
       console.log('📥 Current connection state:', pc.connectionState);
       console.log('📥 Current signaling state:', pc.signalingState);
+      console.log('📥 Current remote description:', pc.remoteDescription ? 'exists' : 'none');
+      
+      // Check if we already have this answer
+      if (pc.remoteDescription) {
+        console.log('⚠️ Already have remote description, checking if it matches...');
+        // If we already have a remote description, the answer might be a duplicate
+        // This can happen in race conditions - it's usually safe to ignore
+        return;
+      }
       
       // Only set remote description if we're in the right state
-      if (pc.signalingState === 'have-local-offer') {
+      if (pc.signalingState === 'have-local-offer' || pc.signalingState === 'stable') {
         try {
           console.log('📥 Setting remote description from answer...');
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
           console.log('✅ Remote description set from answer');
+          console.log('📥 New signaling state:', pc.signalingState);
         } catch (error: any) {
           console.error('❌ Error setting remote description from answer:', error);
           // If already set, that's okay
-          if (error.message && error.message.includes('already')) {
-            console.log('ℹ️ Remote description already set');
+          if (error.message && (error.message.includes('already') || error.message.includes('stable'))) {
+            console.log('ℹ️ Remote description already set or in wrong state');
           }
         }
       } else {
         console.warn('⚠️ Received answer but in wrong signaling state:', pc.signalingState);
+        // Try to set it anyway - sometimes the state check is too strict
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          console.log('✅ Successfully set remote description despite state check');
+        } catch (err) {
+          console.error('❌ Failed to set remote description:', err);
+        }
       }
     } else {
       console.warn('⚠️ Received answer but no peer connection exists');
