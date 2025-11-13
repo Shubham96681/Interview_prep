@@ -32,6 +32,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [recordingStarted, setRecordingStarted] = useState(false);
   
   // All refs - must be called in same order
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -944,17 +945,42 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     }
   };
 
-  const startRecording = async () => {
-    if (!localStream && !remoteStream) return;
+  const startRecording = useCallback(async () => {
+    // Get streams from refs (most up-to-date) or state
+    const currentLocalStream = localStreamRef.current || localStream;
+    const currentRemoteStream = remoteStreamRef.current || remoteStream;
+    
+    if (!currentLocalStream && !currentRemoteStream) {
+      console.warn('⚠️ Cannot start recording: no streams available');
+      return;
+    }
+
+    // Don't start if already recording
+    if (isRecordingRef.current || mediaRecorderRef.current) {
+      console.log('⚠️ Recording already in progress');
+      return;
+    }
 
     try {
+      console.log('🎬 Starting recording...');
       const combinedStream = new MediaStream();
       
-      if (localStream) {
-        localStream.getTracks().forEach(track => combinedStream.addTrack(track));
+      if (currentLocalStream) {
+        currentLocalStream.getTracks().forEach(track => {
+          combinedStream.addTrack(track);
+          console.log('📹 Added local track to recording:', track.kind);
+        });
       }
-      if (remoteStream) {
-        remoteStream.getTracks().forEach(track => combinedStream.addTrack(track));
+      if (currentRemoteStream) {
+        currentRemoteStream.getTracks().forEach(track => {
+          combinedStream.addTrack(track);
+          console.log('📹 Added remote track to recording:', track.kind);
+        });
+      }
+
+      if (combinedStream.getTracks().length === 0) {
+        console.warn('⚠️ No tracks available for recording');
+        return;
       }
 
       const recorder = new MediaRecorder(combinedStream, {
@@ -966,10 +992,12 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
+          console.log('📹 Recording data chunk received:', event.data.size, 'bytes');
         }
       };
 
       recorder.onstop = async () => {
+        console.log('🛑 Recording stopped, processing...');
         const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         setRecordingUrl(url);
@@ -1006,14 +1034,60 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         }
       };
 
-      recorder.start();
+      recorder.onerror = (event: any) => {
+        console.error('❌ Recording error:', event.error);
+        setIsRecording(false);
+        isRecordingRef.current = false;
+      };
+
+      recorder.start(1000); // Collect data every second
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       isRecordingRef.current = true;
+      setRecordingStarted(true);
+      console.log('✅ Recording started successfully');
     } catch (error) {
-      console.error('Error starting recording:', error);
+      console.error('❌ Error starting recording:', error);
+      setIsRecording(false);
+      isRecordingRef.current = false;
     }
-  };
+  }, [localStream, remoteStream, sessionId]);
+
+  // Auto-start recording when connection is established and streams are ready
+  useEffect(() => {
+    // Only auto-start if:
+    // 1. We have a peer connection
+    // 2. Connection is established
+    // 3. We have at least local stream
+    // 4. We haven't started recording yet
+    if (
+      peerConnectionRef.current &&
+      peerConnectionRef.current.connectionState === 'connected' &&
+      (localStreamRef.current || localStream) &&
+      !isRecordingRef.current &&
+      !recordingStarted
+    ) {
+      // Wait a bit to ensure streams are fully ready
+      const timer = setTimeout(() => {
+        if (
+          peerConnectionRef.current?.connectionState === 'connected' &&
+          !isRecordingRef.current &&
+          !recordingStarted
+        ) {
+          console.log('🎬 Auto-starting recording (connection established)...');
+          startRecording();
+        }
+      }, 3000); // Wait 3 seconds after connection to ensure everything is ready
+
+      return () => clearTimeout(timer);
+    }
+  }, [
+    localStream,
+    remoteStream,
+    isRecording,
+    recordingStarted,
+    startRecording
+  ]);
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecordingRef.current) {
@@ -1176,9 +1250,10 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             size="lg"
             onClick={startRecording}
             className="rounded-full"
+            disabled={recordingStarted} // Disable if auto-recording already started
           >
             <Video className="h-5 w-5 mr-2" />
-            Record
+            {recordingStarted ? 'Recording...' : 'Record'}
           </Button>
         ) : (
           <Button
