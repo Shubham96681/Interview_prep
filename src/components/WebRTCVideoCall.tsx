@@ -40,6 +40,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isRecordingRef = useRef(false);
   const socketInitializedRef = useRef(false);
@@ -145,6 +146,12 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         console.error('Error disconnecting socket:', e);
       }
       socketRef.current = null;
+    }
+    
+    // Clear remote stream ref
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach(track => track.stop());
+      remoteStreamRef.current = null;
     }
     
     // Reset states
@@ -358,6 +365,10 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
         socketInstance.on('user-left', () => {
           console.log('👤 User left');
+          if (remoteStreamRef.current) {
+            remoteStreamRef.current.getTracks().forEach(track => track.stop());
+            remoteStreamRef.current = null;
+          }
           setRemoteStream(null);
         });
 
@@ -463,16 +474,27 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
+      console.log('📹 Setting remote stream to video element. Tracks:', remoteStream.getTracks().length);
       remoteVideoRef.current.srcObject = remoteStream;
       // Ensure video plays
       remoteVideoRef.current.play().catch(err => {
         console.error('Error playing remote video:', err);
       });
+      
+      // Log when video starts playing
+      remoteVideoRef.current.onloadedmetadata = () => {
+        console.log('✅ Remote video metadata loaded');
+      };
+      
+      remoteVideoRef.current.onplay = () => {
+        console.log('✅ Remote video started playing');
+      };
+    } else if (!remoteStream && remoteVideoRef.current) {
+      console.log('📹 Clearing remote video element');
+      remoteVideoRef.current.srcObject = null;
     }
     return () => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = null;
-      }
+      // Don't clear here - let cleanup handle it
     };
   }, [remoteStream]);
 
@@ -514,10 +536,35 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         pc.addTrack(track, currentStream!);
       });
 
-      // Handle remote stream
+      // Handle remote stream - collect all tracks into a single stream
       pc.ontrack = (event) => {
-        console.log('📹 Received remote stream');
-        setRemoteStream(event.streams[0]);
+        console.log('📹 Received remote track:', event.track.kind, event.track.id);
+        
+        // Get or create remote stream
+        if (!remoteStreamRef.current) {
+          remoteStreamRef.current = new MediaStream();
+          console.log('📹 Created new remote stream');
+        }
+        
+        // Add track to remote stream
+        remoteStreamRef.current.addTrack(event.track);
+        console.log('📹 Added track to remote stream. Total tracks:', remoteStreamRef.current.getTracks().length);
+        
+        // Update state with the stream
+        setRemoteStream(new MediaStream(remoteStreamRef.current.getTracks()));
+        
+        // Log track details
+        event.track.onended = () => {
+          console.log('📹 Remote track ended:', event.track.kind);
+        };
+        
+        event.track.onmute = () => {
+          console.log('📹 Remote track muted:', event.track.kind);
+        };
+        
+        event.track.onunmute = () => {
+          console.log('📹 Remote track unmuted:', event.track.kind);
+        };
       };
 
       // Handle ICE candidates
