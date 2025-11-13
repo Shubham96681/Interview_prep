@@ -81,6 +81,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Store token if available
     if (userData.token) {
       localStorage.setItem('token', userData.token);
+      console.log('✅ AuthContext: Token saved:', userData.token.substring(0, 20) + '...');
+      
+      // Verify token was saved
+      const savedToken = localStorage.getItem('token');
+      if (!savedToken || savedToken !== userData.token) {
+        console.error('❌ AuthContext: Token not saved correctly!');
+      }
+    } else {
+      console.error('❌ AuthContext: No token in userData:', userData);
     }
     // Also store in authService for compatibility
     authService.login(userData);

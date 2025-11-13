@@ -47,17 +47,35 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
     
     if (response.success && response.data) {
       const data = response.data;
+      
+      // Verify token exists in response
+      if (!data.token) {
+        console.error('❌ No token in login response:', data);
+        toast.error('Login failed: No authentication token received');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Store the token in localStorage FIRST
+      localStorage.setItem('token', data.token);
+      console.log('✅ Token saved to localStorage:', data.token.substring(0, 20) + '...');
+      
+      // Verify token was saved
+      const savedToken = localStorage.getItem('token');
+      if (!savedToken || savedToken !== data.token) {
+        console.error('❌ Token not saved correctly!');
+        toast.error('Failed to save authentication token');
+        setIsLoading(false);
+        return;
+      }
+      
       toast.success(`🎉 Welcome back, ${data.user.name}!`, {
         description: 'You have successfully signed in to InterviewAce',
       });
-      // Store the token in localStorage
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-        console.log('✅ Token saved to localStorage');
-      }
+      
       // Pass the user data with token to the parent component
       const userWithToken = { ...data.user, token: data.token };
-      console.log('✅ Calling onLogin with user:', userWithToken);
+      console.log('✅ Calling onLogin with user:', { ...userWithToken, token: '***' });
       onLogin(data.user.userType, userWithToken);
       onClose();
       setIsLoading(false);
@@ -66,12 +84,29 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
       // If backend fails, try local auth service for test users
       const localUser = authService.testLogin(email, password);
       if (localUser) {
+        // Generate a token for local test users
+        const testToken = 'test-token-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+        const localUserWithToken = { ...localUser, token: testToken };
+        
+        // Store token in localStorage
+        localStorage.setItem('token', testToken);
+        console.log('✅ Test user token saved to localStorage:', testToken.substring(0, 20) + '...');
+        
+        // Verify token was saved
+        const savedToken = localStorage.getItem('token');
+        if (!savedToken || savedToken !== testToken) {
+          console.error('❌ Test token not saved correctly!');
+          toast.error('Failed to save authentication token');
+          setIsLoading(false);
+          return;
+        }
+        
         toast.success(`🎉 Welcome back, ${localUser.name}!`, {
-          description: 'You have successfully signed in to InterviewAce',
+          description: 'You have successfully signed in to InterviewAce (Test Mode)',
         });
         // Store in authService for compatibility
-        authService.login(localUser);
-        onLogin(localUser.userType, localUser);
+        authService.login(localUserWithToken);
+        onLogin(localUser.userType, localUserWithToken);
         onClose();
         setIsLoading(false);
         return;

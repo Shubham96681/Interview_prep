@@ -163,7 +163,20 @@ export default function ExpertProfile() {
     if (userData.token) {
       localStorage.setItem('token', userData.token);
       console.log('✅ Token saved in ExpertProfile:', userData.token.substring(0, 20) + '...');
+      
+      // Verify token was saved
+      const savedToken = localStorage.getItem('token');
+      if (!savedToken || savedToken !== userData.token) {
+        console.error('❌ Token not saved correctly in ExpertProfile!');
+        toast.error('Failed to save authentication token');
+        return;
+      }
+    } else {
+      console.error('❌ No token in userData:', userData);
+      toast.error('Login failed: No authentication token received');
+      return;
     }
+    
     // Also store in authService for compatibility
     authService.login(userData);
     
@@ -185,18 +198,29 @@ export default function ExpertProfile() {
     
     // Check if user is authenticated
     if (!currentUser) {
+      console.error('❌ No current user found');
       toast.error('Please log in to book a session');
       setShowAuthModal(true);
       return;
     }
 
-    // Check if token exists
+    // Check if token exists - CRITICAL CHECK
     const token = localStorage.getItem('token');
     if (!token) {
-      toast.error('Authentication token not found. Please log in again.');
+      console.error('❌ No token found in localStorage');
+      console.log('Current localStorage:', {
+        token: localStorage.getItem('token'),
+        user: localStorage.getItem('user')
+      });
+      toast.error('Authentication token not found. Please log in again.', {
+        description: 'Your session may have expired. Please log in to continue.',
+        duration: 5000
+      });
       setShowAuthModal(true);
       return;
     }
+    
+    console.log('✅ Token found:', token.substring(0, 20) + '...');
 
     if (currentUser.userType !== 'candidate') {
       toast.error('Only candidates can book sessions');
