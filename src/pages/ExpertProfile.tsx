@@ -9,6 +9,7 @@ import { ArrowLeft, Star, MapPin, Clock, Award, Video, Calendar, Edit } from 'lu
 import { mockExperts } from '@/lib/mockData';
 import { authService, User } from '@/lib/auth';
 import { apiService } from '@/lib/apiService';
+import { useAuth } from '@/contexts/AuthContext';
 import AuthModal from '@/components/AuthModal';
 import ExpertProfileEdit from '@/components/ExpertProfileEdit';
 import BookingCalendar from '@/components/BookingCalendar';
@@ -37,6 +38,7 @@ interface Expert {
 export default function ExpertProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { login: authLogin } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -160,9 +162,14 @@ export default function ExpertProfile() {
     // Store token if available
     if (userData.token) {
       localStorage.setItem('token', userData.token);
+      console.log('✅ Token saved in ExpertProfile:', userData.token.substring(0, 20) + '...');
     }
     // Also store in authService for compatibility
     authService.login(userData);
+    
+    // Use AuthContext login to properly update global auth state
+    authLogin(userData);
+    
     setShowAuthModal(false);
     
     // If they logged in as a candidate, show the booking interface

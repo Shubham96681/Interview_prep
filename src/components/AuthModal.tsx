@@ -53,9 +53,12 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
       // Store the token in localStorage
       if (data.token) {
         localStorage.setItem('token', data.token);
+        console.log('✅ Token saved to localStorage');
       }
       // Pass the user data with token to the parent component
-      onLogin(data.user.userType, { ...data.user, token: data.token });
+      const userWithToken = { ...data.user, token: data.token };
+      console.log('✅ Calling onLogin with user:', userWithToken);
+      onLogin(data.user.userType, userWithToken);
       onClose();
       setIsLoading(false);
       return;

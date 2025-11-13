@@ -27,11 +27,11 @@ const App = () => (
       >
         <AuthProvider>
           <ErrorBoundary>
-            <ConnectionStatus />
-            <Routes>
+        <ConnectionStatus />
+        <Routes>
               <Route path="/" element={<ProtectedRoute requireAuth={false}><Index /></ProtectedRoute>} />
-              <Route path="/experts" element={<ExpertDirectory />} />
-              <Route path="/expert/:id" element={<ExpertProfile />} />
+          <Route path="/experts" element={<ExpertDirectory />} />
+          <Route path="/expert/:id" element={<ExpertProfile />} />
               <Route path="/dashboard" element={<ProtectedRoute requireAuth={true}><Dashboard /></ProtectedRoute>} />
               <Route 
                 path="/meeting/:meetingId" 
@@ -43,8 +43,8 @@ const App = () => (
                   </ErrorBoundary>
                 } 
               />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
           </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>
