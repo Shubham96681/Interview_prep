@@ -513,10 +513,23 @@ app.put('/api/users/profile', authenticateToken, upload.single('profilePhoto'), 
 });
 
 // Book a session
-app.post('/api/sessions', authenticateToken, validateSessionBooking, async (req, res) => {
+app.post('/api/sessions', authenticateToken, async (req, res) => {
   try {
-    const { expertId, title, description, scheduledDate, duration, sessionType } = req.body;
-    const candidateId = req.user.userId;
+    const { expertId, candidateId: providedCandidateId, title, description, scheduledDate, date, time, duration, sessionType } = req.body;
+    
+    // Use provided candidateId or fall back to req.user.id (for JWT tokens)
+    let candidateId = providedCandidateId;
+    if (!candidateId && req.user) {
+      candidateId = req.user.id;
+    }
+    
+    // If no candidateId and no req.user (test token), return error
+    if (!candidateId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Please log in again to get a valid token'
+      });
+    }
 
     // Verify expert exists
     const expert = await prisma.user.findFirst({
@@ -524,7 +537,10 @@ app.post('/api/sessions', authenticateToken, validateSessionBooking, async (req,
     });
 
     if (!expert) {
-      return res.status(404).json({ message: 'Expert not found' });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Expert not found' 
+      });
     }
 
     // Create session
