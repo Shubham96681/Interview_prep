@@ -1,6 +1,15 @@
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+// Load environment variables if not already loaded
+if (!process.env.AWS_S3_BUCKET_NAME) {
+  try {
+    require('dotenv').config();
+  } catch (e) {
+    // dotenv might not be available, that's okay
+  }
+}
+
 class S3Service {
   constructor() {
     // Build S3 client configuration
@@ -27,7 +36,9 @@ class S3Service {
     this.s3Client = new S3Client(config);
     this.bucketName = process.env.AWS_S3_BUCKET_NAME;
     
-    if (!this.bucketName) {
+    if (this.bucketName) {
+      console.log(`✅ S3 Service initialized with bucket: ${this.bucketName}`);
+    } else {
       console.warn('⚠️ AWS_S3_BUCKET_NAME not set - S3 uploads will be disabled');
     }
   }
