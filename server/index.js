@@ -28,6 +28,9 @@ console.log('🔧 Environment loaded successfully');
 // Import Prisma client
 const prisma = require('./lib/prisma');
 
+// Import realtime service
+const realtimeService = require('./services/realtime');
+
 // Import middleware
 const { authenticateToken, requireRole, requireVerification } = require('./middleware/auth-prisma');
 const {
@@ -647,18 +650,49 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
 });
 
 // Get user sessions
-app.get('/api/sessions', authenticateToken, validatePagination, async (req, res) => {
+app.get('/api/sessions', async (req, res) => {
   try {
-    const { page = 1, limit = 10, status } = req.query;
+    const { userId: queryUserId, userType, page = 1, limit = 100, status } = req.query;
+    
+    // Determine userId - use query param or authenticated user
+    let userId = queryUserId;
+    if (!userId && req.user) {
+      userId = req.user.id || req.user.userId;
+    }
+    
+    // Handle mock IDs
+    if (userId === 'candidate-001') {
+      const candidate = await prisma.user.findUnique({
+        where: { email: 'john@example.com' }
+      });
+      if (candidate) {
+        userId = candidate.id;
+      }
+    } else if (userId === 'expert-001') {
+      const expert = await prisma.user.findUnique({
+        where: { email: 'jane@example.com' }
+      });
+      if (expert) {
+        userId = expert.id;
+      }
+    }
+    
+    // If no userId, return empty
+    if (!userId) {
+      return res.json({
+        success: true,
+        sessions: [],
+        total: 0
+      });
+    }
+    
+    const targetUserType = userType || 'candidate';
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const userId = req.user.userId;
 
-    const where = {
-      OR: [
-        { candidateId: userId },
-        { expertId: userId }
-      ]
-    };
+    // Build where clause based on userType
+    const where = targetUserType === 'candidate'
+      ? { candidateId: userId }
+      : { expertId: userId };
 
     if (status) {
       where.status = status;
@@ -682,18 +716,46 @@ app.get('/api/sessions', authenticateToken, validatePagination, async (req, res)
       prisma.session.count({ where })
     ]);
 
+    // Format sessions to match frontend expectations
+    const formattedSessions = sessions.map(session => {
+      const localDate = new Date(session.scheduledDate);
+      const dateStr = `${String(localDate.getFullYear())}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+      
+      return {
+        id: session.id,
+        expertId: session.expertId,
+        candidateId: session.candidateId,
+        expertName: session.expert?.name || 'Unknown',
+        candidateName: session.candidate?.name || 'Unknown',
+        date: dateStr,
+        time: timeStr,
+        scheduledDate: session.scheduledDate.toISOString(),
+        duration: session.duration,
+        sessionType: session.sessionType,
+        status: session.status,
+        paymentAmount: session.paymentAmount,
+        paymentStatus: session.paymentStatus,
+        meetingLink: session.meetingLink,
+        meetingId: session.meetingId,
+        recordingUrl: session.recordingUrl,
+        isRecordingEnabled: session.isRecordingEnabled,
+        createdAt: session.createdAt.toISOString()
+      };
+    });
+
     res.json({
-      sessions,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+      success: true,
+      sessions: formattedSessions,
+      total: formattedSessions.length
     });
   } catch (error) {
     console.error('Get sessions error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: error.message 
+    });
   }
 });
 
