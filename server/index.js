@@ -1032,13 +1032,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
-});
-
-// Start server
-// Real-time endpoint (Server-Sent Events)
+// Real-time endpoint (Server-Sent Events) - MUST be before 404 handler
 app.get('/api/realtime', (req, res) => {
   const userId = req.query.userId || 'anonymous';
   
@@ -1076,6 +1070,11 @@ app.get('/api/realtime', (req, res) => {
 
 // Start realtime service
 realtimeService.start();
+
+// 404 handler - MUST be last
+app.use('*', (req, res) => {
+  res.status(404).json({ message: 'Route not found' });
+});
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
