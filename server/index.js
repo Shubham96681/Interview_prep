@@ -1038,6 +1038,45 @@ app.use('*', (req, res) => {
 });
 
 // Start server
+// Real-time endpoint (Server-Sent Events)
+app.get('/api/realtime', (req, res) => {
+  const userId = req.query.userId || 'anonymous';
+  
+  // Handle mock IDs
+  let actualUserId = userId;
+  if (userId === 'candidate-001') {
+    actualUserId = 'john@example.com';
+  } else if (userId === 'expert-001') {
+    actualUserId = 'jane@example.com';
+  }
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'http://localhost:5173',
+    'Access-Control-Allow-Credentials': 'true'
+  });
+
+  // Add connection to real-time service
+  realtimeService.addConnection(actualUserId, res);
+
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({
+    event: 'connected',
+    data: { userId: actualUserId, timestamp: new Date().toISOString() }
+  })}\n\n`);
+
+  // Handle client disconnect
+  req.on('close', () => {
+    realtimeService.removeConnection(actualUserId, res);
+  });
+});
+
+// Start realtime service
+realtimeService.start();
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Database: SQLite with Prisma`);
