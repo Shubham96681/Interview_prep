@@ -1097,9 +1097,23 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   };
 
   const endCall = () => {
-    cleanup();
-    if (onEndCall) {
-      onEndCall();
+    // Stop recording before ending call to ensure it's uploaded
+    if (mediaRecorderRef.current && isRecordingRef.current) {
+      console.log('🛑 Stopping recording before ending call...');
+      mediaRecorderRef.current.stop();
+      isRecordingRef.current = false;
+      // Wait a moment for the upload to start before cleaning up
+      setTimeout(() => {
+        cleanup();
+        if (onEndCall) {
+          onEndCall();
+        }
+      }, 1000);
+    } else {
+      cleanup();
+      if (onEndCall) {
+        onEndCall();
+      }
     }
   };
 
