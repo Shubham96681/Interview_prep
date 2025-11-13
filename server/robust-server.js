@@ -1937,7 +1937,14 @@ class RobustServer {
   setupRealtime() {
     // Server-Sent Events endpoint for real-time updates
     this.app.get('/api/realtime', (req, res) => {
-      const userId = req.query.userId || 'cmguho5y30000mb9sp9zy6gwe';
+      let userId = req.query.userId || 'anonymous';
+      
+      // Handle mock IDs
+      if (userId === 'candidate-001') {
+        userId = 'john@example.com';
+      } else if (userId === 'expert-001') {
+        userId = 'jane@example.com';
+      }
       
       // Set SSE headers
       res.writeHead(200, {
