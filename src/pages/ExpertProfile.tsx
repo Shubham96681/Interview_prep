@@ -38,7 +38,7 @@ interface Expert {
 export default function ExpertProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { login: authLogin } = useAuth();
+  const { login: authLogin, user: authUser } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
@@ -180,10 +180,20 @@ export default function ExpertProfile() {
   };
 
   const handleBookSession = async (date: string, time: string) => {
-    const currentUser = authService.getCurrentUser();
+    // Check authentication via AuthContext first
+    const currentUser = authUser || authService.getCurrentUser();
     
+    // Check if user is authenticated
     if (!currentUser) {
       toast.error('Please log in to book a session');
+      setShowAuthModal(true);
+      return;
+    }
+
+    // Check if token exists
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast.error('Authentication token not found. Please log in again.');
       setShowAuthModal(true);
       return;
     }
@@ -214,6 +224,9 @@ export default function ExpertProfile() {
         sessionType: 'technical' // Default session type
       };
 
+      console.log('📤 Creating session with data:', sessionData);
+      console.log('🔑 Token available:', token ? 'Yes' : 'No');
+      
       const response = await apiService.createSession(sessionData);
       
       if (response.success) {
