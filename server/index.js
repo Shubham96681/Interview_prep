@@ -258,8 +258,6 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
       console.log('✅ Skipping password check for newly created user');
     }
 
-    console.log('✅ Password valid for:', email);
-
     // Generate JWT token
     console.log('🎫 Generating JWT token...');
     const token = jwt.sign(
@@ -607,17 +605,29 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
     const actualExpertId = expert.id;
     const actualCandidateId = candidate.id;
 
+    // Parse date and time if provided (for compatibility with frontend)
+    let finalScheduledDate = scheduledDate;
+    if (date && time && !scheduledDate) {
+      const [year, month, day] = date.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      finalScheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    } else if (scheduledDate) {
+      finalScheduledDate = new Date(scheduledDate);
+    }
+
     // Create session
     const session = await prisma.session.create({
       data: {
-        title,
-        description,
-        scheduledDate: new Date(scheduledDate),
-        duration: parseInt(duration),
-        sessionType,
+        title: title || `${sessionType || 'Technical'} Interview Session`,
+        description: description || `Interview session scheduled for ${date || scheduledDate} at ${time || ''}`,
+        scheduledDate: finalScheduledDate,
+        duration: parseInt(duration) || 60,
+        sessionType: sessionType || 'technical',
         candidateId: actualCandidateId,
         expertId: actualExpertId,
-        paymentAmount: expert.hourlyRate ? (expert.hourlyRate * parseInt(duration)) / 60 : null
+        paymentAmount: expert.hourlyRate ? (expert.hourlyRate * parseInt(duration || 60)) / 60 : 75,
+        paymentStatus: 'pending',
+        status: 'scheduled'
       },
       include: {
         candidate: {
