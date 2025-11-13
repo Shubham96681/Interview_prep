@@ -261,14 +261,33 @@ class ApiService {
       const formData = new FormData();
       formData.append('recording', recordingBlob, `recording-${sessionId}-${Date.now()}.webm`);
 
+      // Get token from localStorage (same as request method)
       const token = localStorage.getItem('token');
       const headers: HeadersInit = {};
+      
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+        console.log('🔑 Token found for upload:', token.substring(0, 20) + '...');
+      } else {
+        console.warn('⚠️ No token found in localStorage for upload');
+        // Try to get from user object as fallback
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          try {
+            const user = JSON.parse(userStr);
+            if (user.token) {
+              headers['Authorization'] = `Bearer ${user.token}`;
+              console.log('🔑 Using token from user object');
+            }
+          } catch (e) {
+            console.error('Error parsing user object:', e);
+          }
+        }
       }
 
-      console.log('Uploading recording for session:', sessionId);
+      console.log('📤 Uploading recording for session:', sessionId, 'Size:', recordingBlob.size, 'bytes');
 
+      // Don't set Content-Type - browser will set it automatically with boundary for FormData
       const response = await fetch(url, {
         method: 'POST',
         headers,
