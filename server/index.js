@@ -34,6 +34,9 @@ const realtimeService = require('./services/realtime');
 // Import WebRTC service
 const webrtcService = require('./services/webrtcService');
 
+// Import S3 service
+const s3Service = require('./services/s3Service');
+
 // Import middleware
 const { authenticateToken, requireRole, requireVerification } = require('./middleware/auth-prisma');
 const {
@@ -842,6 +845,8 @@ app.get('/api/sessions/meeting/:meetingId', async (req, res) => {
       candidateId: session.candidateId,
       expertName: session.expert?.name || 'Unknown',
       candidateName: session.candidate?.name || 'Unknown',
+      expertEmail: session.expert?.email || null,
+      candidateEmail: session.candidate?.email || null,
       date: dateStr,
       time: timeStr,
       scheduledDate: session.scheduledDate.toISOString(),
@@ -867,6 +872,147 @@ app.get('/api/sessions/meeting/:meetingId', async (req, res) => {
       success: false,
       error: 'Failed to fetch session',
       message: error.message
+    });
+  }
+});
+
+// Configure multer for recording uploads
+const recordingsDir = path.join(__dirname, 'uploads', 'recordings');
+if (!fs.existsSync(recordingsDir)) {
+  fs.mkdirSync(recordingsDir, { recursive: true });
+}
+
+const recordingStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, recordingsDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `recording-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const uploadRecording = multer({
+  storage: recordingStorage,
+  limits: {
+    fileSize: 500 * 1024 * 1024 // 500MB limit for video files
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow video files
+    const allowedTypes = /webm|mp4|ogg|mov|avi/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype) || file.mimetype.startsWith('video/');
+
+    if (mimetype || extname) {
+      return cb(null, true);
+    } else {
+      cb(new Error('Only video files are allowed'));
+    }
+  }
+});
+
+// Upload recording file for a session
+app.post('/api/sessions/:id/upload-recording', uploadRecording.single('recording'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No recording file provided'
+      });
+    }
+
+    // Verify session exists
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        candidate: { select: { id: true, email: true } },
+        expert: { select: { id: true, email: true } }
+      }
+    });
+
+    if (!session) {
+      // Delete uploaded file if session doesn't exist
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found'
+      });
+    }
+
+    let recordingUrl;
+    let fullUrl;
+
+    // Check if S3 is configured
+    const isS3Configured = process.env.AWS_S3_BUCKET_NAME;
+
+    if (isS3Configured) {
+      // Upload to S3
+      try {
+        const fileBuffer = fs.readFileSync(req.file.path);
+        const fileName = `recordings/recording-${id}-${Date.now()}-${Math.round(Math.random() * 1E9)}.webm`;
+        
+        const s3Result = await s3Service.uploadFile(
+          fileBuffer,
+          fileName,
+          req.file.mimetype || 'video/webm'
+        );
+
+        recordingUrl = s3Result.url;
+        fullUrl = s3Result.url;
+
+        // Delete local file after S3 upload
+        if (fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+
+        console.log(`✅ Recording uploaded to S3 for session ${id}: ${s3Result.key}`);
+      } catch (s3Error) {
+        console.error('❌ S3 upload failed, falling back to local storage:', s3Error);
+        // Fall back to local storage
+        recordingUrl = `/uploads/recordings/${req.file.filename}`;
+        fullUrl = `${req.protocol}://${req.get('host')}${recordingUrl}`;
+      }
+    } else {
+      // Use local storage
+      recordingUrl = `/uploads/recordings/${req.file.filename}`;
+      fullUrl = `${req.protocol}://${req.get('host')}${recordingUrl}`;
+    }
+
+    // Update session with recording URL
+    await prisma.session.update({
+      where: { id },
+      data: { recordingUrl: fullUrl }
+    });
+
+    res.json({
+      success: true,
+      message: 'Recording uploaded successfully',
+      recordingUrl: fullUrl
+    });
+  } catch (error) {
+    console.error('Error uploading recording:', error);
+    
+    // Clean up uploaded file on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload recording',
+      error: error.message
     });
   }
 });
