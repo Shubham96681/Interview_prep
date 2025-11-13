@@ -316,14 +316,16 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             }
           }, 100);
           
-          // If there are other users, send them an offer
+          // If there are other users, send them an offer after peer connection is created
+          // This happens when joining an existing meeting
           if (otherUsers.length > 0) {
             console.log('👥 Other users in room, will send offer after peer connection is created...');
-            // The offer will be sent after peer connection is created (in createPeerConnection)
-            // But we need to wait a bit for the peer connection to be ready
+            // Wait for peer connection to be created, then send offer
             setTimeout(async () => {
               if (peerConnectionRef.current && socketInstance) {
                 const pc = peerConnectionRef.current;
+                // Wait a bit more to ensure peer connection is fully ready
+                await new Promise(resolve => setTimeout(resolve, 200));
                 if (pc.signalingState === 'stable') {
                   try {
                     console.log('📤 Sending offer to existing users...');
@@ -338,9 +340,15 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
                   } catch (err) {
                     console.error('Error sending offer to existing users:', err);
                   }
+                } else {
+                  console.log('⚠️ Peer connection not ready, state:', pc.signalingState);
                 }
               }
-            }, 500);
+            }, 700);
+          } else {
+            // No other users - we're the first one
+            // We'll send an offer when someone joins (handled in user-joined event)
+            console.log('👤 We are the first user, will send offer when someone joins');
           }
         });
 
