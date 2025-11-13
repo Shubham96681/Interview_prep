@@ -77,9 +77,19 @@ cd /var/www/interview-prep/server
 npx prisma studio
 ```
 
-Or query directly:
+Or query directly (note: table name is `sessions` lowercase):
 ```bash
-sqlite3 prisma/dev.db "SELECT id, meetingId, recordingUrl, createdAt FROM Session WHERE recordingUrl IS NOT NULL ORDER BY createdAt DESC LIMIT 10;"
+sqlite3 prisma/dev.db "SELECT id, meetingId, recordingUrl, createdAt FROM sessions WHERE recordingUrl IS NOT NULL ORDER BY createdAt DESC LIMIT 10;"
+```
+
+**Check all sessions (including those without recordings):**
+```bash
+sqlite3 prisma/dev.db "SELECT id, meetingId, recordingUrl, status, createdAt FROM sessions ORDER BY createdAt DESC LIMIT 10;"
+```
+
+**Count sessions with S3 recordings:**
+```bash
+sqlite3 prisma/dev.db "SELECT COUNT(*) as s3_recordings FROM sessions WHERE recordingUrl LIKE '%s3%' OR recordingUrl LIKE '%amazonaws%';"
 ```
 
 **Recording URLs in S3 will look like:**
