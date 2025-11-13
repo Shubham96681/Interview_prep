@@ -1153,9 +1153,9 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-gray-900">
+    <div className="w-full h-full flex flex-col bg-gray-900 overflow-hidden">
       {/* Video Area */}
-      <div className="flex-1 relative grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+      <div className="flex-1 relative grid grid-cols-1 md:grid-cols-2 gap-4 p-4 min-h-0 overflow-auto">
         {/* Remote Video */}
         <div className="relative bg-black rounded-lg overflow-hidden">
           {remoteStream ? (
@@ -1230,7 +1230,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       </div>
 
       {/* Controls */}
-      <div className="bg-gray-800 p-4 flex items-center justify-center gap-4">
+      <div className="bg-gray-800 p-4 flex items-center justify-center gap-4 flex-shrink-0 z-10">
         <Button
           variant={isAudioEnabled ? "default" : "destructive"}
           size="lg"
@@ -1292,7 +1292,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       </div>
 
       {/* Connection Status */}
-      <div className="bg-gray-800 px-4 py-2 text-center text-sm text-white">
+      <div className="bg-gray-800 px-4 py-2 text-center text-sm text-white flex-shrink-0">
         {isConnected ? (
           <div className="flex items-center justify-center gap-2 flex-wrap">
             <span className="text-green-400">● Connected</span>
