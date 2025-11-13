@@ -308,7 +308,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           }
           
           if (otherUsers.length > 0) {
-            // Defer peer connection creation to avoid calling undefined function
+            // Other users already in meeting - wait for them to send offer
+            // Don't create peer connection yet, wait for offer
+            console.log('👥 Other users in meeting, waiting for offer...');
+          } else {
+            // First user - create peer connection and send offer
             setTimeout(() => {
               if (createPeerConnectionRef.current) {
                 createPeerConnectionRef.current().catch(err => {
@@ -319,15 +323,34 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           }
         });
 
-        socketInstance.on('user-joined', async () => {
-          console.log('👤 Another user joined');
-          setTimeout(() => {
-            if (createPeerConnectionRef.current) {
-              createPeerConnectionRef.current().catch(err => {
-                console.error('Error creating peer connection:', err);
+        socketInstance.on('user-joined', async ({ socketId }) => {
+          console.log('👤 Another user joined:', socketId);
+          // When a new user joins, if we already have a peer connection, send offer
+          // Otherwise, wait for them to send offer
+          if (peerConnectionRef.current) {
+            console.log('👤 We have peer connection, sending offer to new user...');
+            try {
+              const offer = await peerConnectionRef.current.createOffer();
+              await peerConnectionRef.current.setLocalDescription(offer);
+              socketInstance.emit('offer', {
+                meetingId: meetingIdRef.current,
+                offer,
+                targetSocketId: socketId
               });
+              console.log('✅ Offer sent to new user');
+            } catch (err) {
+              console.error('Error sending offer to new user:', err);
             }
-          }, 100);
+          } else {
+            // Create peer connection and send offer
+            setTimeout(() => {
+              if (createPeerConnectionRef.current) {
+                createPeerConnectionRef.current().catch(err => {
+                  console.error('Error creating peer connection:', err);
+                });
+              }
+            }, 100);
+          }
         });
 
         socketInstance.on('offer', async ({ offer, senderSocketId }) => {
@@ -560,11 +583,22 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         
         event.track.onmute = () => {
           console.log('📹 Remote track muted:', event.track.kind);
+          // If video track is muted, try to unmute it
+          if (event.track.kind === 'video' && event.track.enabled) {
+            console.log('📹 Attempting to unmute video track...');
+            // The track might be muted by the sender, but we can still display it
+          }
         };
         
         event.track.onunmute = () => {
           console.log('📹 Remote track unmuted:', event.track.kind);
         };
+        
+        // Ensure track is enabled
+        if (!event.track.enabled) {
+          console.log('📹 Enabling remote track:', event.track.kind);
+          event.track.enabled = true;
+        }
       };
 
       // Handle ICE candidates
@@ -589,17 +623,24 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       peerConnectionRef.current = pc;
 
       // Create and send offer if we're the first to join
-      if (socket) {
+      // Only send offer if we don't already have a local description
+      if (socket && pc.signalingState === 'stable') {
         console.log('📤 Creating and sending offer...');
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        console.log('📤 Offer created, sending to server...');
-        socket.emit('offer', {
-          meetingId: meetingIdRef.current,
-          offer,
-          targetSocketId: null // null means broadcast to all in room
-        });
-        console.log('✅ Offer sent to server');
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          console.log('📤 Offer created, sending to server...');
+          socket.emit('offer', {
+            meetingId: meetingIdRef.current,
+            offer,
+            targetSocketId: null // null means broadcast to all in room
+          });
+          console.log('✅ Offer sent to server');
+        } catch (error) {
+          console.error('❌ Error creating/sending offer:', error);
+        }
+      } else {
+        console.log('📤 Skipping offer creation - signaling state:', pc.signalingState);
       }
     } catch (error) {
       console.error('Error creating peer connection:', error);
@@ -615,30 +656,64 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     }
 
     const pc = peerConnectionRef.current!;
-    console.log('📥 Setting remote description...');
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
     
-    console.log('📥 Creating answer...');
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    console.log('📥 Answer created, sending to server...');
+    // Check if we already have a remote description (race condition protection)
+    if (pc.remoteDescription) {
+      console.log('⚠️ Already have remote description, ignoring duplicate offer');
+      return;
+    }
+    
+    try {
+      console.log('📥 Setting remote description...');
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      
+      console.log('📥 Creating answer...');
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      console.log('📥 Answer created, sending to server...');
 
-    if (socket) {
-      socket.emit('answer', {
-        meetingId: meetingIdRef.current,
-        answer,
-        targetSocketId: senderSocketId
-      });
-      console.log('✅ Answer sent to:', senderSocketId);
+      if (socket) {
+        socket.emit('answer', {
+          meetingId: meetingIdRef.current,
+          answer,
+          targetSocketId: senderSocketId
+        });
+        console.log('✅ Answer sent to:', senderSocketId);
+      }
+    } catch (error: any) {
+      console.error('❌ Error handling offer:', error);
+      // If error is because we already have a remote description, that's okay
+      if (error.message && error.message.includes('already')) {
+        console.log('ℹ️ Remote description already set, continuing...');
+      }
     }
   }, [socket, createPeerConnection]);
 
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
     console.log('📥 Received answer');
     if (peerConnectionRef.current) {
-      console.log('📥 Setting remote description from answer...');
-      await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-      console.log('✅ Remote description set from answer');
+      const pc = peerConnectionRef.current;
+      
+      // Check current state
+      console.log('📥 Current connection state:', pc.connectionState);
+      console.log('📥 Current signaling state:', pc.signalingState);
+      
+      // Only set remote description if we're in the right state
+      if (pc.signalingState === 'have-local-offer') {
+        try {
+          console.log('📥 Setting remote description from answer...');
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          console.log('✅ Remote description set from answer');
+        } catch (error: any) {
+          console.error('❌ Error setting remote description from answer:', error);
+          // If already set, that's okay
+          if (error.message && error.message.includes('already')) {
+            console.log('ℹ️ Remote description already set');
+          }
+        }
+      } else {
+        console.warn('⚠️ Received answer but in wrong signaling state:', pc.signalingState);
+      }
     } else {
       console.warn('⚠️ Received answer but no peer connection exists');
     }
