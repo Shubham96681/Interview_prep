@@ -119,14 +119,37 @@ class RobustServer {
       try {
         const { email, password } = req.body;
         
-        console.log('Login attempt:', { email, password: password ? '***' : 'undefined' });
+        console.log('🔐 Login attempt:', { email, password: password ? '***' : 'undefined' });
         
         // For demo purposes, accept any password
         // In production, you'd verify the password hash
-        const user = await databaseService.getUserByEmail(email);
+        let user = await databaseService.getUserByEmail(email);
+        
+        // If user doesn't exist, create test users on-the-fly for common test emails
+        if (!user && (email === 'john@example.com' || email === 'jane@example.com')) {
+          console.log('⚠️ User not found, creating test user:', email);
+          try {
+            const testUserData = {
+              email,
+              name: email === 'john@example.com' ? 'John Doe' : 'Jane Smith',
+              password: 'hashed_' + Date.now(), // Placeholder hash
+              userType: email === 'john@example.com' ? 'candidate' : 'expert',
+              company: email === 'john@example.com' ? 'Tech Corp' : 'Google',
+              title: email === 'john@example.com' ? 'Software Engineer' : 'Senior Software Engineer',
+            };
+            
+            user = await prisma.user.create({
+              data: testUserData
+            });
+            console.log('✅ Test user created:', user.id);
+          } catch (createError) {
+            console.error('❌ Error creating test user:', createError);
+            // If creation fails, continue with 401
+          }
+        }
         
         if (!user) {
-          console.log('Login failed: User not found for:', email);
+          console.log('❌ Login failed: User not found for:', email);
           return res.status(401).json({
             success: false,
             message: 'Invalid credentials',
@@ -135,7 +158,7 @@ class RobustServer {
         }
         
         if (!password) {
-          console.log('Login failed: No password provided for:', email);
+          console.log('❌ Login failed: No password provided for:', email);
           return res.status(401).json({
             success: false,
             message: 'Invalid credentials',
@@ -143,10 +166,13 @@ class RobustServer {
           });
         }
         
-        console.log('Login successful for:', email);
+        console.log('✅ Login successful for:', email);
         
         // Return full user data (excluding password)
         const { password: _, ...userWithoutPassword } = user;
+        
+        // Generate a simple token (not JWT for now, just a string token)
+        const token = 'token-' + user.id + '-' + Date.now();
         
         res.json({
           success: true,
@@ -157,7 +183,7 @@ class RobustServer {
             userType: user.userType,
             bio: user.bio,
             experience: user.experience,
-            skills: user.skills ? JSON.parse(user.skills) : [],
+            skills: user.skills ? (typeof user.skills === 'string' ? JSON.parse(user.skills) : user.skills) : [],
             rating: user.rating,
             totalSessions: user.totalSessions,
             hourlyRate: user.hourlyRate,
@@ -166,7 +192,7 @@ class RobustServer {
             company: user.company,
             title: user.title
           },
-          token: 'jwt-token-' + Date.now()
+          token: token
         });
       } catch (error) {
         console.error('Login error:', error);
@@ -455,9 +481,18 @@ class RobustServer {
 
     this.app.post('/api/sessions', async (req, res) => {
       try {
+        // Log token if provided (for debugging)
+        const authHeader = req.headers.authorization;
+        if (authHeader) {
+          const token = authHeader.replace('Bearer ', '');
+          console.log('🔑 Token received:', token.substring(0, 30) + '...');
+        } else {
+          console.log('⚠️ No token in request headers');
+        }
+        
         const { expertId, candidateId, date, time, duration, sessionType } = req.body;
         
-        console.log('Creating session:', { expertId, candidateId, date, time, duration, sessionType });
+        console.log('📅 Creating session:', { expertId, candidateId, date, time, duration, sessionType });
         
         // Validate that expert and candidate exist
         let expert = null;
@@ -484,7 +519,13 @@ class RobustServer {
           expert = await databaseService.getUserByEmail('jane@example.com');
         }
         
+        // Handle mock candidate IDs (map to real database candidates)
+        if (!candidate && candidateId === 'candidate-001') {
+          candidate = await databaseService.getUserByEmail('john@example.com');
+        }
+        
         if (!expert || expert.userType !== 'expert') {
+          console.error('❌ Expert not found:', expertId, 'expert:', expert);
           return res.status(400).json({
             success: false,
             error: 'Invalid expert ID',
@@ -493,6 +534,7 @@ class RobustServer {
         }
         
         if (!candidate || candidate.userType !== 'candidate') {
+          console.error('❌ Candidate not found:', candidateId, 'candidate:', candidate);
           return res.status(400).json({
             success: false,
             error: 'Invalid candidate ID',
