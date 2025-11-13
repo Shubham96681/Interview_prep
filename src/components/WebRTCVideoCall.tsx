@@ -349,6 +349,29 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             // No other users - we're the first one
             // We'll send an offer when someone joins (handled in user-joined event)
             console.log('👤 We are the first user, will send offer when someone joins');
+            // But also, send an offer after peer connection is ready, in case the server
+            // didn't include other users in the list (timing issue)
+            setTimeout(async () => {
+              if (peerConnectionRef.current && socketInstance) {
+                const pc = peerConnectionRef.current;
+                await new Promise(resolve => setTimeout(resolve, 300));
+                if (pc.signalingState === 'stable' && !pc.localDescription) {
+                  try {
+                    console.log('📤 Sending initial offer (first user, no other users detected)...');
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    socketInstance.emit('offer', {
+                      meetingId: meetingIdRef.current,
+                      offer,
+                      targetSocketId: null // Broadcast to all in room
+                    });
+                    console.log('✅ Initial offer sent');
+                  } catch (err) {
+                    console.error('Error sending initial offer:', err);
+                  }
+                }
+              }
+            }, 800);
           }
         });
 
