@@ -54,28 +54,60 @@ class WebRTCService {
 
       // Handle WebRTC offer
       socket.on('offer', ({ meetingId, offer, targetSocketId }) => {
-        console.log(`📤 Offer from ${socket.id} to ${targetSocketId}`);
-        socket.to(targetSocketId).emit('offer', {
-          offer,
-          senderSocketId: socket.id
-        });
+        console.log(`📤 Offer from ${socket.id} in meeting ${meetingId}`);
+        if (targetSocketId) {
+          // Send to specific target
+          console.log(`   Sending to specific target: ${targetSocketId}`);
+          socket.to(targetSocketId).emit('offer', {
+            offer,
+            senderSocketId: socket.id
+          });
+        } else {
+          // Broadcast to all other users in the meeting room
+          console.log(`   Broadcasting to all other users in room`);
+          socket.to(meetingId).emit('offer', {
+            offer,
+            senderSocketId: socket.id
+          });
+        }
       });
 
       // Handle WebRTC answer
       socket.on('answer', ({ meetingId, answer, targetSocketId }) => {
-        console.log(`📥 Answer from ${socket.id} to ${targetSocketId}`);
-        socket.to(targetSocketId).emit('answer', {
-          answer,
-          senderSocketId: socket.id
-        });
+        console.log(`📥 Answer from ${socket.id} in meeting ${meetingId}`);
+        if (targetSocketId) {
+          // Send to specific target
+          console.log(`   Sending to specific target: ${targetSocketId}`);
+          socket.to(targetSocketId).emit('answer', {
+            answer,
+            senderSocketId: socket.id
+          });
+        } else {
+          // Broadcast to all other users in the meeting room
+          console.log(`   Broadcasting to all other users in room`);
+          socket.to(meetingId).emit('answer', {
+            answer,
+            senderSocketId: socket.id
+          });
+        }
       });
 
       // Handle ICE candidates
       socket.on('ice-candidate', ({ meetingId, candidate, targetSocketId }) => {
-        socket.to(targetSocketId).emit('ice-candidate', {
-          candidate,
-          senderSocketId: socket.id
-        });
+        console.log(`🧊 ICE candidate from ${socket.id} in meeting ${meetingId}`);
+        if (targetSocketId) {
+          // Send to specific target
+          socket.to(targetSocketId).emit('ice-candidate', {
+            candidate,
+            senderSocketId: socket.id
+          });
+        } else {
+          // Broadcast to all other users in the meeting room
+          socket.to(meetingId).emit('ice-candidate', {
+            candidate,
+            senderSocketId: socket.id
+          });
+        }
       });
 
       // Handle disconnect

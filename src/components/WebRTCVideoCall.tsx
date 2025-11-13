@@ -570,11 +570,14 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate && socket) {
+          console.log('🧊 Sending ICE candidate...');
           socket.emit('ice-candidate', {
             meetingId: meetingIdRef.current,
             candidate: event.candidate,
-            targetSocketId: null // Will be set by server
+            targetSocketId: null // null means broadcast to all in room
           });
+        } else if (!event.candidate) {
+          console.log('🧊 ICE gathering complete (no more candidates)');
         }
       };
 
@@ -587,13 +590,16 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
       // Create and send offer if we're the first to join
       if (socket) {
+        console.log('📤 Creating and sending offer...');
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
+        console.log('📤 Offer created, sending to server...');
         socket.emit('offer', {
           meetingId: meetingIdRef.current,
           offer,
-          targetSocketId: null
+          targetSocketId: null // null means broadcast to all in room
         });
+        console.log('✅ Offer sent to server');
       }
     } catch (error) {
       console.error('Error creating peer connection:', error);
@@ -601,15 +607,21 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   }, [localStream, socket, startLocalStreamMemo]);
 
   const handleOffer = useCallback(async (offer: RTCSessionDescriptionInit, senderSocketId: string) => {
+    console.log('📥 Received offer from:', senderSocketId);
+    
     if (!peerConnectionRef.current) {
+      console.log('📥 No peer connection, creating one...');
       await createPeerConnection();
     }
 
     const pc = peerConnectionRef.current!;
+    console.log('📥 Setting remote description...');
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
     
+    console.log('📥 Creating answer...');
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    console.log('📥 Answer created, sending to server...');
 
     if (socket) {
       socket.emit('answer', {
@@ -617,18 +629,32 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         answer,
         targetSocketId: senderSocketId
       });
+      console.log('✅ Answer sent to:', senderSocketId);
     }
   }, [socket, createPeerConnection]);
 
   const handleAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
+    console.log('📥 Received answer');
     if (peerConnectionRef.current) {
+      console.log('📥 Setting remote description from answer...');
       await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+      console.log('✅ Remote description set from answer');
+    } else {
+      console.warn('⚠️ Received answer but no peer connection exists');
     }
   }, []);
 
   const handleIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
+    console.log('🧊 Received ICE candidate');
     if (peerConnectionRef.current) {
-      await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      try {
+        await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        console.log('✅ ICE candidate added');
+      } catch (error) {
+        console.error('❌ Error adding ICE candidate:', error);
+      }
+    } else {
+      console.warn('⚠️ Received ICE candidate but no peer connection exists');
     }
   }, []);
 
