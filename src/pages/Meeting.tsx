@@ -149,6 +149,16 @@ export default function Meeting() {
     );
   }
 
+  // Map mock IDs to real database IDs for comparison
+  let userDbId = user?.id;
+  if (user?.id === 'candidate-001' && session.candidateEmail === 'john@example.com') {
+    // If user is candidate-001 and session candidate email matches, allow access
+    userDbId = session.candidateId;
+  } else if (user?.id === 'expert-001' && session.expertEmail === 'jane@example.com') {
+    // If user is expert-001 and session expert email matches, allow access
+    userDbId = session.expertId;
+  }
+
   // Check if user is a participant
   // Allow access if:
   // 1. User is the candidate
@@ -156,14 +166,17 @@ export default function Meeting() {
   // 3. User is an admin
   // 4. User is in additionalParticipants
   // 5. User email matches candidate or expert email (fallback)
+  // 6. Mock ID matches (candidate-001/expert-001 with matching email)
   const isParticipant = 
     !user || // Allow if no user (will be checked later)
-    (session.candidateId && user?.id === session.candidateId) || 
-    (session.expertId && user?.id === session.expertId) ||
+    (session.candidateId && (userDbId === session.candidateId || user?.id === session.candidateId)) || 
+    (session.expertId && (userDbId === session.expertId || user?.id === session.expertId)) ||
     user?.userType === 'admin' ||
     (session.additionalParticipants && Array.isArray(session.additionalParticipants) && session.additionalParticipants.includes(user?.id)) ||
     (session.candidateEmail && user?.email === session.candidateEmail) || // Check by email
     (session.expertEmail && user?.email === session.expertEmail) || // Check by email
+    (user?.id === 'candidate-001' && session.candidateEmail === 'john@example.com') || // Mock ID check
+    (user?.id === 'expert-001' && session.expertEmail === 'jane@example.com') || // Mock ID check
     (session.candidateName && user?.email === session.candidateName) || // Fallback: check by name (if name is email)
     (session.expertName && user?.email === session.expertName); // Fallback: check by name (if name is email)
 

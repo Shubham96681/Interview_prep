@@ -31,6 +31,9 @@ const prisma = require('./lib/prisma');
 // Import realtime service
 const realtimeService = require('./services/realtime');
 
+// Import WebRTC service
+const webrtcService = require('./services/webrtcService');
+
 // Import middleware
 const { authenticateToken, requireRole, requireVerification } = require('./middleware/auth-prisma');
 const {
@@ -1185,10 +1188,15 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-app.listen(PORT, () => {
+// Start server and initialize WebRTC
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Database: SQLite with Prisma`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Initialize WebRTC signaling service (Socket.IO)
+  webrtcService.initialize(server);
+  console.log(`✅ WebRTC/Socket.IO service initialized`);
 });
 
 // Graceful shutdown
