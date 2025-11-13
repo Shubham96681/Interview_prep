@@ -55,10 +55,13 @@ git checkout main || true
 echo "📦 Installing frontend dependencies..."
 npm install --legacy-peer-deps --prefer-offline --no-audit
 
-# Install server dependencies (production only)
+# Install server dependencies
 echo "📦 Installing backend dependencies..."
 cd server
-npm install --production --legacy-peer-deps --prefer-offline --no-audit
+# Install all dependencies (Prisma needs dev dependencies for engines)
+npm install --legacy-peer-deps --prefer-offline --no-audit
+# Ensure Prisma is properly set up
+npx prisma generate || echo "⚠️ Prisma generate failed, continuing..."
 cd ..
 
 # Build frontend
