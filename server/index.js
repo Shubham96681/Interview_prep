@@ -759,6 +759,115 @@ app.get('/api/sessions', async (req, res) => {
   }
 });
 
+// Get session by meeting ID (for meeting page access) - MUST be before /api/sessions/:id
+app.get('/api/sessions/meeting/:meetingId', async (req, res) => {
+  try {
+    const { meetingId } = req.params;
+    
+    console.log('Fetching session by meetingId:', meetingId);
+    
+    // Try to find session by meetingId
+    let session = await prisma.session.findFirst({
+      where: { meetingId: meetingId },
+      include: {
+        candidate: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        expert: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
+      }
+    });
+
+    // If not found, try to find by meetingLink containing the meetingId
+    if (!session) {
+      console.log('Session not found by meetingId, trying to find by meetingLink...');
+      const allSessions = await prisma.session.findMany({
+        where: {
+          meetingLink: {
+            contains: meetingId
+          }
+        },
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          expert: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        }
+      });
+      
+      if (allSessions.length > 0) {
+        session = allSessions[0];
+        console.log('Found session by meetingLink:', session.id);
+      }
+    }
+
+    if (!session) {
+      console.log('Session not found for meetingId:', meetingId);
+      return res.status(404).json({
+        success: false,
+        message: 'Session not found for this meeting ID'
+      });
+    }
+
+    // Format response
+    const localDate = new Date(session.scheduledDate);
+    const dateStr = `${String(localDate.getFullYear())}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+
+    const formattedSession = {
+      id: session.id,
+      expertId: session.expertId,
+      candidateId: session.candidateId,
+      expertName: session.expert?.name || 'Unknown',
+      candidateName: session.candidate?.name || 'Unknown',
+      date: dateStr,
+      time: timeStr,
+      scheduledDate: session.scheduledDate.toISOString(),
+      duration: session.duration,
+      sessionType: session.sessionType,
+      status: session.status,
+      paymentAmount: session.paymentAmount,
+      paymentStatus: session.paymentStatus,
+      meetingLink: session.meetingLink,
+      meetingId: session.meetingId,
+      recordingUrl: session.recordingUrl,
+      isRecordingEnabled: session.isRecordingEnabled,
+      createdAt: session.createdAt.toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: formattedSession
+    });
+  } catch (error) {
+    console.error('Error fetching session by meetingId:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch session',
+      message: error.message
+    });
+  }
+});
+
 // Get session by ID
 app.get('/api/sessions/:id', authenticateToken, validateObjectId, async (req, res) => {
   try {
