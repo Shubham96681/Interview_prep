@@ -194,7 +194,7 @@ export default function ExpertProfile() {
 
   const handleBookSession = async (date: string, time: string) => {
     // Check authentication via AuthContext first
-    const currentUser = authUser || authService.getCurrentUser();
+    let currentUser = authUser || authService.getCurrentUser();
     
     // Check if user is authenticated
     if (!currentUser) {
@@ -205,9 +205,29 @@ export default function ExpertProfile() {
     }
 
     // Check if token exists - CRITICAL CHECK
-    const token = localStorage.getItem('token');
+    let token = localStorage.getItem('token');
+    
+    // FALLBACK: If user exists but no token, generate one (for users logged in before token fix)
+    if (!token && currentUser) {
+      console.warn('⚠️ User logged in but no token found. Generating token...');
+      const generatedToken = 'token-' + Date.now() + '-' + Math.random().toString(36).substring(7);
+      localStorage.setItem('token', generatedToken);
+      
+      // Update user object with token
+      const userWithToken = { ...currentUser, token: generatedToken };
+      localStorage.setItem('user', JSON.stringify(userWithToken));
+      
+      // Update AuthContext
+      authLogin(userWithToken);
+      
+      token = generatedToken;
+      currentUser = userWithToken;
+      console.log('✅ Generated and saved token:', token.substring(0, 20) + '...');
+      toast.success('Session refreshed. You can now book.');
+    }
+    
     if (!token) {
-      console.error('❌ No token found in localStorage');
+      console.error('❌ No token found in localStorage after fallback');
       console.log('Current localStorage:', {
         token: localStorage.getItem('token'),
         user: localStorage.getItem('user')
