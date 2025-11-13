@@ -295,8 +295,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           });
         });
 
-        socketInstance.on('joined-meeting', async ({ otherUsers }) => {
-          console.log('✅ Joined meeting, other users:', otherUsers);
+        socketInstance.on('joined-meeting', async ({ otherUsers, socketId }) => {
+          console.log('✅ Joined meeting, other users:', otherUsers, 'my socketId:', socketId);
           
           // Ensure local stream is started
           if (!localStreamRef.current) {
@@ -307,12 +307,76 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             }
           }
           
+          // Create peer connection
+          setTimeout(() => {
+            if (createPeerConnectionRef.current) {
+              createPeerConnectionRef.current().catch(err => {
+                console.error('Error creating peer connection:', err);
+              });
+            }
+          }, 100);
+          
+          // If there are other users, send them an offer
           if (otherUsers.length > 0) {
-            // Other users already in meeting - wait for them to send offer
-            // Don't create peer connection yet, wait for offer
-            console.log('👥 Other users in meeting, waiting for offer...');
+            console.log('👥 Other users in room, will send offer after peer connection is created...');
+            // The offer will be sent after peer connection is created (in createPeerConnection)
+            // But we need to wait a bit for the peer connection to be ready
+            setTimeout(async () => {
+              if (peerConnectionRef.current && socketInstance) {
+                const pc = peerConnectionRef.current;
+                if (pc.signalingState === 'stable') {
+                  try {
+                    console.log('📤 Sending offer to existing users...');
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    socketInstance.emit('offer', {
+                      meetingId: meetingIdRef.current,
+                      offer,
+                      targetSocketId: null // Broadcast to all in room
+                    });
+                    console.log('✅ Offer sent to existing users');
+                  } catch (err) {
+                    console.error('Error sending offer to existing users:', err);
+                  }
+                }
+              }
+            }, 500);
+          }
+        });
+
+        socketInstance.on('user-joined', async ({ socketId }) => {
+          console.log('👤 Another user joined:', socketId);
+          // When a new user joins, if we already have a peer connection,
+          // send them an offer
+          if (peerConnectionRef.current) {
+            const pc = peerConnectionRef.current;
+            // We can only create a new offer if we're in stable state
+            // If we already have a local description, we can't create another offer on the same connection
+            // So we need to wait for the new user to send us an offer
+            if (pc.signalingState === 'stable' && !pc.localDescription) {
+              try {
+                console.log('📤 Sending offer to new user:', socketId);
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                socketInstance.emit('offer', {
+                  meetingId: meetingIdRef.current,
+                  offer,
+                  targetSocketId: socketId
+                });
+                console.log('✅ Offer sent to new user');
+              } catch (err) {
+                console.error('Error sending offer to new user:', err);
+              }
+            } else if (pc.localDescription) {
+              // We already have a local description, so we can't send another offer
+              // The new user will create their peer connection and send us an offer
+              console.log('👤 Already have local description, waiting for new user to send offer...');
+            } else {
+              console.log('👤 Peer connection not in stable state:', pc.signalingState, ', waiting...');
+            }
           } else {
-            // First user - create peer connection and send offer
+            // Create peer connection first, then it will send offer
+            console.log('👤 Creating peer connection for new user...');
             setTimeout(() => {
               if (createPeerConnectionRef.current) {
                 createPeerConnectionRef.current().catch(err => {
@@ -321,18 +385,6 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
               }
             }, 100);
           }
-        });
-
-        socketInstance.on('user-joined', async ({ socketId }) => {
-          console.log('👤 Another user joined:', socketId);
-          // When a new user joins, we should wait for them to send an offer
-          // OR if we're the first user and already have a peer connection, 
-          // we can send them an offer, but we need to create a NEW peer connection
-          // for this specific user (or use the existing one if it's not connected yet)
-          
-          // For now, let's wait for the new user to send an offer
-          // This avoids race conditions
-          console.log('👤 Waiting for new user to send offer...');
         });
 
         socketInstance.on('offer', async ({ offer, senderSocketId }) => {
