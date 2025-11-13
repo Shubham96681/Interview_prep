@@ -229,6 +229,7 @@ export default function Meeting() {
       <div className="fixed inset-0 z-50">
         <WebRTCVideoCall
           meetingId={meetingId || ''}
+          sessionId={session?.id}
           onEndCall={() => {
             console.log('📞 Call ended, returning to meeting page');
             setIsInCall(false);

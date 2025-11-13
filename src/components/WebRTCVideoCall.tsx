@@ -4,13 +4,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Video, VideoOff, Mic, MicOff, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { io, Socket } from 'socket.io-client';
+import { apiService } from '@/lib/apiService';
 
 interface WebRTCVideoCallProps {
   meetingId: string;
+  sessionId?: string;
   onEndCall?: () => void;
 }
 
-export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCallProps) {
+export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: WebRTCVideoCallProps) {
   // ALL HOOKS MUST BE CALLED IN THE SAME ORDER EVERY RENDER
   // No conditional hook calls allowed!
   
@@ -26,6 +28,8 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   
@@ -677,12 +681,41 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
         }
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         setRecordingUrl(url);
         setIsRecording(false);
         isRecordingRef.current = false;
+
+        // Upload recording to server if sessionId is available
+        if (sessionId && blob.size > 0) {
+          setIsUploading(true);
+          setUploadError(null);
+          try {
+            console.log('📤 Uploading recording to server...', { sessionId, size: blob.size });
+            const response = await apiService.uploadRecording(sessionId, blob);
+            if (response.success && response.data) {
+              console.log('✅ Recording uploaded successfully:', response.data.recordingUrl);
+              // Update recording URL to server URL
+              setRecordingUrl(response.data.recordingUrl);
+              // Clean up local blob URL
+              URL.revokeObjectURL(url);
+            } else {
+              console.error('❌ Failed to upload recording:', response.error);
+              setUploadError(response.error || 'Failed to upload recording');
+              // Keep local URL as fallback
+            }
+          } catch (error: any) {
+            console.error('❌ Error uploading recording:', error);
+            setUploadError(error.message || 'Failed to upload recording');
+            // Keep local URL as fallback
+          } finally {
+            setIsUploading(false);
+          }
+        } else {
+          console.log('⚠️ Skipping upload: sessionId not available or empty blob', { sessionId, blobSize: blob.size });
+        }
       };
 
       recorder.start();
@@ -906,17 +939,48 @@ export default function WebRTCVideoCall({ meetingId, onEndCall }: WebRTCVideoCal
       {recordingUrl && (
         <Card className="m-4">
           <CardContent className="p-4">
-            <p className="mb-2">Recording completed!</p>
-            <Button
-              onClick={() => {
-                const a = document.createElement('a');
-                a.href = recordingUrl;
-                a.download = `recording-${meetingId}-${Date.now()}.webm`;
-                a.click();
-              }}
-            >
-              Download Recording
-            </Button>
+            {isUploading ? (
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Uploading recording to server...</p>
+              </div>
+            ) : uploadError ? (
+              <div className="text-center">
+                <p className="text-sm text-red-600 mb-2">Upload failed: {uploadError}</p>
+                <p className="text-xs text-gray-500 mb-2">You can still download the recording locally:</p>
+                <Button
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = recordingUrl;
+                    a.download = `recording-${meetingId}-${Date.now()}.webm`;
+                    a.click();
+                  }}
+                  variant="outline"
+                >
+                  Download Recording
+                </Button>
+              </div>
+            ) : (
+              <div>
+                <p className="mb-2 text-green-600">✅ Recording saved to server!</p>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => {
+                      if (recordingUrl.startsWith('http') || recordingUrl.startsWith('/')) {
+                        window.open(recordingUrl, '_blank');
+                      } else {
+                        const a = document.createElement('a');
+                        a.href = recordingUrl;
+                        a.download = `recording-${meetingId}-${Date.now()}.webm`;
+                        a.click();
+                      }
+                    }}
+                  >
+                    {recordingUrl.startsWith('http') || recordingUrl.startsWith('/') ? 'View Recording' : 'Download Recording'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

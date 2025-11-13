@@ -255,6 +255,51 @@ class ApiService {
     });
   }
 
+  async uploadRecording(sessionId: string, recordingBlob: Blob): Promise<ApiResponse<{ recordingUrl: string; fileSize: number; filename: string }>> {
+    try {
+      const url = `${API_BASE_URL}/api/sessions/${sessionId}/upload-recording`;
+      const formData = new FormData();
+      formData.append('recording', recordingBlob, `recording-${sessionId}-${Date.now()}.webm`);
+
+      const token = localStorage.getItem('token');
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      console.log('Uploading recording for session:', sessionId);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          success: false,
+          error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+          message: errorData.message,
+          status: response.status,
+        };
+      }
+
+      const data = await response.json();
+      console.log('Recording uploaded successfully:', data);
+      return {
+        success: true,
+        data: data.data || data,
+      };
+    } catch (error: any) {
+      console.error('Failed to upload recording:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to upload recording',
+      };
+    }
+  }
+
   async getAllUsers() {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return this.request(`/api/admin/users?email=${encodeURIComponent(user.email || '')}`);

@@ -1,10 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const config = require('./config/server');
 const databaseService = require('./services/database');
 const realtimeService = require('./services/realtime');
 const videoService = require('./services/videoService');
 const webrtcService = require('./services/webrtcService');
+const s3Service = require('./services/s3Service');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -76,6 +80,19 @@ class RobustServer {
     
     // JSON parsing
     this.app.use(express.json());
+    
+    // Create uploads directories if they don't exist
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const recordingsDir = path.join(uploadsDir, 'recordings');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    if (!fs.existsSync(recordingsDir)) {
+      fs.mkdirSync(recordingsDir, { recursive: true });
+    }
+    
+    // Serve static files from uploads directory
+    this.app.use('/uploads', express.static(uploadsDir));
     
     // Request logging
     this.app.use((req, res, next) => {
@@ -1592,6 +1609,164 @@ class RobustServer {
         res.status(500).json({
           success: false,
           error: 'Failed to fetch payouts',
+          message: error.message
+        });
+      }
+    });
+
+    // Configure multer for recording uploads
+    const recordingsDir = path.join(__dirname, 'uploads', 'recordings');
+    const recordingStorage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, recordingsDir);
+      },
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `recording-${uniqueSuffix}${path.extname(file.originalname)}`);
+      }
+    });
+
+    const uploadRecording = multer({
+      storage: recordingStorage,
+      limits: {
+        fileSize: 500 * 1024 * 1024 // 500MB limit for video files
+      },
+      fileFilter: (req, file, cb) => {
+        // Allow video files
+        const allowedTypes = /webm|mp4|ogg|mov|avi/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype) || file.mimetype.startsWith('video/');
+
+        if (mimetype || extname) {
+          return cb(null, true);
+        } else {
+          cb(new Error('Only video files are allowed'));
+        }
+      }
+    });
+
+    // Upload recording file for a session
+    this.app.post('/api/sessions/:id/upload-recording', uploadRecording.single('recording'), async (req, res) => {
+      try {
+        const { id } = req.params;
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+          return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+          });
+        }
+
+        if (!req.file) {
+          return res.status(400).json({
+            success: false,
+            message: 'No recording file provided'
+          });
+        }
+
+        // Verify session exists and user has access
+        const session = await prisma.session.findUnique({
+          where: { id },
+          include: {
+            candidate: { select: { id: true, email: true } },
+            expert: { select: { id: true, email: true } }
+          }
+        });
+
+        if (!session) {
+          // Delete uploaded file if session doesn't exist
+          if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+          }
+          return res.status(404).json({
+            success: false,
+            message: 'Session not found'
+          });
+        }
+
+        let recordingUrl;
+        let fullUrl;
+
+        // Check if S3 is configured
+        // S3 can work with either:
+        // 1. IAM role (on EC2) - no credentials needed, automatically detected
+        // 2. IAM user credentials (local dev) - AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+        // We only need the bucket name to be set
+        const isS3Configured = process.env.AWS_S3_BUCKET_NAME;
+
+        if (isS3Configured) {
+          // Upload to S3
+          try {
+            const fileBuffer = fs.readFileSync(req.file.path);
+            const fileName = `recording-${id}-${Date.now()}-${Math.round(Math.random() * 1E9)}.webm`;
+            
+            const s3Result = await s3Service.uploadFile(
+              fileBuffer,
+              fileName,
+              req.file.mimetype || 'video/webm'
+            );
+            
+            fullUrl = s3Result.url;
+            recordingUrl = s3Result.key;
+
+            // Delete local file after S3 upload
+            if (fs.existsSync(req.file.path)) {
+              fs.unlinkSync(req.file.path);
+            }
+
+            console.log(`✅ Recording uploaded to S3 for session ${id}: ${recordingUrl}`);
+          } catch (s3Error) {
+            console.error('S3 upload failed, falling back to local storage:', s3Error);
+            // Fall back to local storage
+            recordingUrl = `/uploads/recordings/${req.file.filename}`;
+            fullUrl = process.env.FRONTEND_URL 
+              ? `${process.env.FRONTEND_URL}${recordingUrl}`
+              : `${req.protocol}://${req.get('host')}${recordingUrl}`;
+            console.log(`✅ Recording saved locally for session ${id}: ${recordingUrl}`);
+          }
+        } else {
+          // Use local storage
+          recordingUrl = `/uploads/recordings/${req.file.filename}`;
+          fullUrl = process.env.FRONTEND_URL 
+            ? `${process.env.FRONTEND_URL}${recordingUrl}`
+            : `${req.protocol}://${req.get('host')}${recordingUrl}`;
+          console.log(`✅ Recording saved locally for session ${id}: ${recordingUrl}`);
+        }
+
+        // Update session with recording URL
+        const updatedSession = await prisma.session.update({
+          where: { id },
+          data: {
+            recordingUrl: fullUrl
+          },
+          include: {
+            candidate: { select: { name: true, email: true } },
+            expert: { select: { name: true, email: true } }
+          }
+        });
+
+        res.json({
+          success: true,
+          data: {
+            session: updatedSession,
+            recordingUrl: fullUrl,
+            fileSize: req.file.size,
+            filename: req.file.filename
+          },
+          message: 'Recording uploaded successfully'
+        });
+      } catch (error) {
+        console.error('Error uploading recording:', error);
+        
+        // Delete uploaded file on error
+        if (req.file && fs.existsSync(req.file.path)) {
+          fs.unlinkSync(req.file.path);
+        }
+
+        res.status(500).json({
+          success: false,
+          error: 'Failed to upload recording',
           message: error.message
         });
       }
