@@ -216,6 +216,10 @@ export default function Meeting() {
   const isValidDate = !isNaN(meetingDate.getTime());
   const isUpcoming = isValidDate && meetingDate > new Date();
   const isNow = isValidDate && Math.abs(meetingDate.getTime() - Date.now()) < 15 * 60 * 1000; // Within 15 minutes
+  
+  // TESTING MODE: Allow joining at any time (set to true for testing)
+  const TESTING_MODE = true; // Set to false to restore time restrictions
+  const canJoinMeeting = TESTING_MODE || isNow || !isUpcoming;
 
   // Check if this is a WebRTC meeting (custom video system)
   // WebRTC meetings have meetingLink containing '/meeting/' or we have a meetingId from URL
@@ -295,13 +299,17 @@ export default function Meeting() {
             </div>
 
             <div className="border-t pt-6">
-              {isNow || !isUpcoming ? (
+              {canJoinMeeting ? (
                 <div className="text-center space-y-4">
-                  <h3 className="text-lg font-semibold">Ready to Join</h3>
+                  <h3 className="text-lg font-semibold">
+                    {TESTING_MODE ? "🧪 Testing Mode - Ready to Join" : "Ready to Join"}
+                  </h3>
                   <p className="text-gray-600">
-                    {isNow 
-                      ? "It's time for your session! Click below to join the meeting."
-                      : "The session time has arrived. Click below to join the meeting."}
+                    {TESTING_MODE 
+                      ? "Testing mode enabled - you can join the meeting at any time."
+                      : isNow 
+                        ? "It's time for your session! Click below to join the meeting."
+                        : "The session time has arrived. Click below to join the meeting."}
                   </p>
                   {/* Always show button if we have meetingId or meetingLink */}
                   {(session.meetingLink || session.meetingId || meetingId) && (
