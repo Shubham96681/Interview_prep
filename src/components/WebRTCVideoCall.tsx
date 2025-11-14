@@ -762,12 +762,14 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         console.log('🔗 Connection state changed:', pc.connectionState);
         if (pc.connectionState === 'connected') {
           console.log('✅ Peer connection established!');
-          // Auto-start recording when connection is established
+          // Auto-start recording when connection is established (only if we're the first participant)
+          const isFirstParticipant = isFirstParticipantRef.current;
           const hasLocalStream = !!(localStreamRef.current || localStream);
           const hasRemoteStream = !!(remoteStreamRef.current || remoteStream);
           const notRecording = !isRecordingRef.current && !recordingStarted;
           
           console.log('🔍 Connection state handler - recording check:', {
+            isFirstParticipant,
             hasLocalStream,
             hasRemoteStream,
             notRecording,
@@ -776,10 +778,10 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             recordingStarted
           });
           
-          if (notRecording && hasLocalStream && startRecordingRef.current) {
+          if (isFirstParticipant && notRecording && hasLocalStream && startRecordingRef.current) {
             setTimeout(() => {
               if (!isRecordingRef.current && !recordingStarted && startRecordingRef.current) {
-                console.log('🎬 Auto-starting recording (peer connection established)...');
+                console.log('🎬 Auto-starting recording (peer connection established, first participant)...');
                 startRecordingRef.current();
               } else {
                 console.log('⚠️ Recording start cancelled in connection handler:', {
@@ -789,8 +791,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
                 });
               }
             }, 1000); // Wait 1 second to ensure streams are ready
+          } else if (!isFirstParticipant) {
+            console.log('📹 Not recording: we are not the first participant (second participant does not record)');
           } else {
             console.log('⚠️ Cannot start recording in connection handler:', {
+              isFirstParticipant,
               notRecording,
               hasLocalStream,
               hasStartRecordingRef: !!startRecordingRef.current
