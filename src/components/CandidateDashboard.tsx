@@ -264,8 +264,7 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                                     window.open(session.recordingUrl, '_blank');
                                   }
                                 } catch (error) {
-                                  console.error('Error getting recording URL:', error);
-                                  // Fallback to stored URL
+                                  // Silently fallback to stored URL
                                   window.open(session.recordingUrl, '_blank');
                                 }
                               }}
@@ -418,8 +417,7 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                                     window.open(session.recordingUrl, '_blank');
                                   }
                                 } catch (error) {
-                                  console.error('Error getting recording URL:', error);
-                                  // Fallback to stored URL
+                                  // Silently fallback to stored URL
                                   window.open(session.recordingUrl, '_blank');
                                 }
                               }}

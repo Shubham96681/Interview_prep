@@ -410,11 +410,12 @@ export default function Meeting() {
                         window.open(response.data.recordingUrl, '_blank');
                       } else {
                         // Fallback to stored URL
+                        console.log('Using stored recording URL (endpoint may not be available yet)');
                         window.open(session.recordingUrl, '_blank');
                       }
                     } catch (error) {
-                      console.error('Error getting recording URL:', error);
-                      // Fallback to stored URL
+                      // Silently fallback to stored URL - this is expected if endpoint isn't deployed yet
+                      console.log('Using stored recording URL (fresh URL endpoint not available)');
                       window.open(session.recordingUrl, '_blank');
                     }
                   }}
