@@ -1196,49 +1196,116 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       remoteVideo.muted = true; // Mute to avoid feedback
       recordingRemoteVideoRef.current = remoteVideo;
 
-      // Wait for videos to be ready and playing
+      // Wait for videos to be ready and playing - CRITICAL for smooth recording
       await Promise.all([
         new Promise<void>((resolve) => {
           if (currentLocalStream) {
-            localVideo.onloadedmetadata = async () => {
+            let resolved = false;
+            const checkReady = async () => {
+              if (resolved) return;
               try {
-                await localVideo.play();
-                // Wait for video to actually start playing
-                await new Promise(r => setTimeout(r, 100));
-                console.log('✅ Local video ready for recording:', localVideo.videoWidth, 'x', localVideo.videoHeight);
-                resolve();
+                // Wait for metadata
+                if (localVideo.readyState >= 2) {
+                  await localVideo.play();
+                  // Wait for video to actually start playing and have frames
+                  let attempts = 0;
+                  const waitForFrames = () => {
+                    if (localVideo.readyState >= 2 && localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
+                      console.log('✅ Local video ready for recording:', localVideo.videoWidth, 'x', localVideo.videoHeight, 'readyState:', localVideo.readyState);
+                      resolved = true;
+                      resolve();
+                    } else if (attempts < 20) {
+                      attempts++;
+                      setTimeout(waitForFrames, 100);
+                    } else {
+                      console.warn('⚠️ Local video timeout, continuing anyway');
+                      resolved = true;
+                      resolve();
+                    }
+                  };
+                  waitForFrames();
+                } else {
+                  localVideo.onloadedmetadata = checkReady;
+                  localVideo.oncanplay = checkReady;
+                }
               } catch (err) {
                 console.error('Error playing local video:', err);
-                resolve(); // Continue anyway
+                if (!resolved) {
+                  resolved = true;
+                  resolve(); // Continue anyway
+                }
               }
             };
+            localVideo.onloadedmetadata = checkReady;
+            localVideo.oncanplay = checkReady;
             // Fallback timeout
-            setTimeout(() => resolve(), 2000);
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                console.warn('⚠️ Local video timeout, continuing anyway');
+                resolve();
+              }
+            }, 3000);
           } else {
             resolve();
           }
         }),
         new Promise<void>((resolve) => {
           if (currentRemoteStream) {
-            remoteVideo.onloadedmetadata = async () => {
+            let resolved = false;
+            const checkReady = async () => {
+              if (resolved) return;
               try {
-                await remoteVideo.play();
-                // Wait for video to actually start playing
-                await new Promise(r => setTimeout(r, 100));
-                console.log('✅ Remote video ready for recording:', remoteVideo.videoWidth, 'x', remoteVideo.videoHeight);
-                resolve();
+                // Wait for metadata
+                if (remoteVideo.readyState >= 2) {
+                  await remoteVideo.play();
+                  // Wait for video to actually start playing and have frames
+                  let attempts = 0;
+                  const waitForFrames = () => {
+                    if (remoteVideo.readyState >= 2 && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0) {
+                      console.log('✅ Remote video ready for recording:', remoteVideo.videoWidth, 'x', remoteVideo.videoHeight, 'readyState:', remoteVideo.readyState);
+                      resolved = true;
+                      resolve();
+                    } else if (attempts < 20) {
+                      attempts++;
+                      setTimeout(waitForFrames, 100);
+                    } else {
+                      console.warn('⚠️ Remote video timeout, continuing anyway');
+                      resolved = true;
+                      resolve();
+                    }
+                  };
+                  waitForFrames();
+                } else {
+                  remoteVideo.onloadedmetadata = checkReady;
+                  remoteVideo.oncanplay = checkReady;
+                }
               } catch (err) {
                 console.error('Error playing remote video:', err);
-                resolve(); // Continue anyway
+                if (!resolved) {
+                  resolved = true;
+                  resolve(); // Continue anyway
+                }
               }
             };
+            remoteVideo.onloadedmetadata = checkReady;
+            remoteVideo.oncanplay = checkReady;
             // Fallback timeout
-            setTimeout(() => resolve(), 2000);
+            setTimeout(() => {
+              if (!resolved) {
+                resolved = true;
+                console.warn('⚠️ Remote video timeout, continuing anyway');
+                resolve();
+              }
+            }, 3000);
           } else {
             resolve();
           }
         })
       ]);
+      
+      // Additional wait to ensure videos are actually rendering frames
+      await new Promise(r => setTimeout(r, 500));
 
       // Determine optimal canvas resolution based on video sources
       let canvasWidth = 1920; // Full HD width
@@ -1281,19 +1348,37 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Function to draw both videos on canvas (side-by-side layout)
+      // CRITICAL: This must run continuously at 30 FPS for smooth video
       const drawVideos = () => {
-        if (!recordingCanvasContextRef.current || !recordingCanvasRef.current) return;
+        if (!recordingCanvasContextRef.current || !recordingCanvasRef.current) {
+          console.warn('⚠️ Canvas context or canvas not available, stopping draw loop');
+          return;
+        }
+        
+        if (!isRecordingRef.current) {
+          // Stop drawing if not recording
+          return;
+        }
         
         const ctx = recordingCanvasContextRef.current;
         const canvas = recordingCanvasRef.current;
         
-        // Clear canvas
-        ctx.fillStyle = '#1a1a1a';
+        // Clear canvas with black background
+        ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Check if videos are ready and have valid dimensions
+        // readyState: 0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA
         const hasLocal = currentLocalStream && localVideo.readyState >= 2 && localVideo.videoWidth > 0 && localVideo.videoHeight > 0;
         const hasRemote = currentRemoteStream && remoteVideo.readyState >= 2 && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0;
+        
+        // Ensure videos are playing
+        if (hasLocal && localVideo.paused) {
+          localVideo.play().catch(err => console.warn('Could not play local video:', err));
+        }
+        if (hasRemote && remoteVideo.paused) {
+          remoteVideo.play().catch(err => console.warn('Could not play remote video:', err));
+        }
         
         if (hasLocal && hasRemote) {
           // Side-by-side layout: each video takes half the width, maintaining aspect ratio
@@ -1352,14 +1437,25 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           ctx.drawImage(remoteVideo, x, y, width, height);
         }
         
-        // Continue drawing
+        // CRITICAL: Continue drawing loop - this must run continuously
         if (isRecordingRef.current) {
           recordingAnimationFrameRef.current = requestAnimationFrame(drawVideos);
+        } else {
+          console.log('🛑 Stopping canvas draw loop (recording stopped)');
         }
       };
 
-      // Start drawing loop
+      // Start drawing loop immediately - this must run continuously for smooth video
+      console.log('🎬 Starting canvas draw loop for recording...');
       drawVideos();
+      
+      // Verify the loop is running
+      setTimeout(() => {
+        if (recordingAnimationFrameRef.current === null && isRecordingRef.current) {
+          console.error('❌ Canvas draw loop stopped unexpectedly! Restarting...');
+          drawVideos();
+        }
+      }, 1000);
 
       // Get audio tracks for recording - we'll add both to the stream
       // MediaRecorder will record both, creating a combined audio track
@@ -1382,7 +1478,34 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       // Create combined stream from canvas video + audio tracks
       // Use 30 FPS for smooth video (matches Zoom/Google Meet standard)
       // Higher FPS (60) would increase latency and resource usage
+      // CRITICAL: The canvas must be actively drawing for captureStream to work
       const canvasStream = canvas.captureStream(30); // 30 FPS - optimal balance
+      console.log('📹 Canvas stream created with', canvasStream.getVideoTracks().length, 'video track(s)');
+      
+      // Verify the canvas stream is active
+      const canvasVideoTrack = canvasStream.getVideoTracks()[0];
+      if (canvasVideoTrack) {
+        console.log('✅ Canvas video track:', {
+          enabled: canvasVideoTrack.enabled,
+          readyState: canvasVideoTrack.readyState,
+          settings: canvasVideoTrack.getSettings()
+        });
+        
+        // Monitor track state
+        canvasVideoTrack.onended = () => {
+          console.error('❌ Canvas video track ended unexpectedly!');
+        };
+        
+        canvasVideoTrack.onmute = () => {
+          console.warn('⚠️ Canvas video track muted');
+        };
+        
+        canvasVideoTrack.onunmute = () => {
+          console.log('✅ Canvas video track unmuted');
+        };
+      } else {
+        console.error('❌ No video track in canvas stream!');
+      }
       const combinedStream = new MediaStream();
       
       // Add canvas video track (combined video showing both participants)
@@ -1445,10 +1568,29 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       recordedChunksRef.current = [];
 
       recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
+        if (event.data && event.data.size > 0) {
           recordedChunksRef.current.push(event.data);
           console.log('📹 Recording data chunk received:', event.data.size, 'bytes');
+        } else {
+          console.warn('⚠️ Received empty data chunk');
         }
+      };
+      
+      // Monitor recorder state
+      recorder.onstart = () => {
+        console.log('✅ MediaRecorder started, state:', recorder.state);
+      };
+      
+      recorder.onerror = (event) => {
+        console.error('❌ MediaRecorder error:', event);
+      };
+      
+      recorder.onpause = () => {
+        console.warn('⚠️ MediaRecorder paused');
+      };
+      
+      recorder.onresume = () => {
+        console.log('▶️ MediaRecorder resumed');
       };
 
       recorder.onstop = async () => {
@@ -1516,7 +1658,25 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         isRecordingRef.current = false;
       };
 
-      recorder.start(1000); // Collect data every second
+      // Start recording with timeslice for regular data chunks
+      // timeslice: Request data every 100ms for smoother recording
+      // Without timeslice, data is only available when recording stops
+      try {
+        recorder.start(100); // Request data every 100ms for better quality
+        console.log('✅ MediaRecorder started with 100ms timeslice');
+        
+        // Verify recorder is actually recording
+        setTimeout(() => {
+          if (recorder.state === 'recording') {
+            console.log('✅ MediaRecorder confirmed recording, state:', recorder.state);
+          } else {
+            console.error('❌ MediaRecorder not recording! State:', recorder.state);
+          }
+        }, 500);
+      } catch (err) {
+        console.error('❌ Error starting MediaRecorder:', err);
+        throw err;
+      }
       mediaRecorderRef.current = recorder;
       setIsRecording(true);
       isRecordingRef.current = true;
