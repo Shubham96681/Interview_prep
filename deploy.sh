@@ -12,33 +12,39 @@ df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)
 # Navigate to project directory
 cd /var/www/interview-prep
 
-# Cleanup old files to free up space
-echo "🧹 Cleaning up old files to free disk space..."
+# Cleanup old files to free up space (optional - skip if we have enough space)
+echo "🧹 Checking if cleanup is needed..."
+AVAILABLE_SPACE=$(df -h / | tail -1 | awk '{print $4}' | sed 's/G//' | sed 's/M//')
+if [ -n "$AVAILABLE_SPACE" ] && [ "$AVAILABLE_SPACE" -lt 2 ] 2>/dev/null; then
+    echo "   Low disk space (${AVAILABLE_SPACE}G available), cleaning up..."
+    
+    # Remove old node_modules to save space (we'll reinstall)
+    # Use more robust removal methods
+    if [ -d "node_modules" ]; then
+        echo "   Removing old frontend node_modules..."
+        # Try multiple methods to ensure removal
+        rm -rf node_modules 2>/dev/null || \
+        find node_modules -delete 2>/dev/null || \
+        sudo rm -rf node_modules 2>/dev/null || \
+        echo "   ⚠️  Could not remove frontend node_modules, continuing..."
+    fi
 
-# Remove old node_modules to save space (we'll reinstall)
-# Use more robust removal methods
-if [ -d "node_modules" ]; then
-    echo "   Removing old frontend node_modules..."
-    # Try multiple methods to ensure removal
-    rm -rf node_modules 2>/dev/null || \
-    find node_modules -delete 2>/dev/null || \
-    sudo rm -rf node_modules 2>/dev/null || \
-    echo "   ⚠️  Could not remove frontend node_modules, continuing..."
-fi
+    if [ -d "server/node_modules" ]; then
+        echo "   Removing old backend node_modules..."
+        # Try multiple methods to ensure removal
+        rm -rf server/node_modules 2>/dev/null || \
+        find server/node_modules -delete 2>/dev/null || \
+        sudo rm -rf server/node_modules 2>/dev/null || \
+        echo "   ⚠️  Could not remove backend node_modules, continuing..."
+    fi
 
-if [ -d "server/node_modules" ]; then
-    echo "   Removing old backend node_modules..."
-    # Try multiple methods to ensure removal
-    rm -rf server/node_modules 2>/dev/null || \
-    find server/node_modules -delete 2>/dev/null || \
-    sudo rm -rf server/node_modules 2>/dev/null || \
-    echo "   ⚠️  Could not remove backend node_modules, continuing..."
-fi
-
-# Remove old build artifacts
-if [ -d "dist" ]; then
-    echo "   Removing old dist build..."
-    rm -rf dist 2>/dev/null || sudo rm -rf dist 2>/dev/null || echo "   ⚠️  Could not remove dist, continuing..."
+    # Remove old build artifacts
+    if [ -d "dist" ]; then
+        echo "   Removing old dist build..."
+        rm -rf dist 2>/dev/null || sudo rm -rf dist 2>/dev/null || echo "   ⚠️  Could not remove dist, continuing..."
+    fi
+else
+    echo "   Sufficient disk space available, skipping cleanup to speed up deployment"
 fi
 
 # Clean npm cache
