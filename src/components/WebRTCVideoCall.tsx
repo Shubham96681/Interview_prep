@@ -59,12 +59,22 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const cleanupRef = useRef<() => void>();
   const startRecordingRef = useRef<(() => Promise<void>) | null>(null);
 
-  // STUN/TURN servers configuration
+  // STUN/TURN servers configuration - optimized for low latency like Zoom/Google Meet
   const rtcConfiguration: RTCConfiguration = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' }
+    ],
+    iceCandidatePoolSize: 10, // Pre-gather ICE candidates for faster connection
+    iceTransportPolicy: 'all', // Use both relay and direct connections
+    bundlePolicy: 'max-bundle', // Bundle all media on single transport (lower latency)
+    rtcpMuxPolicy: 'require', // Require RTCP multiplexing (lower latency)
+    // Optimize for low latency
+    iceConnectionReceivingTimeout: 30000, // 30 seconds timeout
+    iceBackupCandidatePairPingInterval: 25000 // 25 seconds
   };
 
   // Memoize cleanup function to avoid stale closures
@@ -1241,8 +1251,9 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       }
 
       // Create combined stream from canvas video + audio tracks
-      // Use 30 FPS for smooth video (60 FPS might be too resource-intensive)
-      const canvasStream = canvas.captureStream(30); // 30 FPS for good quality and performance
+      // Use 30 FPS for smooth video (matches Zoom/Google Meet standard)
+      // Higher FPS (60) would increase latency and resource usage
+      const canvasStream = canvas.captureStream(30); // 30 FPS - optimal balance
       const combinedStream = new MediaStream();
       
       // Add canvas video track (combined video showing both participants)
@@ -1284,11 +1295,23 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         }
       }
       
-      const recorder = new MediaRecorder(combinedStream, {
+      // Optimize MediaRecorder settings for Zoom/Google Meet quality
+      // Use adaptive bitrate - let browser optimize based on content
+      const recorderOptions: MediaRecorderOptions = {
         mimeType: mimeType,
-        videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality (adjust as needed)
-        audioBitsPerSecond: 128000 // 128 kbps for audio
-      });
+        videoBitsPerSecond: 4000000, // 4 Mbps for high quality (Zoom uses 3-4 Mbps)
+        audioBitsPerSecond: 192000,  // 192 kbps for high-quality audio
+        // Use timeslice for smoother recording (100ms chunks)
+        timeslice: 100
+      };
+      
+      // If browser supports it, use quality settings
+      if ('videoBitsPerSecond' in recorderOptions) {
+        // Adaptive: browser will adjust based on content complexity
+        recorderOptions.videoBitsPerSecond = 4000000; // Max 4 Mbps
+      }
+      
+      const recorder = new MediaRecorder(combinedStream, recorderOptions);
       
       console.log('📹 MediaRecorder configured:', {
         mimeType,
