@@ -50,6 +50,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const recordingLocalVideoRef = useRef<HTMLVideoElement | null>(null);
   const recordingRemoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const socketInitializedRef = useRef(false);
+  const isFirstParticipantRef = useRef(false); // Track if we're the first participant (only first one records)
   const meetingIdRef = useRef(meetingId);
   const createPeerConnectionRef = useRef<() => Promise<void>>();
   const handleOfferRef = useRef<(offer: RTCSessionDescriptionInit, senderSocketId: string) => Promise<void>>();
@@ -326,6 +327,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
         socketInstance.on('joined-meeting', async ({ otherUsers, socketId }) => {
           console.log('✅ Joined meeting, other users:', otherUsers, 'my socketId:', socketId);
+          
+          // Determine if we're the first participant (only first one should record)
+          // If there are no other users when we join, we're the first
+          isFirstParticipantRef.current = otherUsers.length === 0;
+          console.log(`📹 Recording role: ${isFirstParticipantRef.current ? 'RECORDER (first participant)' : 'NON-RECORDER (second participant)'}`);
           
           // Ensure local stream is started
           if (!localStreamRef.current) {
@@ -1274,10 +1280,12 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   // Auto-start recording when connection is established and streams are ready
   useEffect(() => {
     // Only auto-start if:
-    // 1. We have a peer connection
-    // 2. We have at least local stream
-    // 3. We haven't started recording yet
+    // 1. We are the first participant (only first one records)
+    // 2. We have a peer connection
+    // 3. We have at least local stream
+    // 4. We haven't started recording yet
     const shouldStartRecording = () => {
+      const isFirstParticipant = isFirstParticipantRef.current;
       const hasPeerConnection = peerConnectionRef.current !== null;
       const hasLocalStream = !!(localStreamRef.current || localStream);
       const notRecording = !isRecordingRef.current && !recordingStarted;
@@ -1288,10 +1296,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         peerConnectionRef.current?.iceConnectionState === 'checking'
       );
       
-      const result = hasPeerConnection && hasLocalStream && notRecording && connectionReady;
+      const result = isFirstParticipant && hasPeerConnection && hasLocalStream && notRecording && connectionReady;
       
       if (hasPeerConnection && hasLocalStream && notRecording) {
         console.log('🔍 Recording check:', {
+          isFirstParticipant,
           hasPeerConnection,
           hasLocalStream,
           notRecording,
