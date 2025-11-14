@@ -75,13 +75,14 @@ class S3Service {
       // Generate public URL (if ACL is public-read)
       // const url = `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
       
-      // Or generate signed URL (expires in 1 year)
+      // Or generate signed URL (expires in 7 days - AWS S3 maximum)
       console.log(`🔗 Generating signed URL...`);
       const getCommand = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
-      const url = await getSignedUrl(this.s3Client, getCommand, { expiresIn: 31536000 }); // 1 year
+      // AWS S3 presigned URLs have a maximum expiration of 7 days (604800 seconds)
+      const url = await getSignedUrl(this.s3Client, getCommand, { expiresIn: 604800 }); // 7 days (max allowed)
       console.log(`✅ Signed URL generated: ${url.substring(0, 100)}...`);
 
       return {
@@ -109,12 +110,20 @@ class S3Service {
    */
   async getSignedUrl(key, expiresIn = 3600) {
     try {
+      // Ensure expiration doesn't exceed AWS S3 maximum of 7 days
+      const maxExpiration = 604800; // 7 days in seconds
+      const actualExpiration = Math.min(expiresIn, maxExpiration);
+      
+      if (expiresIn > maxExpiration) {
+        console.warn(`⚠️ Requested expiration (${expiresIn}s) exceeds S3 maximum (${maxExpiration}s). Using ${maxExpiration}s instead.`);
+      }
+      
       const command = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
 
-      const url = await getSignedUrl(this.s3Client, command, { expiresIn });
+      const url = await getSignedUrl(this.s3Client, command, { expiresIn: actualExpiration });
       return url;
     } catch (error) {
       console.error('Error generating signed URL:', error);
