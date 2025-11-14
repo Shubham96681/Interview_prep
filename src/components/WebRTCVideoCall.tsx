@@ -44,6 +44,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isRecordingRef = useRef(false);
+  const recordingCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const recordingCanvasContextRef = useRef<CanvasRenderingContext2D | null>(null);
+  const recordingAnimationFrameRef = useRef<number | null>(null);
+  const recordingLocalVideoRef = useRef<HTMLVideoElement | null>(null);
+  const recordingRemoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const socketInitializedRef = useRef(false);
   const meetingIdRef = useRef(meetingId);
   const createPeerConnectionRef = useRef<() => Promise<void>>();
@@ -136,6 +141,28 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       }
       mediaRecorderRef.current = null;
       isRecordingRef.current = false;
+    }
+    
+    // Clean up recording canvas and video elements
+    if (recordingAnimationFrameRef.current) {
+      cancelAnimationFrame(recordingAnimationFrameRef.current);
+      recordingAnimationFrameRef.current = null;
+    }
+    if (recordingLocalVideoRef.current) {
+      recordingLocalVideoRef.current.srcObject = null;
+      recordingLocalVideoRef.current = null;
+    }
+    if (recordingRemoteVideoRef.current) {
+      recordingRemoteVideoRef.current.srcObject = null;
+      recordingRemoteVideoRef.current = null;
+    }
+    if (recordingCanvasRef.current) {
+      const ctx = recordingCanvasContextRef.current;
+      if (ctx) {
+        ctx.clearRect(0, 0, recordingCanvasRef.current.width, recordingCanvasRef.current.height);
+      }
+      recordingCanvasRef.current = null;
+      recordingCanvasContextRef.current = null;
     }
     
     // Disconnect socket
@@ -1001,20 +1028,151 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     }
 
     try {
-      console.log('🎬 Starting recording...');
-      const combinedStream = new MediaStream();
+      console.log('🎬 Starting combined video recording (Zoom-style)...');
       
+      // Create hidden video elements for recording
+      const localVideo = document.createElement('video');
+      localVideo.srcObject = currentLocalStream || null;
+      localVideo.autoplay = true;
+      localVideo.playsInline = true;
+      localVideo.muted = true; // Mute to avoid feedback
+      recordingLocalVideoRef.current = localVideo;
+      
+      const remoteVideo = document.createElement('video');
+      remoteVideo.srcObject = currentRemoteStream || null;
+      remoteVideo.autoplay = true;
+      remoteVideo.playsInline = true;
+      remoteVideo.muted = true; // Mute to avoid feedback
+      recordingRemoteVideoRef.current = remoteVideo;
+
+      // Wait for videos to be ready
+      await Promise.all([
+        new Promise<void>((resolve) => {
+          if (currentLocalStream) {
+            localVideo.onloadedmetadata = () => {
+              localVideo.play().catch(console.error);
+              resolve();
+            };
+          } else {
+            resolve();
+          }
+        }),
+        new Promise<void>((resolve) => {
+          if (currentRemoteStream) {
+            remoteVideo.onloadedmetadata = () => {
+              remoteVideo.play().catch(console.error);
+              resolve();
+            };
+          } else {
+            resolve();
+          }
+        })
+      ]);
+
+      // Create canvas for combining videos
+      const canvas = document.createElement('canvas');
+      canvas.width = 1280; // HD width
+      canvas.height = 720; // HD height
+      recordingCanvasRef.current = canvas;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Failed to get canvas context');
+      }
+      recordingCanvasContextRef.current = ctx;
+      
+      // Set canvas background
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Function to draw both videos on canvas (side-by-side layout)
+      const drawVideos = () => {
+        if (!recordingCanvasContextRef.current || !recordingCanvasRef.current) return;
+        
+        const ctx = recordingCanvasContextRef.current;
+        const canvas = recordingCanvasRef.current;
+        
+        // Clear canvas
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const hasLocal = currentLocalStream && localVideo.videoWidth > 0 && localVideo.videoHeight > 0;
+        const hasRemote = currentRemoteStream && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0;
+        
+        if (hasLocal && hasRemote) {
+          // Side-by-side layout: each video takes half the width
+          const videoWidth = canvas.width / 2;
+          const videoHeight = canvas.height;
+          
+          // Draw remote video (left side)
+          ctx.drawImage(remoteVideo, 0, 0, videoWidth, videoHeight);
+          
+          // Draw local video (right side)
+          ctx.drawImage(localVideo, videoWidth, 0, videoWidth, videoHeight);
+        } else if (hasLocal) {
+          // Only local video - center it
+          const scale = Math.min(canvas.width / localVideo.videoWidth, canvas.height / localVideo.videoHeight);
+          const width = localVideo.videoWidth * scale;
+          const height = localVideo.videoHeight * scale;
+          const x = (canvas.width - width) / 2;
+          const y = (canvas.height - height) / 2;
+          ctx.drawImage(localVideo, x, y, width, height);
+        } else if (hasRemote) {
+          // Only remote video - center it
+          const scale = Math.min(canvas.width / remoteVideo.videoWidth, canvas.height / remoteVideo.videoHeight);
+          const width = remoteVideo.videoWidth * scale;
+          const height = remoteVideo.videoHeight * scale;
+          const x = (canvas.width - width) / 2;
+          const y = (canvas.height - height) / 2;
+          ctx.drawImage(remoteVideo, x, y, width, height);
+        }
+        
+        // Continue drawing
+        if (isRecordingRef.current) {
+          recordingAnimationFrameRef.current = requestAnimationFrame(drawVideos);
+        }
+      };
+
+      // Start drawing loop
+      drawVideos();
+
+      // Get audio tracks for recording - we'll add both to the stream
+      // MediaRecorder will record both, creating a combined audio track
+      const audioTracks: MediaStreamTrack[] = [];
       if (currentLocalStream) {
-        currentLocalStream.getTracks().forEach(track => {
-          combinedStream.addTrack(track);
-          console.log('📹 Added local track to recording:', track.kind);
-        });
+        const localAudio = currentLocalStream.getAudioTracks()[0];
+        if (localAudio && localAudio.enabled) {
+          audioTracks.push(localAudio);
+          console.log('📹 Found local audio track for recording');
+        }
       }
       if (currentRemoteStream) {
-        currentRemoteStream.getTracks().forEach(track => {
-          combinedStream.addTrack(track);
-          console.log('📹 Added remote track to recording:', track.kind);
-        });
+        const remoteAudio = currentRemoteStream.getAudioTracks()[0];
+        if (remoteAudio && remoteAudio.enabled) {
+          audioTracks.push(remoteAudio);
+          console.log('📹 Found remote audio track for recording');
+        }
+      }
+
+      // Create combined stream from canvas video + audio tracks
+      const canvasStream = canvas.captureStream(30); // 30 FPS
+      const combinedStream = new MediaStream();
+      
+      // Add canvas video track (combined video showing both participants)
+      const videoTrack = canvasStream.getVideoTracks()[0];
+      if (videoTrack) {
+        combinedStream.addTrack(videoTrack);
+        console.log('📹 Added combined canvas video track to recording');
+      }
+      
+      // Add all audio tracks (both local and remote will be recorded)
+      audioTracks.forEach((track, index) => {
+        combinedStream.addTrack(track);
+        console.log(`📹 Added audio track ${index + 1} to recording: ${track.label || 'unnamed'}`);
+      });
+      
+      if (audioTracks.length === 0) {
+        console.warn('⚠️ No audio tracks available for recording');
       }
 
       if (combinedStream.getTracks().length === 0) {
@@ -1037,6 +1195,27 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
       recorder.onstop = async () => {
         console.log('🛑 Recording stopped, processing...');
+        
+        // Stop animation frame
+        if (recordingAnimationFrameRef.current) {
+          cancelAnimationFrame(recordingAnimationFrameRef.current);
+          recordingAnimationFrameRef.current = null;
+        }
+        
+        // Clean up video elements
+        if (recordingLocalVideoRef.current) {
+          recordingLocalVideoRef.current.srcObject = null;
+          recordingLocalVideoRef.current = null;
+        }
+        if (recordingRemoteVideoRef.current) {
+          recordingRemoteVideoRef.current.srcObject = null;
+          recordingRemoteVideoRef.current = null;
+        }
+        
+        // Clean up canvas
+        recordingCanvasRef.current = null;
+        recordingCanvasContextRef.current = null;
+        
         const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         setRecordingUrl(url);
@@ -1084,7 +1263,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       setIsRecording(true);
       isRecordingRef.current = true;
       setRecordingStarted(true);
-      console.log('✅ Recording started successfully');
+      console.log('✅ Combined video recording started successfully');
     } catch (error) {
       console.error('❌ Error starting recording:', error);
       setIsRecording(false);
