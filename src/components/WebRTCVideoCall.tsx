@@ -51,6 +51,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const handleAnswerRef = useRef<(answer: RTCSessionDescriptionInit) => Promise<void>>();
   const handleIceCandidateRef = useRef<(candidate: RTCIceCandidateInit) => Promise<void>>();
   const cleanupRef = useRef<() => void>();
+  const startRecordingRef = useRef<(() => Promise<void>) | null>(null);
 
   // STUN/TURN servers configuration
   const rtcConfiguration: RTCConfiguration = {
@@ -728,6 +729,15 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         console.log('🔗 Connection state changed:', pc.connectionState);
         if (pc.connectionState === 'connected') {
           console.log('✅ Peer connection established!');
+          // Auto-start recording when connection is established
+          if (!isRecordingRef.current && !recordingStarted && (localStreamRef.current || localStream)) {
+            setTimeout(() => {
+              if (!isRecordingRef.current && !recordingStarted && startRecordingRef.current) {
+                console.log('🎬 Auto-starting recording (peer connection established)...');
+                startRecordingRef.current();
+              }
+            }, 1000); // Wait 1 second to ensure streams are ready
+          }
         } else if (pc.connectionState === 'failed') {
           console.error('❌ Peer connection failed');
         } else if (pc.connectionState === 'disconnected') {
@@ -947,6 +957,9 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   };
 
   const startRecording = useCallback(async () => {
+    // Store ref for access in event handlers
+    startRecordingRef.current = startRecording;
+    
     // Get streams from refs (most up-to-date) or state
     const currentLocalStream = localStreamRef.current || localStream;
     const currentRemoteStream = remoteStreamRef.current || remoteStream;
@@ -1071,7 +1084,21 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         peerConnectionRef.current?.iceConnectionState === 'checking'
       );
       
-      return hasPeerConnection && hasLocalStream && notRecording && connectionReady;
+      const result = hasPeerConnection && hasLocalStream && notRecording && connectionReady;
+      
+      if (hasPeerConnection && hasLocalStream && notRecording) {
+        console.log('🔍 Recording check:', {
+          hasPeerConnection,
+          hasLocalStream,
+          notRecording,
+          connectionState: peerConnectionRef.current?.connectionState,
+          iceConnectionState: peerConnectionRef.current?.iceConnectionState,
+          hasRemoteStream: !!(remoteStream || remoteStreamRef.current),
+          shouldStart: result
+        });
+      }
+      
+      return result;
     };
 
     if (!shouldStartRecording()) {
@@ -1080,17 +1107,25 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
     // Priority 1: Start recording when remote stream is received (both participants connected)
     if (remoteStream || remoteStreamRef.current) {
+      console.log('⏱️ Scheduling auto-start recording (remote stream detected, waiting 1.5s)...');
       const timer = setTimeout(() => {
         if (shouldStartRecording() && !isRecordingRef.current) {
           console.log('🎬 Auto-starting recording (remote stream received - both participants connected)...');
           startRecording();
+        } else {
+          console.log('⚠️ Recording start cancelled - conditions changed:', {
+            shouldStart: shouldStartRecording(),
+            isRecording: isRecordingRef.current,
+            recordingStarted
+          });
         }
-      }, 2000); // Wait 2 seconds after remote stream to ensure everything is ready
+      }, 1500); // Wait 1.5 seconds after remote stream to ensure everything is ready
       return () => clearTimeout(timer);
     }
     
     // Priority 2: Start recording with local stream only (solo recording or waiting for remote)
     // Wait a bit longer to see if remote stream arrives
+    console.log('⏱️ Scheduling auto-start recording (local stream only, waiting 2.5s for remote)...');
     const timer = setTimeout(() => {
       if (shouldStartRecording() && !isRecordingRef.current) {
         // Check again if remote stream arrived while waiting
@@ -1100,8 +1135,14 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           console.log('🎬 Auto-starting recording (local stream ready - solo recording or waiting for remote participant)...');
         }
         startRecording();
+      } else {
+        console.log('⚠️ Recording start cancelled - conditions changed:', {
+          shouldStart: shouldStartRecording(),
+          isRecording: isRecordingRef.current,
+          recordingStarted
+        });
       }
-    }, 3000); // Wait 3 seconds to see if remote stream arrives, then start anyway
+    }, 2500); // Wait 2.5 seconds to see if remote stream arrives, then start anyway
     
     return () => clearTimeout(timer);
   }, [
