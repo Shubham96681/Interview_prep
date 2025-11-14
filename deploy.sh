@@ -4,6 +4,7 @@ set -e  # Exit on any error (but we'll use || true for non-critical cleanup)
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
+echo "Deployment version: $(date +%Y%m%d-%H%M%S)"
 
 # Check disk space before starting
 echo "💾 Checking disk space..."
