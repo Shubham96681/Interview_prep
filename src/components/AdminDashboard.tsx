@@ -241,7 +241,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const exportData = async (type: 'sessions' | 'users' | 'payments' | 'recordings') => {(type: 'sessions' | 'users' | 'payments') => {
+  const exportData = (type: 'sessions' | 'users' | 'payments' | 'recordings') => {
     let data: any[] = [];
     let filename = '';
 
@@ -283,6 +283,23 @@ export default function AdminDashboard({}: AdminDashboardProps) {
             date: s.date
           }));
         filename = 'payments-export.csv';
+        break;
+      case 'recordings':
+        data = sessions
+          .filter(s => s.recordingUrl || s.isRecordingEnabled)
+          .map(s => ({
+            'Session ID': s.id,
+            'Date': s.date,
+            'Time': s.time,
+            'Candidate': s.candidateName,
+            'Expert': s.expertName,
+            'Type': s.sessionType,
+            'Status': s.status,
+            'Duration (min)': s.duration,
+            'Recording Available': s.recordingUrl ? 'Yes' : 'No',
+            'Recording URL': s.recordingUrl || 'N/A'
+          }));
+        filename = `recordings-${new Date().toISOString().split('T')[0]}.csv`;
         break;
     }
 
