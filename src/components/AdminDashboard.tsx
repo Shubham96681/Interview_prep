@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
 import AddUserForm from './AddUserForm';
 
@@ -32,6 +32,8 @@ interface Session {
   feedbackComment?: string;
   additionalParticipants?: string[];
   reviews?: any[];
+  recordingUrl?: string;
+  isRecordingEnabled?: boolean;
 }
 
 interface User {
@@ -239,7 +241,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const exportData = (type: 'sessions' | 'users' | 'payments') => {
+  const exportData = async (type: 'sessions' | 'users' | 'payments' | 'recordings') => {(type: 'sessions' | 'users' | 'payments') => {
     let data: any[] = [];
     let filename = '';
 
@@ -316,13 +318,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
+          <TabsTrigger value="recordings">Recordings</TabsTrigger>
           <TabsTrigger value="participants">Participants</TabsTrigger>
         </TabsList>
 
@@ -1171,6 +1174,122 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </Card>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="recordings" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Video className="h-5 w-5" />
+                    All Recordings
+                  </CardTitle>
+                  <CardDescription>View and manage all session recordings</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Badge variant="outline">
+                    {sessions.filter(s => s.recordingUrl).length} recordings available
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={() => exportData('recordings')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {sessions.filter(s => s.recordingUrl || s.isRecordingEnabled).length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date/Time</TableHead>
+                      <TableHead>Session</TableHead>
+                      <TableHead>Candidate</TableHead>
+                      <TableHead>Expert</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Recording</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sessions
+                      .filter(s => s.recordingUrl || s.isRecordingEnabled)
+                      .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+                      .map((session) => (
+                        <TableRow key={session.id}>
+                          <TableCell>
+                            <div>{session.date}</div>
+                            <div className="text-sm text-muted-foreground">{session.time}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-medium">{session.sessionType}</div>
+                            <div className="text-sm text-muted-foreground">{session.duration} min</div>
+                          </TableCell>
+                          <TableCell>{session.candidateName}</TableCell>
+                          <TableCell>{session.expertName}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{session.sessionType}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge>{session.status}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {session.recordingUrl ? (
+                              <Badge variant="default" className="bg-green-600">
+                                Available
+                              </Badge>
+                            ) : session.isRecordingEnabled ? (
+                              <Badge variant="secondary">Processing...</Badge>
+                            ) : (
+                              <Badge variant="outline">No recording</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {session.recordingUrl ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    // Get fresh signed URL from backend
+                                    const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
+                                      method: 'GET'
+                                    });
+                                    
+                                    if (response.success && response.data?.recordingUrl) {
+                                      window.open(response.data.recordingUrl, '_blank');
+                                    } else {
+                                      // Fallback to stored URL
+                                      window.open(session.recordingUrl, '_blank');
+                                    }
+                                  } catch (error) {
+                                    // Silently fallback to stored URL
+                                    window.open(session.recordingUrl, '_blank');
+                                  }
+                                }}
+                              >
+                                <Video className="h-4 w-4 mr-2" />
+                                View Recording
+                              </Button>
+                            ) : (
+                              <span className="text-sm text-muted-foreground">No recording</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="text-center py-12">
+                  <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">No recordings available</h3>
+                  <p className="text-gray-500">Recordings will appear here once sessions are completed and recorded.</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
