@@ -250,7 +250,25 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => window.open(session.recordingUrl, '_blank')}
+                              onClick={async () => {
+                                try {
+                                  // Get fresh signed URL from backend
+                                  const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
+                                    method: 'GET'
+                                  });
+                                  
+                                  if (response.success && response.data?.recordingUrl) {
+                                    window.open(response.data.recordingUrl, '_blank');
+                                  } else {
+                                    // Fallback to stored URL
+                                    window.open(session.recordingUrl, '_blank');
+                                  }
+                                } catch (error) {
+                                  console.error('Error getting recording URL:', error);
+                                  // Fallback to stored URL
+                                  window.open(session.recordingUrl, '_blank');
+                                }
+                              }}
                             >
                               <Video className="h-4 w-4 mr-2" />
                               View Recording
@@ -312,7 +330,25 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => window.open(session.recordingUrl, '_blank')}
+                            onClick={async () => {
+                              try {
+                                // Get fresh signed URL from backend
+                                const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
+                                  method: 'GET'
+                                });
+                                
+                                if (response.success && response.data?.recordingUrl) {
+                                  window.open(response.data.recordingUrl, '_blank');
+                                } else {
+                                  // Fallback to stored URL
+                                  window.open(session.recordingUrl, '_blank');
+                                }
+                              } catch (error) {
+                                console.error('Error getting recording URL:', error);
+                                // Fallback to stored URL
+                                window.open(session.recordingUrl, '_blank');
+                              }
+                            }}
                           >
                             <Video className="h-4 w-4 mr-2" />
                             View Recording
@@ -368,7 +404,25 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                             <Button 
                               size="sm" 
                               className="bg-blue-600 hover:bg-blue-700"
-                              onClick={() => window.open(session.recordingUrl, '_blank')}
+                              onClick={async () => {
+                                try {
+                                  // Get fresh signed URL from backend
+                                  const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
+                                    method: 'GET'
+                                  });
+                                  
+                                  if (response.success && response.data?.recordingUrl) {
+                                    window.open(response.data.recordingUrl, '_blank');
+                                  } else {
+                                    // Fallback to stored URL
+                                    window.open(session.recordingUrl, '_blank');
+                                  }
+                                } catch (error) {
+                                  console.error('Error getting recording URL:', error);
+                                  // Fallback to stored URL
+                                  window.open(session.recordingUrl, '_blank');
+                                }
+                              }}
                             >
                               <Video className="h-4 w-4 mr-2" />
                               Watch Recording
