@@ -198,6 +198,11 @@ server {
     ssl_ciphers HIGH:!aNULL:!MD5;
     ssl_prefer_server_ciphers on;
 
+    # Increase max upload size for video recordings
+    client_max_body_size 500m;
+    client_body_timeout 300s;
+    client_body_buffer_size 128k;
+
     # Frontend static files
     location / {
         root /var/www/interview-prep/dist;
@@ -217,6 +222,9 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 86400;
+        proxy_request_buffering off;
+        client_max_body_size 500m;
+        client_body_timeout 300s;
     }
 
     # Socket.io WebSocket proxy
