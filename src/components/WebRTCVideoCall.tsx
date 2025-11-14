@@ -71,10 +71,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     iceCandidatePoolSize: 10, // Pre-gather ICE candidates for faster connection
     iceTransportPolicy: 'all', // Use both relay and direct connections
     bundlePolicy: 'max-bundle', // Bundle all media on single transport (lower latency)
-    rtcpMuxPolicy: 'require', // Require RTCP multiplexing (lower latency)
-    // Optimize for low latency
-    iceConnectionReceivingTimeout: 30000, // 30 seconds timeout
-    iceBackupCandidatePairPingInterval: 25000 // 25 seconds
+    rtcpMuxPolicy: 'require' // Require RTCP multiplexing (lower latency)
   };
 
   // Memoize cleanup function to avoid stale closures
@@ -235,9 +232,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           height: { ideal: 1080, min: 480 },     // Full HD preferred, 480p minimum
           frameRate: { ideal: 30, min: 15 },     // 30 FPS preferred, 15 FPS minimum
           aspectRatio: { ideal: 16/9 },          // Standard widescreen
-          facingMode: 'user',                    // Front-facing camera
-          // Advanced constraints for better quality
-          resizeMode: 'none'                     // Don't resize, use native resolution
+          facingMode: 'user'                     // Front-facing camera
         },
         audio: {
           echoCancellation: true,                // Remove echo
@@ -736,12 +731,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
               params.encodings[0] = {
                 ...params.encodings[0],
                 maxBitrate: 2500000, // 2.5 Mbps max (high quality)
-                minBitrate: 500000,  // 500 kbps min (fallback)
                 maxFramerate: 30,    // 30 FPS (smooth video)
-                scaleResolutionDownBy: 1, // Start at full resolution
-                // Enable adaptive bitrate
-                adaptivePtime: false,
-                networkPriority: 'high'
+                scaleResolutionDownBy: 1 // Start at full resolution
               };
               
               // Try to enable simulcast (multiple quality layers) if supported
@@ -769,10 +760,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
               // Optimize audio for low latency
               params.encodings[0] = {
                 ...params.encodings[0],
-                maxBitrate: 128000, // 128 kbps (high quality audio)
-                minBitrate: 32000,  // 32 kbps (fallback)
-                adaptivePtime: true, // Adaptive packet time for lower latency
-                networkPriority: 'high'
+                maxBitrate: 128000 // 128 kbps (high quality audio)
               };
               
               try {
@@ -802,10 +790,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
               }
               params.encodings[0] = {
                 maxBitrate: 2500000,
-                minBitrate: 500000,
                 maxFramerate: 30,
-                scaleResolutionDownBy: 1,
-                networkPriority: 'high'
+                scaleResolutionDownBy: 1
               };
               await sender.setParameters(params);
             } catch (err) {
@@ -924,7 +910,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       };
       
       // Handle ICE connection state changes - optimized for low latency
-      pc.oniceconnectionstatechange = () => {
+      pc.oniceconnectionstatechange = async () => {
         console.log('🧊 ICE connection state:', pc.iceConnectionState);
         if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
           console.log('✅ ICE connection established!');
@@ -942,9 +928,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
                 params.encodings[0] = {
                   ...params.encodings[0],
                   maxBitrate: 2500000,
-                  minBitrate: 500000,
-                  maxFramerate: 30,
-                  networkPriority: 'high'
+                  maxFramerate: 30
                 };
                 
                 await sender.setParameters(params);
@@ -1314,7 +1298,6 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         if (hasLocal && hasRemote) {
           // Side-by-side layout: each video takes half the width, maintaining aspect ratio
           const videoWidth = canvas.width / 2;
-          const videoHeight = canvas.height;
           
           // Calculate aspect ratio for remote video
           const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
@@ -1446,16 +1429,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       const recorderOptions: MediaRecorderOptions = {
         mimeType: mimeType,
         videoBitsPerSecond: 4000000, // 4 Mbps for high quality (Zoom uses 3-4 Mbps)
-        audioBitsPerSecond: 192000,  // 192 kbps for high-quality audio
-        // Use timeslice for smoother recording (100ms chunks)
-        timeslice: 100
+        audioBitsPerSecond: 192000   // 192 kbps for high-quality audio
       };
-      
-      // If browser supports it, use quality settings
-      if ('videoBitsPerSecond' in recorderOptions) {
-        // Adaptive: browser will adjust based on content complexity
-        recorderOptions.videoBitsPerSecond = 4000000; // Max 4 Mbps
-      }
       
       const recorder = new MediaRecorder(combinedStream, recorderOptions);
       
