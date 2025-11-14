@@ -1056,41 +1056,85 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       remoteVideo.muted = true; // Mute to avoid feedback
       recordingRemoteVideoRef.current = remoteVideo;
 
-      // Wait for videos to be ready
+      // Wait for videos to be ready and playing
       await Promise.all([
         new Promise<void>((resolve) => {
           if (currentLocalStream) {
-            localVideo.onloadedmetadata = () => {
-              localVideo.play().catch(console.error);
-              resolve();
+            localVideo.onloadedmetadata = async () => {
+              try {
+                await localVideo.play();
+                // Wait for video to actually start playing
+                await new Promise(r => setTimeout(r, 100));
+                console.log('✅ Local video ready for recording:', localVideo.videoWidth, 'x', localVideo.videoHeight);
+                resolve();
+              } catch (err) {
+                console.error('Error playing local video:', err);
+                resolve(); // Continue anyway
+              }
             };
+            // Fallback timeout
+            setTimeout(() => resolve(), 2000);
           } else {
             resolve();
           }
         }),
         new Promise<void>((resolve) => {
           if (currentRemoteStream) {
-            remoteVideo.onloadedmetadata = () => {
-              remoteVideo.play().catch(console.error);
-              resolve();
+            remoteVideo.onloadedmetadata = async () => {
+              try {
+                await remoteVideo.play();
+                // Wait for video to actually start playing
+                await new Promise(r => setTimeout(r, 100));
+                console.log('✅ Remote video ready for recording:', remoteVideo.videoWidth, 'x', remoteVideo.videoHeight);
+                resolve();
+              } catch (err) {
+                console.error('Error playing remote video:', err);
+                resolve(); // Continue anyway
+              }
             };
+            // Fallback timeout
+            setTimeout(() => resolve(), 2000);
           } else {
             resolve();
           }
         })
       ]);
 
-      // Create canvas for combining videos
+      // Determine optimal canvas resolution based on video sources
+      let canvasWidth = 1920; // Full HD width
+      let canvasHeight = 1080; // Full HD height
+      
+      // Try to get actual video dimensions
+      if (localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
+        // Use the larger video dimension as base
+        const maxWidth = Math.max(localVideo.videoWidth, remoteVideo.videoWidth || 0);
+        const maxHeight = Math.max(localVideo.videoHeight, remoteVideo.videoHeight || 0);
+        if (maxWidth > 0 && maxHeight > 0) {
+          // For side-by-side, we need double width
+          canvasWidth = Math.max(1920, maxWidth * 2);
+          canvasHeight = Math.max(1080, maxHeight);
+          console.log('📐 Using video-based canvas size:', canvasWidth, 'x', canvasHeight);
+        }
+      }
+
+      // Create canvas for combining videos with high resolution
       const canvas = document.createElement('canvas');
-      canvas.width = 1280; // HD width
-      canvas.height = 720; // HD height
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
       recordingCanvasRef.current = canvas;
       
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { 
+        alpha: false, // No transparency for better performance
+        desynchronized: true // Better performance
+      });
       if (!ctx) {
         throw new Error('Failed to get canvas context');
       }
       recordingCanvasContextRef.current = ctx;
+      
+      // Enable image smoothing for better quality
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       
       // Set canvas background
       ctx.fillStyle = '#1a1a1a';
@@ -1107,21 +1151,52 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         ctx.fillStyle = '#1a1a1a';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
-        const hasLocal = currentLocalStream && localVideo.videoWidth > 0 && localVideo.videoHeight > 0;
-        const hasRemote = currentRemoteStream && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0;
+        // Check if videos are ready and have valid dimensions
+        const hasLocal = currentLocalStream && localVideo.readyState >= 2 && localVideo.videoWidth > 0 && localVideo.videoHeight > 0;
+        const hasRemote = currentRemoteStream && remoteVideo.readyState >= 2 && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0;
         
         if (hasLocal && hasRemote) {
-          // Side-by-side layout: each video takes half the width
+          // Side-by-side layout: each video takes half the width, maintaining aspect ratio
           const videoWidth = canvas.width / 2;
           const videoHeight = canvas.height;
           
+          // Calculate aspect ratio for remote video
+          const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
+          let remoteDrawWidth = videoWidth;
+          let remoteDrawHeight = videoWidth / remoteAspect;
+          let remoteX = 0;
+          let remoteY = (canvas.height - remoteDrawHeight) / 2;
+          
+          // If height exceeds canvas, scale down
+          if (remoteDrawHeight > canvas.height) {
+            remoteDrawHeight = canvas.height;
+            remoteDrawWidth = remoteDrawHeight * remoteAspect;
+            remoteX = (videoWidth - remoteDrawWidth) / 2;
+            remoteY = 0;
+          }
+          
           // Draw remote video (left side)
-          ctx.drawImage(remoteVideo, 0, 0, videoWidth, videoHeight);
+          ctx.drawImage(remoteVideo, remoteX, remoteY, remoteDrawWidth, remoteDrawHeight);
+          
+          // Calculate aspect ratio for local video
+          const localAspect = localVideo.videoWidth / localVideo.videoHeight;
+          let localDrawWidth = videoWidth;
+          let localDrawHeight = videoWidth / localAspect;
+          let localX = videoWidth;
+          let localY = (canvas.height - localDrawHeight) / 2;
+          
+          // If height exceeds canvas, scale down
+          if (localDrawHeight > canvas.height) {
+            localDrawHeight = canvas.height;
+            localDrawWidth = localDrawHeight * localAspect;
+            localX = videoWidth + (videoWidth - localDrawWidth) / 2;
+            localY = 0;
+          }
           
           // Draw local video (right side)
-          ctx.drawImage(localVideo, videoWidth, 0, videoWidth, videoHeight);
+          ctx.drawImage(localVideo, localX, localY, localDrawWidth, localDrawHeight);
         } else if (hasLocal) {
-          // Only local video - center it
+          // Only local video - center it and maintain aspect ratio
           const scale = Math.min(canvas.width / localVideo.videoWidth, canvas.height / localVideo.videoHeight);
           const width = localVideo.videoWidth * scale;
           const height = localVideo.videoHeight * scale;
@@ -1129,7 +1204,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           const y = (canvas.height - height) / 2;
           ctx.drawImage(localVideo, x, y, width, height);
         } else if (hasRemote) {
-          // Only remote video - center it
+          // Only remote video - center it and maintain aspect ratio
           const scale = Math.min(canvas.width / remoteVideo.videoWidth, canvas.height / remoteVideo.videoHeight);
           const width = remoteVideo.videoWidth * scale;
           const height = remoteVideo.videoHeight * scale;
@@ -1166,7 +1241,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       }
 
       // Create combined stream from canvas video + audio tracks
-      const canvasStream = canvas.captureStream(30); // 30 FPS
+      // Use 30 FPS for smooth video (60 FPS might be too resource-intensive)
+      const canvasStream = canvas.captureStream(30); // 30 FPS for good quality and performance
       const combinedStream = new MediaStream();
       
       // Add canvas video track (combined video showing both participants)
@@ -1191,8 +1267,35 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         return;
       }
 
+      // Try to use the best available codec
+      let mimeType = 'video/webm;codecs=vp8,opus';
+      const codecs = [
+        'video/webm;codecs=vp9,opus', // VP9 for better quality
+        'video/webm;codecs=vp8,opus', // VP8 fallback
+        'video/webm;codecs=h264,opus', // H.264 if supported
+        'video/webm' // Fallback
+      ];
+      
+      for (const codec of codecs) {
+        if (MediaRecorder.isTypeSupported(codec)) {
+          mimeType = codec;
+          console.log('✅ Using codec:', codec);
+          break;
+        }
+      }
+      
       const recorder = new MediaRecorder(combinedStream, {
-        mimeType: 'video/webm;codecs=vp8,opus'
+        mimeType: mimeType,
+        videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality (adjust as needed)
+        audioBitsPerSecond: 128000 // 128 kbps for audio
+      });
+      
+      console.log('📹 MediaRecorder configured:', {
+        mimeType,
+        videoBitsPerSecond: recorder.videoBitsPerSecond,
+        audioBitsPerSecond: recorder.audioBitsPerSecond,
+        canvasSize: `${canvas.width}x${canvas.height}`,
+        frameRate: '30 FPS'
       });
 
       recordedChunksRef.current = [];
