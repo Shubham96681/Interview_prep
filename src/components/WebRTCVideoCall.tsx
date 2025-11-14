@@ -730,13 +730,38 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         if (pc.connectionState === 'connected') {
           console.log('✅ Peer connection established!');
           // Auto-start recording when connection is established
-          if (!isRecordingRef.current && !recordingStarted && (localStreamRef.current || localStream)) {
+          const hasLocalStream = !!(localStreamRef.current || localStream);
+          const hasRemoteStream = !!(remoteStreamRef.current || remoteStream);
+          const notRecording = !isRecordingRef.current && !recordingStarted;
+          
+          console.log('🔍 Connection state handler - recording check:', {
+            hasLocalStream,
+            hasRemoteStream,
+            notRecording,
+            hasStartRecordingRef: !!startRecordingRef.current,
+            isRecordingRef: isRecordingRef.current,
+            recordingStarted
+          });
+          
+          if (notRecording && hasLocalStream && startRecordingRef.current) {
             setTimeout(() => {
               if (!isRecordingRef.current && !recordingStarted && startRecordingRef.current) {
                 console.log('🎬 Auto-starting recording (peer connection established)...');
                 startRecordingRef.current();
+              } else {
+                console.log('⚠️ Recording start cancelled in connection handler:', {
+                  isRecording: isRecordingRef.current,
+                  recordingStarted,
+                  hasRef: !!startRecordingRef.current
+                });
               }
             }, 1000); // Wait 1 second to ensure streams are ready
+          } else {
+            console.log('⚠️ Cannot start recording in connection handler:', {
+              notRecording,
+              hasLocalStream,
+              hasStartRecordingRef: !!startRecordingRef.current
+            });
           }
         } else if (pc.connectionState === 'failed') {
           console.error('❌ Peer connection failed');
@@ -1109,14 +1134,29 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     if (remoteStream || remoteStreamRef.current) {
       console.log('⏱️ Scheduling auto-start recording (remote stream detected, waiting 1.5s)...');
       const timer = setTimeout(() => {
-        if (shouldStartRecording() && !isRecordingRef.current) {
+        // Check connection state again - it should be 'connected' by now
+        const connectionState = peerConnectionRef.current?.connectionState;
+        const iceState = peerConnectionRef.current?.iceConnectionState;
+        console.log('⏱️ Timer fired - checking conditions:', {
+          connectionState,
+          iceState,
+          shouldStart: shouldStartRecording(),
+          isRecording: isRecordingRef.current,
+          recordingStarted,
+          hasStartRecording: !!startRecordingRef.current
+        });
+        
+        if (shouldStartRecording() && !isRecordingRef.current && startRecordingRef.current) {
           console.log('🎬 Auto-starting recording (remote stream received - both participants connected)...');
-          startRecording();
+          startRecordingRef.current();
         } else {
           console.log('⚠️ Recording start cancelled - conditions changed:', {
             shouldStart: shouldStartRecording(),
             isRecording: isRecordingRef.current,
-            recordingStarted
+            recordingStarted,
+            hasStartRecording: !!startRecordingRef.current,
+            connectionState,
+            iceState
           });
         }
       }, 1500); // Wait 1.5 seconds after remote stream to ensure everything is ready
@@ -1152,6 +1192,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     recordingStarted,
     startRecording
   ]);
+
+  // Update startRecordingRef whenever startRecording changes
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecordingRef.current) {
