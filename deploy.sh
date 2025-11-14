@@ -62,33 +62,53 @@ git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
 echo "📦 Installing frontend dependencies..."
+echo "   This may take a few minutes..."
 # If node_modules exists, try to update instead of full reinstall
 if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo "   node_modules exists, updating dependencies..."
-    npm install --legacy-peer-deps --prefer-offline --no-audit || {
+    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
+        echo "   npm: $line"
+    done || {
         echo "   ⚠️  Update failed, trying clean install..."
         rm -rf node_modules package-lock.json 2>/dev/null || true
-        npm install --legacy-peer-deps --prefer-offline --no-audit
+        echo "   Starting clean install..."
+        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
+            echo "   npm: $line"
+        done
     }
 else
-    npm install --legacy-peer-deps --prefer-offline --no-audit
+    echo "   Starting fresh install..."
+    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
+        echo "   npm: $line"
+    done
 fi
+echo "✅ Frontend dependencies installed"
 
 # Install server dependencies
 echo "📦 Installing backend dependencies..."
+echo "   This may take a few minutes..."
 cd server
 # If node_modules exists, try to update instead of full reinstall
 if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo "   node_modules exists, updating dependencies..."
-    npm install --legacy-peer-deps --prefer-offline --no-audit || {
+    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
+        echo "   npm: $line"
+    done || {
         echo "   ⚠️  Update failed, trying clean install..."
         rm -rf node_modules package-lock.json 2>/dev/null || true
-        npm install --legacy-peer-deps --prefer-offline --no-audit
+        echo "   Starting clean install..."
+        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
+            echo "   npm: $line"
+        done
     }
 else
+    echo "   Starting fresh install..."
     # Install all dependencies (Prisma needs dev dependencies for engines)
-    npm install --legacy-peer-deps --prefer-offline --no-audit
+    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
+        echo "   npm: $line"
+    done
 fi
+echo "✅ Backend dependencies installed"
 # Ensure Prisma is properly set up
 npx prisma generate || echo "⚠️ Prisma generate failed, continuing..."
 cd ..
