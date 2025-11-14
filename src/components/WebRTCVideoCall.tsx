@@ -228,17 +228,32 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         throw new Error(errorMsg);
       }
       
+      // Optimized constraints matching Zoom/Google Meet standards
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: 'user'
+          width: { ideal: 1920, min: 640 },      // Full HD preferred, 640p minimum
+          height: { ideal: 1080, min: 480 },     // Full HD preferred, 480p minimum
+          frameRate: { ideal: 30, min: 15 },     // 30 FPS preferred, 15 FPS minimum
+          aspectRatio: { ideal: 16/9 },          // Standard widescreen
+          facingMode: 'user',                    // Front-facing camera
+          // Advanced constraints for better quality
+          resizeMode: 'none'                     // Don't resize, use native resolution
         },
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+          echoCancellation: true,                // Remove echo
+          noiseSuppression: true,                // Remove background noise
+          autoGainControl: true,                 // Automatic volume adjustment
+          sampleRate: 48000,                     // High-quality audio (48kHz)
+          channelCount: { ideal: 2 },            // Stereo if available
+          latency: 0.01,                         // Low latency audio (10ms)
+          // Advanced audio processing (Chrome-specific)
+          googEchoCancellation: true,
+          googNoiseSuppression: true,
+          googAutoGainControl: true,
+          googHighpassFilter: true,
+          googTypingNoiseDetection: true,
+          googAudioMirroring: false
+        } as any // TypeScript workaround for Chrome-specific constraints
       });
       
       console.log('✅ Media stream obtained:', {
@@ -704,10 +719,100 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       
       const pc = new RTCPeerConnection(rtcConfiguration);
       
-      // Add local stream tracks
+      // Optimize peer connection for low latency and high quality
+      // Set bandwidth constraints (adaptive based on network)
+      pc.addEventListener('connectionstatechange', () => {
+        if (pc.connectionState === 'connected') {
+          // Configure bandwidth for optimal quality/latency balance
+          // These settings match Zoom/Google Meet standards
+          pc.getSenders().forEach(async (sender) => {
+            if (sender.track && sender.track.kind === 'video') {
+              const params = sender.getParameters();
+              if (!params.encodings) {
+                params.encodings = [{}];
+              }
+              
+              // Adaptive bitrate: start high, let browser adapt
+              params.encodings[0] = {
+                ...params.encodings[0],
+                maxBitrate: 2500000, // 2.5 Mbps max (high quality)
+                minBitrate: 500000,  // 500 kbps min (fallback)
+                maxFramerate: 30,    // 30 FPS (smooth video)
+                scaleResolutionDownBy: 1, // Start at full resolution
+                // Enable adaptive bitrate
+                adaptivePtime: false,
+                networkPriority: 'high'
+              };
+              
+              // Try to enable simulcast (multiple quality layers) if supported
+              if (params.encodings.length === 1 && 'setSimulcast' in sender) {
+                // Simulcast: send multiple quality layers for adaptive streaming
+                params.encodings = [
+                  { rid: 'high', maxBitrate: 2500000, maxFramerate: 30, scaleResolutionDownBy: 1 },
+                  { rid: 'medium', maxBitrate: 1000000, maxFramerate: 20, scaleResolutionDownBy: 2 },
+                  { rid: 'low', maxBitrate: 500000, maxFramerate: 15, scaleResolutionDownBy: 4 }
+                ];
+              }
+              
+              try {
+                await sender.setParameters(params);
+                console.log('✅ Video encoding parameters optimized:', params.encodings);
+              } catch (err) {
+                console.warn('⚠️ Could not set encoding parameters:', err);
+              }
+            } else if (sender.track && sender.track.kind === 'audio') {
+              const params = sender.getParameters();
+              if (!params.encodings) {
+                params.encodings = [{}];
+              }
+              
+              // Optimize audio for low latency
+              params.encodings[0] = {
+                ...params.encodings[0],
+                maxBitrate: 128000, // 128 kbps (high quality audio)
+                minBitrate: 32000,  // 32 kbps (fallback)
+                adaptivePtime: true, // Adaptive packet time for lower latency
+                networkPriority: 'high'
+              };
+              
+              try {
+                await sender.setParameters(params);
+                console.log('✅ Audio encoding parameters optimized');
+              } catch (err) {
+                console.warn('⚠️ Could not set audio encoding parameters:', err);
+              }
+            }
+          });
+        }
+      });
+      
+      // Add local stream tracks with optimized settings
       currentStream.getTracks().forEach(track => {
         console.log('Adding track to peer connection:', track.kind, track.enabled, track.label);
-        pc.addTrack(track, currentStream!);
+        const sender = pc.addTrack(track, currentStream!);
+        
+        // Immediately configure encoding for video tracks
+        if (track.kind === 'video' && 'getParameters' in sender) {
+          // Set initial parameters
+          setTimeout(async () => {
+            try {
+              const params = sender.getParameters();
+              if (!params.encodings) {
+                params.encodings = [{}];
+              }
+              params.encodings[0] = {
+                maxBitrate: 2500000,
+                minBitrate: 500000,
+                maxFramerate: 30,
+                scaleResolutionDownBy: 1,
+                networkPriority: 'high'
+              };
+              await sender.setParameters(params);
+            } catch (err) {
+              // Ignore if not supported
+            }
+          }, 100);
+        }
       });
 
       // Handle remote stream - collect all tracks into a single stream
@@ -818,13 +923,54 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         }
       };
       
-      // Handle ICE connection state changes
+      // Handle ICE connection state changes - optimized for low latency
       pc.oniceconnectionstatechange = () => {
         console.log('🧊 ICE connection state:', pc.iceConnectionState);
-        if (pc.iceConnectionState === 'connected') {
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
           console.log('✅ ICE connection established!');
+          
+          // Optimize connection once established
+          pc.getSenders().forEach(async (sender) => {
+            if (sender.track && sender.track.kind === 'video') {
+              try {
+                const params = sender.getParameters();
+                if (!params.encodings) {
+                  params.encodings = [{}];
+                }
+                
+                // Ensure optimal settings are applied
+                params.encodings[0] = {
+                  ...params.encodings[0],
+                  maxBitrate: 2500000,
+                  minBitrate: 500000,
+                  maxFramerate: 30,
+                  networkPriority: 'high'
+                };
+                
+                await sender.setParameters(params);
+                console.log('✅ Video encoding optimized after connection');
+              } catch (err) {
+                // Ignore errors
+              }
+            }
+          });
         } else if (pc.iceConnectionState === 'failed') {
-          console.error('❌ ICE connection failed');
+          console.warn('⚠️ ICE connection failed, attempting restart...');
+          // Try to restart ICE
+          try {
+            await pc.restartIce();
+            console.log('🔄 ICE restart initiated');
+          } catch (err) {
+            console.error('❌ Failed to restart ICE:', err);
+          }
+        }
+      };
+      
+      // Optimize ICE gathering for faster connection
+      pc.onicegatheringstatechange = () => {
+        console.log('🧊 ICE gathering state:', pc.iceGatheringState);
+        if (pc.iceGatheringState === 'complete') {
+          console.log('✅ ICE gathering complete (no more candidates)');
         }
       };
 
