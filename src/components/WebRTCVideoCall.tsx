@@ -1442,6 +1442,11 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         // This function just needs to draw the frame
       };
 
+      // IMPORTANT: Set recording flag BEFORE starting draw loop
+      // This ensures the draw loop doesn't exit immediately
+      isRecordingRef.current = true;
+      setIsRecording(true);
+      
       // Start drawing loop immediately - this must run continuously for smooth video
       console.log('🎬 Starting canvas draw loop for recording...');
       
@@ -1716,8 +1721,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         throw err;
       }
       mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-      isRecordingRef.current = true;
+      // Recording flag already set above before draw loop started
       setRecordingStarted(true);
       console.log('✅ Combined video recording started successfully');
     } catch (error) {
