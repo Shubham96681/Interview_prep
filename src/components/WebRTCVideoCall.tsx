@@ -681,7 +681,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         console.log('📹 Added track to remote stream. Total tracks:', remoteStreamRef.current.getTracks().length);
         
         // Update state with the stream
-        setRemoteStream(new MediaStream(remoteStreamRef.current.getTracks()));
+        const updatedStream = new MediaStream(remoteStreamRef.current.getTracks());
+        setRemoteStream(updatedStream);
         
         // Log track details
         event.track.onended = () => {
@@ -1057,30 +1058,52 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   useEffect(() => {
     // Only auto-start if:
     // 1. We have a peer connection
-    // 2. Connection is established
-    // 3. We have at least local stream
-    // 4. We haven't started recording yet
-    if (
-      peerConnectionRef.current &&
-      peerConnectionRef.current.connectionState === 'connected' &&
-      (localStreamRef.current || localStream) &&
-      !isRecordingRef.current &&
-      !recordingStarted
-    ) {
-      // Wait a bit to ensure streams are fully ready
+    // 2. We have at least local stream
+    // 3. We haven't started recording yet
+    const shouldStartRecording = () => {
+      const hasPeerConnection = peerConnectionRef.current !== null;
+      const hasLocalStream = !!(localStreamRef.current || localStream);
+      const notRecording = !isRecordingRef.current && !recordingStarted;
+      const connectionReady = hasPeerConnection && (
+        peerConnectionRef.current?.connectionState === 'connected' ||
+        peerConnectionRef.current?.connectionState === 'connecting' ||
+        peerConnectionRef.current?.iceConnectionState === 'connected' ||
+        peerConnectionRef.current?.iceConnectionState === 'checking'
+      );
+      
+      return hasPeerConnection && hasLocalStream && notRecording && connectionReady;
+    };
+
+    if (!shouldStartRecording()) {
+      return;
+    }
+
+    // Priority 1: Start recording when remote stream is received (both participants connected)
+    if (remoteStream || remoteStreamRef.current) {
       const timer = setTimeout(() => {
-        if (
-          peerConnectionRef.current?.connectionState === 'connected' &&
-          !isRecordingRef.current &&
-          !recordingStarted
-        ) {
-          console.log('🎬 Auto-starting recording (connection established)...');
+        if (shouldStartRecording() && !isRecordingRef.current) {
+          console.log('🎬 Auto-starting recording (remote stream received - both participants connected)...');
           startRecording();
         }
-      }, 3000); // Wait 3 seconds after connection to ensure everything is ready
-
+      }, 2000); // Wait 2 seconds after remote stream to ensure everything is ready
       return () => clearTimeout(timer);
     }
+    
+    // Priority 2: Start recording with local stream only (solo recording or waiting for remote)
+    // Wait a bit longer to see if remote stream arrives
+    const timer = setTimeout(() => {
+      if (shouldStartRecording() && !isRecordingRef.current) {
+        // Check again if remote stream arrived while waiting
+        if (remoteStream || remoteStreamRef.current) {
+          console.log('🎬 Auto-starting recording (remote stream detected after wait - both participants connected)...');
+        } else {
+          console.log('🎬 Auto-starting recording (local stream ready - solo recording or waiting for remote participant)...');
+        }
+        startRecording();
+      }
+    }, 3000); // Wait 3 seconds to see if remote stream arrives, then start anyway
+    
+    return () => clearTimeout(timer);
   }, [
     localStream,
     remoteStream,
