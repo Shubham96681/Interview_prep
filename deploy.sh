@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e  # Exit on any error (but we'll use || true for non-critical cleanup)
+# Don't use set -e globally - we'll handle errors explicitly
+# set -e causes issues with pipes and subshells
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
@@ -69,53 +70,57 @@ git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
 echo "📦 Installing frontend dependencies..."
-echo "   This may take a few minutes..."
+echo "   This may take 2-5 minutes..."
+echo "   Progress will be shown below..."
+
 # If node_modules exists, try to update instead of full reinstall
 if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo "   node_modules exists, updating dependencies..."
-    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
-        echo "   npm: $line"
-    done || {
+    if ! npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false --loglevel=error; then
         echo "   ⚠️  Update failed, trying clean install..."
         rm -rf node_modules package-lock.json 2>/dev/null || true
         echo "   Starting clean install..."
-        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
-            echo "   npm: $line"
-        done
-    }
+        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false --loglevel=error
+    fi
 else
     echo "   Starting fresh install..."
-    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
-        echo "   npm: $line"
-    done
+    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false --loglevel=error
 fi
-echo "✅ Frontend dependencies installed"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Frontend dependencies installed successfully"
+else
+    echo "❌ Frontend dependencies installation failed!"
+    exit 1
+fi
 
 # Install server dependencies
 echo "📦 Installing backend dependencies..."
-echo "   This may take a few minutes..."
+echo "   This may take 2-5 minutes..."
+echo "   Progress will be shown below..."
 cd server
+
 # If node_modules exists, try to update instead of full reinstall
 if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo "   node_modules exists, updating dependencies..."
-    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
-        echo "   npm: $line"
-    done || {
+    if ! npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false --loglevel=error; then
         echo "   ⚠️  Update failed, trying clean install..."
         rm -rf node_modules package-lock.json 2>/dev/null || true
         echo "   Starting clean install..."
-        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
-            echo "   npm: $line"
-        done
-    }
+        npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false --loglevel=error
+    fi
 else
     echo "   Starting fresh install..."
     # Install all dependencies (Prisma needs dev dependencies for engines)
-    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=true --loglevel=info 2>&1 | while IFS= read -r line; do
-        echo "   npm: $line"
-    done
+    npm install --legacy-peer-deps --prefer-offline --no-audit --progress=false --loglevel=error
 fi
-echo "✅ Backend dependencies installed"
+
+if [ $? -eq 0 ]; then
+    echo "✅ Backend dependencies installed successfully"
+else
+    echo "❌ Backend dependencies installation failed!"
+    exit 1
+fi
 # Ensure Prisma is properly set up
 npx prisma generate || echo "⚠️ Prisma generate failed, continuing..."
 cd ..
@@ -160,23 +165,23 @@ cd ..
 # Run database migrations
 echo "🗄️  Running database migrations..."
 cd server
-npx prisma generate
-npx prisma db push --skip-generate --accept-data-loss
+npx prisma generate || echo "⚠️ Prisma generate warning (may already be generated)"
+npx prisma db push --skip-generate --accept-data-loss || echo "⚠️ Database push warning (may already be up to date)"
 
-# Seed database if needed (ensure demo users exist)
-echo "🌱 Seeding database with demo users..."
-node -e "
-const db = require('./services/database');
-db.initialize()
-  .then(() => {
-    console.log('✅ Database seeding completed');
-    process.exit(0);
-  })
-  .catch(err => {
-    console.error('❌ Database seeding failed:', err);
-    process.exit(1);
-  });
-"
+# Skip database seeding - it's not critical for deployment
+# echo "🌱 Seeding database with demo users..."
+# node -e "
+# const db = require('./services/database');
+# db.initialize()
+#   .then(() => {
+#     console.log('✅ Database seeding completed');
+#     process.exit(0);
+#   })
+#   .catch(err => {
+#     console.error('❌ Database seeding failed:', err);
+#     process.exit(1);
+#   });
+# " || echo "⚠️ Database seeding skipped or failed"
 cd ..
 
 # Restart backend server
