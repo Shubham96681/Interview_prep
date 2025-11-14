@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e  # Exit on any error
+set -e  # Exit on any error (but we'll use || true for non-critical cleanup)
 
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
@@ -16,20 +16,29 @@ cd /var/www/interview-prep
 echo "🧹 Cleaning up old files to free disk space..."
 
 # Remove old node_modules to save space (we'll reinstall)
+# Use more robust removal methods
 if [ -d "node_modules" ]; then
     echo "   Removing old frontend node_modules..."
-    rm -rf node_modules
+    # Try multiple methods to ensure removal
+    rm -rf node_modules 2>/dev/null || \
+    find node_modules -delete 2>/dev/null || \
+    sudo rm -rf node_modules 2>/dev/null || \
+    echo "   ⚠️  Could not remove frontend node_modules, continuing..."
 fi
 
 if [ -d "server/node_modules" ]; then
     echo "   Removing old backend node_modules..."
-    rm -rf server/node_modules
+    # Try multiple methods to ensure removal
+    rm -rf server/node_modules 2>/dev/null || \
+    find server/node_modules -delete 2>/dev/null || \
+    sudo rm -rf server/node_modules 2>/dev/null || \
+    echo "   ⚠️  Could not remove backend node_modules, continuing..."
 fi
 
 # Remove old build artifacts
 if [ -d "dist" ]; then
     echo "   Removing old dist build..."
-    rm -rf dist
+    rm -rf dist 2>/dev/null || sudo rm -rf dist 2>/dev/null || echo "   ⚠️  Could not remove dist, continuing..."
 fi
 
 # Clean npm cache
@@ -58,8 +67,18 @@ npm install --legacy-peer-deps --prefer-offline --no-audit
 # Install server dependencies
 echo "📦 Installing backend dependencies..."
 cd server
-# Install all dependencies (Prisma needs dev dependencies for engines)
-npm install --legacy-peer-deps --prefer-offline --no-audit
+# If node_modules exists, try to update instead of full reinstall
+if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
+    echo "   node_modules exists, updating dependencies..."
+    npm install --legacy-peer-deps --prefer-offline --no-audit || {
+        echo "   ⚠️  Update failed, trying clean install..."
+        rm -rf node_modules package-lock.json
+        npm install --legacy-peer-deps --prefer-offline --no-audit
+    }
+else
+    # Install all dependencies (Prisma needs dev dependencies for engines)
+    npm install --legacy-peer-deps --prefer-offline --no-audit
+fi
 # Ensure Prisma is properly set up
 npx prisma generate || echo "⚠️ Prisma generate failed, continuing..."
 cd ..
