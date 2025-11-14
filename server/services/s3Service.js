@@ -51,8 +51,13 @@ class S3Service {
    * @returns {Promise<{url: string, key: string}>}
    */
   async uploadFile(fileBuffer, fileName, contentType = 'video/webm') {
+    if (!this.bucketName) {
+      throw new Error('S3 bucket name not configured');
+    }
+
     try {
       const key = `recordings/${fileName}`;
+      console.log(`📤 S3 Upload: Bucket=${this.bucketName}, Key=${key}, Size=${fileBuffer.length} bytes, ContentType=${contentType}`);
       
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
@@ -63,24 +68,35 @@ class S3Service {
         // ACL: 'public-read'
       });
 
+      console.log(`⏳ Sending file to S3...`);
       await this.s3Client.send(command);
+      console.log(`✅ File uploaded to S3 successfully`);
 
       // Generate public URL (if ACL is public-read)
       // const url = `https://${this.bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
       
       // Or generate signed URL (expires in 1 year)
+      console.log(`🔗 Generating signed URL...`);
       const getCommand = new GetObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
       const url = await getSignedUrl(this.s3Client, getCommand, { expiresIn: 31536000 }); // 1 year
+      console.log(`✅ Signed URL generated: ${url.substring(0, 100)}...`);
 
       return {
         url,
         key,
       };
     } catch (error) {
-      console.error('Error uploading to S3:', error);
+      console.error('❌ Error uploading to S3:');
+      console.error('   Message:', error.message);
+      console.error('   Code:', error.Code || error.code);
+      console.error('   Name:', error.name);
+      if (error.$metadata) {
+        console.error('   Request ID:', error.$metadata.requestId);
+        console.error('   HTTP Status:', error.$metadata.httpStatusCode);
+      }
       throw error;
     }
   }

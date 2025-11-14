@@ -956,12 +956,14 @@ app.post('/api/sessions/:id/upload-recording', uploadRecording.single('recording
 
     // Check if S3 is configured
     const isS3Configured = process.env.AWS_S3_BUCKET_NAME;
+    console.log(`📦 S3 Configuration check: ${isS3Configured ? 'Configured' : 'Not configured'}, Bucket: ${process.env.AWS_S3_BUCKET_NAME || 'N/A'}`);
 
     if (isS3Configured) {
       // Upload to S3
       try {
+        console.log(`📤 Attempting S3 upload for session ${id}, file size: ${req.file.size} bytes`);
         const fileBuffer = fs.readFileSync(req.file.path);
-        const fileName = `recordings/recording-${id}-${Date.now()}-${Math.round(Math.random() * 1E9)}.webm`;
+        const fileName = `recording-${id}-${Date.now()}-${Math.round(Math.random() * 1E9)}.webm`;
         
         const s3Result = await s3Service.uploadFile(
           fileBuffer,
@@ -975,31 +977,42 @@ app.post('/api/sessions/:id/upload-recording', uploadRecording.single('recording
         // Delete local file after S3 upload
         if (fs.existsSync(req.file.path)) {
           fs.unlinkSync(req.file.path);
+          console.log(`🗑️ Deleted local file after S3 upload: ${req.file.path}`);
         }
 
         console.log(`✅ Recording uploaded to S3 for session ${id}: ${s3Result.key}`);
+        console.log(`🔗 S3 URL: ${fullUrl}`);
       } catch (s3Error) {
-        console.error('❌ S3 upload failed, falling back to local storage:', s3Error);
+        console.error('❌ S3 upload failed, falling back to local storage:');
+        console.error('   Error:', s3Error.message);
+        console.error('   Stack:', s3Error.stack);
         // Fall back to local storage
         recordingUrl = `/uploads/recordings/${req.file.filename}`;
         fullUrl = `${req.protocol}://${req.get('host')}${recordingUrl}`;
+        console.log(`📁 Using local storage fallback: ${fullUrl}`);
       }
     } else {
       // Use local storage
+      console.log(`📁 S3 not configured, using local storage`);
       recordingUrl = `/uploads/recordings/${req.file.filename}`;
       fullUrl = `${req.protocol}://${req.get('host')}${recordingUrl}`;
     }
 
     // Update session with recording URL
+    console.log(`💾 Updating session ${id} with recording URL: ${fullUrl}`);
     await prisma.session.update({
       where: { id },
       data: { recordingUrl: fullUrl }
     });
+    console.log(`✅ Session updated successfully`);
 
     res.json({
       success: true,
       message: 'Recording uploaded successfully',
-      recordingUrl: fullUrl
+      data: {
+        recordingUrl: fullUrl,
+        sessionId: id
+      }
     });
   } catch (error) {
     console.error('Error uploading recording:', error);
