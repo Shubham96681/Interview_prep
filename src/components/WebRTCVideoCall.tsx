@@ -1438,24 +1438,55 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         }
         
         // CRITICAL: Continue drawing loop - this must run continuously
-        if (isRecordingRef.current) {
-          recordingAnimationFrameRef.current = requestAnimationFrame(drawVideos);
-        } else {
-          console.log('🛑 Stopping canvas draw loop (recording stopped)');
-        }
+        // Note: The loop continuation is now handled by startDrawLoop wrapper
+        // This function just needs to draw the frame
       };
 
       // Start drawing loop immediately - this must run continuously for smooth video
       console.log('🎬 Starting canvas draw loop for recording...');
-      drawVideos();
       
-      // Verify the loop is running
-      setTimeout(() => {
-        if (recordingAnimationFrameRef.current === null && isRecordingRef.current) {
-          console.error('❌ Canvas draw loop stopped unexpectedly! Restarting...');
-          drawVideos();
+      // Store draw function reference to ensure it can access current state
+      let drawLoopActive = true;
+      let monitorInterval: NodeJS.Timeout | null = null;
+      
+      const startDrawLoop = () => {
+        if (!drawLoopActive || !isRecordingRef.current) {
+          console.log('🛑 Draw loop stopped (recording ended or loop deactivated)');
+          return;
         }
-      }, 1000);
+        
+        if (!recordingCanvasContextRef.current || !recordingCanvasRef.current) {
+          console.warn('⚠️ Canvas not available, retrying draw loop...');
+          setTimeout(startDrawLoop, 100);
+          return;
+        }
+        
+        drawVideos();
+        // Schedule next frame
+        recordingAnimationFrameRef.current = requestAnimationFrame(startDrawLoop);
+      };
+      
+      // Start the loop
+      startDrawLoop();
+      
+      // Monitor the loop to ensure it keeps running
+      monitorInterval = setInterval(() => {
+        if (!isRecordingRef.current) {
+          drawLoopActive = false;
+          if (monitorInterval) {
+            clearInterval(monitorInterval);
+            monitorInterval = null;
+          }
+          return;
+        }
+        
+        // Check if animation frame is still scheduled
+        if (recordingAnimationFrameRef.current === null) {
+          console.warn('⚠️ Canvas draw loop stopped, restarting...');
+          drawLoopActive = true;
+          startDrawLoop();
+        }
+      }, 2000); // Check every 2 seconds
 
       // Get audio tracks for recording - we'll add both to the stream
       // MediaRecorder will record both, creating a combined audio track
@@ -1595,6 +1626,13 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
       recorder.onstop = async () => {
         console.log('🛑 Recording stopped, processing...');
+        
+        // Stop draw loop
+        drawLoopActive = false;
+        if (monitorInterval) {
+          clearInterval(monitorInterval);
+          monitorInterval = null;
+        }
         
         // Stop animation frame
         if (recordingAnimationFrameRef.current) {
