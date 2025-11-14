@@ -62,7 +62,17 @@ git checkout main || true
 
 # Install root dependencies (frontend) - need dev deps for build
 echo "📦 Installing frontend dependencies..."
-npm install --legacy-peer-deps --prefer-offline --no-audit
+# If node_modules exists, try to update instead of full reinstall
+if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
+    echo "   node_modules exists, updating dependencies..."
+    npm install --legacy-peer-deps --prefer-offline --no-audit || {
+        echo "   ⚠️  Update failed, trying clean install..."
+        rm -rf node_modules package-lock.json 2>/dev/null || true
+        npm install --legacy-peer-deps --prefer-offline --no-audit
+    }
+else
+    npm install --legacy-peer-deps --prefer-offline --no-audit
+fi
 
 # Install server dependencies
 echo "📦 Installing backend dependencies..."
@@ -72,7 +82,7 @@ if [ -d "node_modules" ] && [ "$(ls -A node_modules 2>/dev/null)" ]; then
     echo "   node_modules exists, updating dependencies..."
     npm install --legacy-peer-deps --prefer-offline --no-audit || {
         echo "   ⚠️  Update failed, trying clean install..."
-        rm -rf node_modules package-lock.json
+        rm -rf node_modules package-lock.json 2>/dev/null || true
         npm install --legacy-peer-deps --prefer-offline --no-audit
     }
 else
