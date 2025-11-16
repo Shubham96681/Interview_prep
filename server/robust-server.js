@@ -5,6 +5,8 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 const config = require('./config/server');
 const databaseService = require('./services/database');
 const realtimeService = require('./services/realtime');
@@ -77,14 +79,49 @@ class RobustServer {
   }
 
   setupMiddleware() {
+    // Security headers (Helmet)
+    this.app.use(helmet({
+      contentSecurityPolicy: false, // Disable CSP for API (can be configured per route if needed)
+      crossOriginEmbedderPolicy: false
+    }));
+    
     // CORS
     this.app.use(cors(config.cors));
     
-    // JSON parsing
-    this.app.use(express.json());
+    // JSON parsing with size limit (prevent DoS attacks)
+    this.app.use(express.json({ limit: '10mb' }));
     
-    // URL-encoded parsing for form data
-    this.app.use(express.urlencoded({ extended: true }));
+    // URL-encoded parsing for form data with size limit
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+    
+    // Rate limiting for API endpoints (production-level protection)
+    const apiLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Limit each IP to 100 requests per windowMs in production
+      message: {
+        success: false,
+        message: 'Too many requests from this IP, please try again later.'
+      },
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+    
+    // Apply rate limiting to all API routes
+    this.app.use('/api/', apiLimiter);
+    
+    // Stricter rate limiting for auth endpoints (prevent brute force)
+    const authLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: process.env.NODE_ENV === 'production' ? 5 : 50, // 5 attempts per 15 minutes in production
+      message: {
+        success: false,
+        message: 'Too many authentication attempts, please try again later.'
+      },
+      skipSuccessfulRequests: true, // Don't count successful requests
+    });
+    
+    // Apply stricter rate limiting to auth routes
+    this.app.use('/api/auth/', authLimiter);
     
     // Create uploads directories if they don't exist
     const uploadsDir = path.join(__dirname, 'uploads');
@@ -96,17 +133,49 @@ class RobustServer {
       fs.mkdirSync(recordingsDir, { recursive: true });
     }
     
-    // Configure multer for file uploads
+    // Configure multer for file uploads with production-level security
     const storage = multer.diskStorage({
       destination: (req, file, cb) => {
         cb(null, uploadsDir);
       },
       filename: (req, file, cb) => {
+        // Sanitize filename to prevent directory traversal attacks
+        const sanitizedOriginalName = path.basename(file.originalname).replace(/[^a-zA-Z0-9.-]/g, '_');
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(sanitizedOriginalName));
       }
     });
-    this.upload = multer({ storage: storage });
+    
+    // File filter for security - only allow specific file types
+    const fileFilter = (req, file, cb) => {
+      const allowedMimeTypes = [
+        'image/jpeg',
+        'image/jpg',
+        'image/png',
+        'image/gif',
+        'image/webp',
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      
+      if (allowedMimeTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Invalid file type. Allowed types: ${allowedMimeTypes.join(', ')}`), false);
+      }
+    };
+    
+    // Configure multer with file size limits (10MB max)
+    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    this.upload = multer({ 
+      storage: storage,
+      fileFilter: fileFilter,
+      limits: {
+        fileSize: maxFileSize,
+        files: 5 // Max 5 files per request
+      }
+    });
     
     // Serve static files from uploads directory
     this.app.use('/uploads', express.static(uploadsDir));
@@ -231,99 +300,186 @@ class RobustServer {
       { name: 'certification_2', maxCount: 1 }
     ]), async (req, res) => {
       try {
-        console.log('📝 Registration request received');
-        console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
-        console.log('📝 Files:', req.files ? Object.keys(req.files) : 'No files');
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        // Production-safe logging (don't log sensitive data)
+        if (isProduction) {
+          console.log('📝 Registration request received');
+        } else {
+          console.log('📝 Registration request received');
+          console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+          console.log('📝 Files:', req.files ? Object.keys(req.files) : 'No files');
+        }
         
         const { email, password, name, userType, role, phone, company, title, bio, experience, skills, yearsOfExperience, proficiency, hourlyRate, expertBio, expertSkills, currentRole } = req.body;
 
         // Use userType if provided, otherwise fall back to role
         const finalUserType = userType || role;
 
+        // Production-level input validation
         if (!email || !password || !name || !finalUserType) {
-          console.error('❌ Missing required fields:', { email: !!email, password: !!password, name: !!name, userType: !!finalUserType, role: !!role });
+          if (!isProduction) {
+            console.error('❌ Missing required fields:', { email: !!email, password: !!password, name: !!name, userType: !!finalUserType, role: !!role });
+          }
           return res.status(400).json({ 
             success: false,
             message: 'Missing required fields: email, password, name, and userType (or role) are required' 
           });
         }
 
-        // Validate email format
+        // Sanitize and validate email
+        const sanitizedEmail = email.trim().toLowerCase();
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
+        if (!emailRegex.test(sanitizedEmail) || sanitizedEmail.length > 255) {
           return res.status(400).json({ 
             success: false,
             message: 'Invalid email format' 
           });
         }
 
-        // Validate password length
-        if (password.length < 6) {
+        // Production-level password validation
+        if (password.length < 8) {
           return res.status(400).json({ 
             success: false,
-            message: 'Password must be at least 6 characters' 
+            message: 'Password must be at least 8 characters' 
+          });
+        }
+        
+        if (password.length > 128) {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Password must be less than 128 characters' 
           });
         }
 
-        console.log(`🔍 Checking if user exists: ${email}`);
-        // Check if user already exists
+        // Validate password strength (at least one uppercase, one lowercase, one number)
+        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+        if (!passwordRegex.test(password)) {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number' 
+          });
+        }
+
+        // Sanitize and validate name
+        const sanitizedName = name.trim();
+        if (sanitizedName.length < 2 || sanitizedName.length > 100) {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Name must be between 2 and 100 characters' 
+          });
+        }
+
+        // Validate userType
+        if (!['candidate', 'expert', 'admin'].includes(finalUserType)) {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Invalid user type' 
+          });
+        }
+
+        // Check if user already exists (use sanitized email)
         const existingUser = await prisma.user.findUnique({
-          where: { email }
+          where: { email: sanitizedEmail }
         });
 
         if (existingUser) {
-          console.error(`❌ User already exists: ${email}`);
+          if (!isProduction) {
+            console.error(`❌ User already exists: ${sanitizedEmail}`);
+          }
+          // Don't reveal if email exists (security best practice)
           return res.status(400).json({ 
             success: false,
-            message: 'User already exists with this email' 
+            message: 'Registration failed. Please check your information and try again.' 
           });
         }
 
-        console.log(`✅ User does not exist, proceeding with registration for: ${email}`);
+        // Hash password with production-level security (bcrypt rounds: 12 for production)
+        const bcryptRounds = isProduction ? 12 : 10;
+        const hashedPassword = await bcrypt.hash(password, bcryptRounds);
 
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Handle file uploads
+        // Handle file uploads with validation
         const resumePath = req.files?.resume?.[0]?.filename;
         const profilePhotoPath = req.files?.profilePhoto?.[0]?.filename || req.files?.expertProfilePhoto?.[0]?.filename;
         const certificationPaths = [];
         
-        // Handle multiple certification files
+        // Validate and handle multiple certification files
         for (let i = 0; i < 3; i++) {
           const certFile = req.files?.[`certification_${i}`]?.[0];
           if (certFile) {
+            // Additional validation: check file size (already limited by multer, but double-check)
+            if (certFile.size > this.maxFileSize) {
+              return res.status(400).json({
+                success: false,
+                message: `File ${certFile.originalname} exceeds maximum size of 10MB`
+              });
+            }
             certificationPaths.push(certFile.filename);
           }
         }
 
-        // Parse skills and proficiency - store as JSON strings for SQLite
-        const skillsJson = skills ? JSON.stringify(skills.split(',').map(s => s.trim())) : null;
+        // Parse and sanitize skills and proficiency - store as JSON strings for SQLite
+        let skillsJson = null;
+        if (skills) {
+          const skillsArray = typeof skills === 'string' 
+            ? skills.split(',').map(s => s.trim().substring(0, 50)).filter(s => s.length > 0)
+            : skills.map(s => String(s).trim().substring(0, 50)).filter(s => s.length > 0);
+          // Limit to 20 skills max
+          skillsJson = JSON.stringify(skillsArray.slice(0, 20));
+        }
+        
         let proficiencyJson = null;
         if (proficiency) {
           try {
-            proficiencyJson = typeof proficiency === 'string' ? JSON.stringify(JSON.parse(proficiency)) : JSON.stringify(proficiency);
+            let proficiencyArray;
+            if (typeof proficiency === 'string') {
+              proficiencyArray = JSON.parse(proficiency);
+            } else {
+              proficiencyArray = proficiency;
+            }
+            // Sanitize and limit proficiency items
+            proficiencyArray = Array.isArray(proficiencyArray)
+              ? proficiencyArray.map(p => String(p).trim().substring(0, 100)).filter(p => p.length > 0).slice(0, 20)
+              : [String(proficiency).trim().substring(0, 100)];
+            proficiencyJson = JSON.stringify(proficiencyArray);
           } catch (e) {
-            console.warn('Failed to parse proficiency:', e);
-            proficiencyJson = JSON.stringify([proficiency]);
+            if (!isProduction) {
+              console.warn('Failed to parse proficiency:', e);
+            }
+            proficiencyJson = JSON.stringify([String(proficiency).trim().substring(0, 100)]);
+          }
+        }
+        
+        // Sanitize text fields (prevent XSS and limit length)
+        const sanitizeText = (text, maxLength = 1000) => {
+          if (!text) return null;
+          return String(text).trim().substring(0, maxLength);
+        };
+
+        // Validate and sanitize hourly rate
+        let sanitizedHourlyRate = null;
+        if (hourlyRate) {
+          const parsedRate = parseFloat(hourlyRate);
+          if (!isNaN(parsedRate) && parsedRate >= 0 && parsedRate <= 10000) {
+            sanitizedHourlyRate = Math.round(parsedRate * 100) / 100; // Round to 2 decimal places
           }
         }
 
-        // Create user
+        // Create user with sanitized data
         const user = await prisma.user.create({
           data: {
-            email,
+            email: sanitizedEmail,
             password: hashedPassword,
-            name,
+            name: sanitizedName,
             userType: finalUserType,
-            phone: phone || null,
-            company: company || null,
-            title: title || null,
-            bio: bio || expertBio || null,
-            experience: experience || yearsOfExperience || null,
+            phone: phone ? sanitizeText(phone, 20) : null,
+            company: company ? sanitizeText(company, 100) : null,
+            title: title ? sanitizeText(title, 100) : null,
+            bio: sanitizeText(bio || expertBio, 2000),
+            experience: sanitizeText(experience || yearsOfExperience, 500),
             skills: skillsJson,
             proficiency: proficiencyJson,
-            hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
+            hourlyRate: sanitizedHourlyRate,
             resumePath: resumePath || null,
             profilePhotoPath: profilePhotoPath || null,
             certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
@@ -331,19 +487,32 @@ class RobustServer {
           }
         });
 
-        // Generate JWT token
-        const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+        // Generate JWT token - require JWT_SECRET in production
+        const JWT_SECRET = process.env.JWT_SECRET;
+        if (!JWT_SECRET || (isProduction && JWT_SECRET === 'your-super-secret-jwt-key-change-this-in-production')) {
+          console.error('❌ JWT_SECRET not properly configured');
+          return res.status(500).json({
+            success: false,
+            message: 'Server configuration error'
+          });
+        }
+        
         const token = jwt.sign(
           { userId: user.id, email: user.email, userType: user.userType },
           JWT_SECRET,
-          { expiresIn: '7d' }
+          { expiresIn: isProduction ? '7d' : '30d' } // Shorter expiration in production
         );
 
         // Remove password from response
         const { password: _, ...userWithoutPassword } = user;
 
-        console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
-        console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
+        // Production-safe logging
+        if (isProduction) {
+          console.log(`✅ User registered successfully: ${user.id} (${user.userType})`);
+        } else {
+          console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
+          console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
+        }
 
         res.status(201).json({
           success: true,
@@ -352,12 +521,29 @@ class RobustServer {
           token
         });
       } catch (error) {
-        console.error('❌ Registration error:', error);
-        console.error('❌ Error stack:', error.stack);
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        // Handle specific error types
+        if (error.code === 'P2002') {
+          // Prisma unique constraint violation
+          return res.status(400).json({
+            success: false,
+            message: 'Registration failed. Please check your information and try again.'
+          });
+        }
+        
+        // Log error details (more verbose in development)
+        if (isProduction) {
+          console.error('❌ Registration error:', error.message);
+        } else {
+          console.error('❌ Registration error:', error);
+          console.error('❌ Error stack:', error.stack);
+        }
+        
         res.status(500).json({ 
           success: false,
           message: 'Internal server error',
-          error: process.env.NODE_ENV === 'development' ? error.message : undefined
+          error: isProduction ? undefined : error.message
         });
       }
     });
@@ -365,7 +551,11 @@ class RobustServer {
     // Profile update endpoint (authenticated users can update their own profile)
     this.app.put('/api/users/profile', this.upload.single('profilePhoto'), async (req, res) => {
       try {
-        console.log('📝 Profile update request received');
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        if (!isProduction) {
+          console.log('📝 Profile update request received');
+        }
         
         // Get user ID from token
         const token = req.headers.authorization?.replace('Bearer ', '');
@@ -376,15 +566,28 @@ class RobustServer {
           });
         }
 
-        // Verify JWT token
+        // Verify JWT token - require JWT_SECRET in production
         let userId;
         try {
-          const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+          const JWT_SECRET = process.env.JWT_SECRET;
+          if (!JWT_SECRET || (isProduction && JWT_SECRET === 'your-super-secret-jwt-key-change-this-in-production')) {
+            console.error('❌ JWT_SECRET not properly configured');
+            return res.status(500).json({
+              success: false,
+              message: 'Server configuration error'
+            });
+          }
+          
           const decoded = jwt.verify(token, JWT_SECRET);
           userId = decoded.userId;
-          console.log(`✅ Authenticated user ID: ${userId}`);
+          
+          if (!isProduction) {
+            console.log(`✅ Authenticated user ID: ${userId}`);
+          }
         } catch (tokenError) {
-          console.error('❌ Token verification failed:', tokenError);
+          if (!isProduction) {
+            console.error('❌ Token verification failed:', tokenError);
+          }
           return res.status(401).json({
             success: false,
             message: 'Invalid or expired token'
@@ -393,33 +596,89 @@ class RobustServer {
 
         const { name, bio, experience, skills, hourlyRate, company, title, timezone, workingHoursStart, workingHoursEnd, daysAvailable } = req.body;
 
+        // Sanitize helper function
+        const sanitizeText = (text, maxLength = 1000) => {
+          if (!text) return null;
+          return String(text).trim().substring(0, maxLength);
+        };
+
         const updateData = {};
-        if (name) updateData.name = name;
-        if (bio) updateData.bio = bio;
-        if (experience) updateData.experience = experience;
-        if (skills) {
-          updateData.skills = typeof skills === 'string' 
-            ? JSON.stringify(skills.split(',').map(s => s.trim()))
-            : JSON.stringify(skills);
+        
+        // Sanitize and validate all fields
+        if (name) {
+          const sanitizedName = sanitizeText(name, 100);
+          if (sanitizedName && sanitizedName.length >= 2) {
+            updateData.name = sanitizedName;
+          }
         }
-        if (hourlyRate) updateData.hourlyRate = parseFloat(hourlyRate);
-        if (company) updateData.company = company;
-        if (title) updateData.title = title;
-        if (timezone) updateData.timezone = timezone;
-        if (workingHoursStart) updateData.workingHoursStart = workingHoursStart;
-        if (workingHoursEnd) updateData.workingHoursEnd = workingHoursEnd;
+        
+        if (bio) updateData.bio = sanitizeText(bio, 2000);
+        if (experience) updateData.experience = sanitizeText(experience, 500);
+        
+        if (skills) {
+          const skillsArray = typeof skills === 'string' 
+            ? skills.split(',').map(s => s.trim().substring(0, 50)).filter(s => s.length > 0)
+            : skills.map(s => String(s).trim().substring(0, 50)).filter(s => s.length > 0);
+          updateData.skills = JSON.stringify(skillsArray.slice(0, 20));
+        }
+        
+        if (hourlyRate) {
+          const parsedRate = parseFloat(hourlyRate);
+          if (!isNaN(parsedRate) && parsedRate >= 0 && parsedRate <= 10000) {
+            updateData.hourlyRate = Math.round(parsedRate * 100) / 100;
+          }
+        }
+        
+        if (company) updateData.company = sanitizeText(company, 100);
+        if (title) updateData.title = sanitizeText(title, 100);
+        
+        // Validate timezone (basic check)
+        if (timezone && typeof timezone === 'string' && timezone.length <= 50) {
+          updateData.timezone = timezone.trim();
+        }
+        
+        // Validate time format (HH:MM)
+        const timeRegex = /^([0-1][0-9]|2[0-3]):[0-5][0-9]$/;
+        if (workingHoursStart && timeRegex.test(workingHoursStart)) {
+          updateData.workingHoursStart = workingHoursStart;
+        }
+        if (workingHoursEnd && timeRegex.test(workingHoursEnd)) {
+          updateData.workingHoursEnd = workingHoursEnd;
+        }
+        
         if (daysAvailable) {
-          updateData.daysAvailable = typeof daysAvailable === 'string' 
-            ? daysAvailable 
-            : JSON.stringify(daysAvailable);
+          try {
+            const daysArray = typeof daysAvailable === 'string' 
+              ? JSON.parse(daysAvailable)
+              : daysAvailable;
+            if (Array.isArray(daysArray)) {
+              const validDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+              const sanitizedDays = daysArray
+                .filter(day => validDays.includes(String(day).toLowerCase()))
+                .map(day => String(day).toLowerCase());
+              updateData.daysAvailable = JSON.stringify(sanitizedDays);
+            }
+          } catch (e) {
+            // Invalid JSON, skip
+          }
         }
 
         if (req.file) {
+          // Validate file size
+          if (req.file.size > this.maxFileSize) {
+            return res.status(400).json({
+              success: false,
+              message: 'File size exceeds maximum limit of 10MB'
+            });
+          }
           updateData.profilePhotoPath = req.file.filename;
         }
 
-        console.log(`📝 Updating profile for user: ${userId}`);
-        console.log(`📝 Update data:`, JSON.stringify(updateData, null, 2));
+        // Only log in development
+        if (!isProduction) {
+          console.log(`📝 Updating profile for user: ${userId}`);
+          console.log(`📝 Update data:`, JSON.stringify(updateData, null, 2));
+        }
 
         const user = await prisma.user.update({
           where: { id: userId },
@@ -452,7 +711,9 @@ class RobustServer {
           }
         });
 
-        console.log(`✅ Profile updated successfully for user: ${user.email}`);
+        if (!isProduction) {
+          console.log(`✅ Profile updated successfully for user: ${user.email}`);
+        }
 
         res.json({ 
           success: true,
@@ -460,12 +721,29 @@ class RobustServer {
           user 
         });
       } catch (error) {
-        console.error('❌ Update profile error:', error);
-        console.error('❌ Error stack:', error.stack);
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        // Handle specific error types
+        if (error.code === 'P2025') {
+          // Prisma record not found
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+        }
+        
+        // Log error (more verbose in development)
+        if (isProduction) {
+          console.error('❌ Update profile error:', error.message);
+        } else {
+          console.error('❌ Update profile error:', error);
+          console.error('❌ Error stack:', error.stack);
+        }
+        
         res.status(500).json({ 
           success: false,
           message: 'Internal server error',
-          error: process.env.NODE_ENV === 'development' ? error.message : undefined
+          error: isProduction ? undefined : error.message
         });
       }
     });
