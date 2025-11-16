@@ -44,24 +44,48 @@ export default function ExpertDirectory() {
         const response = await apiService.getExperts();
         
         console.log('📥 Full API response:', response);
+        console.log('📥 Response.data:', response.data);
+        console.log('📥 Response.data type:', typeof response.data);
+        console.log('📥 Is response.data an array?', Array.isArray(response.data));
+        if (response.data && typeof response.data === 'object') {
+          console.log('📥 Response.data keys:', Object.keys(response.data));
+          if (response.data.experts) {
+            console.log('📥 Response.data.experts:', response.data.experts);
+            console.log('📥 Is experts an array?', Array.isArray(response.data.experts));
+          }
+        }
         
         if (response.success && response.data) {
           // Handle different response structures
+          // apiService wraps backend response, so structure is:
+          // { success: true, data: { success: true, data: { experts: [...], pagination: {...} } } }
           let expertsData = null;
+          
+          // Check if response.data is directly an array (unlikely but possible)
           if (Array.isArray(response.data)) {
-            // Direct array response
             expertsData = response.data;
-          } else if (response.data.experts && Array.isArray(response.data.experts)) {
-            // Nested structure: { data: { experts: [...], pagination: {...} } }
-            expertsData = response.data.experts;
-          } else if (Array.isArray(response.data.data)) {
-            // Double nested: { data: { data: [...] } }
-            expertsData = response.data.data;
+          }
+          // Check for double nested: response.data.data.experts (apiService wraps backend response)
+          else if (response.data && response.data.data) {
+            // Backend returns: { success: true, data: { experts: [...], pagination: {...} } }
+            // After apiService wraps: { success: true, data: { success: true, data: { experts: [...], pagination: {...} } } }
+            if (response.data.data.experts && Array.isArray(response.data.data.experts)) {
+              expertsData = response.data.data.experts;
+            } else if (Array.isArray(response.data.data)) {
+              expertsData = response.data.data;
+            }
+          }
+          // Check for single nested: response.data.experts (if apiService doesn't wrap)
+          else if (response.data && typeof response.data === 'object' && response.data.experts) {
+            if (Array.isArray(response.data.experts)) {
+              expertsData = response.data.experts;
+            }
           }
           
           if (!expertsData || !Array.isArray(expertsData)) {
-            console.error('❌ Invalid experts data structure:', response.data);
-            setError('Invalid response format from server');
+            console.error('❌ Invalid experts data structure. Full response:', JSON.stringify(response, null, 2));
+            console.error('❌ Response.data:', response.data);
+            setError('Invalid response format from server. Please check console for details.');
             setLoading(false);
             return;
           }
