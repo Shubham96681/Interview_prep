@@ -180,9 +180,47 @@ class RobustServer {
     // Serve static files from uploads directory
     this.app.use('/uploads', express.static(uploadsDir));
     
-    // Request logging
+    // Request logging (production-safe)
     this.app.use((req, res, next) => {
-      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+      const isProduction = process.env.NODE_ENV === 'production';
+      if (isProduction) {
+        // In production, only log important requests
+        if (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/users/')) {
+          console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+        }
+      } else {
+        // In development, log all requests
+        console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+      }
+      next();
+    });
+    
+    // Global error handler for multer errors (file upload errors)
+    this.app.use((error, req, res, next) => {
+      if (error instanceof multer.MulterError) {
+        if (error.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            success: false,
+            message: 'File size exceeds maximum limit of 10MB'
+          });
+        }
+        if (error.code === 'LIMIT_FILE_COUNT') {
+          return res.status(400).json({
+            success: false,
+            message: 'Too many files uploaded. Maximum 5 files allowed.'
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: error.message || 'File upload error'
+        });
+      }
+      if (error) {
+        return res.status(400).json({
+          success: false,
+          message: error.message || 'Invalid file type or upload error'
+        });
+      }
       next();
     });
   }
