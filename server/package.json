@@ -14,7 +14,8 @@
     "migrate:postgresql": "node scripts/migrate-database.js to-postgresql",
     "db:status": "node scripts/migrate-database.js status",
     "db:push": "npx prisma db push --skip-generate",
-    "db:seed": "node scripts/seed.js"
+    "db:seed": "node scripts/seed.js",
+    "db:check-experts": "node scripts/check-experts.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.930.0",
