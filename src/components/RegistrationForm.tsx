@@ -176,11 +176,22 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
     
     if (response.success && response.data) {
       const data = response.data;
-        toast.success('Registration successful! Please log in.');
+      
+      // CRITICAL: Use the actual database ID from the response
+      const actualUserId = data.user?.id;
+      if (!actualUserId) {
+        console.error('❌ Registration response missing user ID:', data);
+        toast.error('Registration successful but user ID not received. Please log in.');
+        onClose();
+        return;
+      }
+      
+      console.log('✅ Registration successful, user ID:', actualUserId);
+      toast.success('Registration successful! Please log in.');
         
-        // Create user data object for the callback
+        // Create user data object for the callback - USE ACTUAL DATABASE ID
         const userData: UserData = {
-          id: data.user?.id || `user-${Date.now()}`,
+          id: actualUserId, // Always use the database ID, never fallback
           email,
           name,
           userType: activeTab,

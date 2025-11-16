@@ -459,7 +459,7 @@ app.get('/api/experts/:id', async (req, res) => {
     }
 
     // Build where clause: allow viewing own profile even if isActive is false
-    const whereClause = {
+    let whereClause = {
       id: expertId,
       userType: 'expert'
     };
@@ -471,7 +471,7 @@ app.get('/api/experts/:id', async (req, res) => {
 
     console.log(`🔍 Searching for expert with where clause:`, JSON.stringify(whereClause));
 
-    const expert = await prisma.user.findFirst({
+    let expert = await prisma.user.findFirst({
       where: whereClause,
       select: {
         id: true,
@@ -497,19 +497,50 @@ app.get('/api/experts/:id', async (req, res) => {
       }
     });
 
+    // If expert not found and ID looks like a frontend-generated ID (user-{timestamp}),
+    // try to find by email or suggest checking the actual database ID
     if (!expert) {
       console.error(`❌ Expert not found: ID=${expertId}, isOwnProfile=${isOwnProfile}, whereClause=`, whereClause);
+      
+      // Check if this looks like a frontend-generated ID
+      const isFrontendGeneratedId = /^user-\d+$/.test(expertId);
+      
       // Try to find the user without the isActive filter to see if they exist
       const userExists = await prisma.user.findFirst({
         where: { id: expertId, userType: 'expert' },
         select: { id: true, isActive: true, userType: true }
       });
+      
+      let errorMessage = 'Expert not found';
       if (userExists) {
         console.error(`⚠️ User exists but doesn't match criteria: isActive=${userExists.isActive}, userType=${userExists.userType}`);
+        if (!userExists.isActive) {
+          errorMessage = 'Expert profile is not active';
+        }
       } else {
-        console.error(`⚠️ User with ID ${expertId} does not exist in database`);
+        // Check if user exists with different userType
+        const anyUser = await prisma.user.findFirst({
+          where: { id: expertId },
+          select: { id: true, userType: true, isActive: true }
+        });
+        if (anyUser) {
+          console.error(`⚠️ User exists but is not an expert: userType=${anyUser.userType}`);
+          errorMessage = `User found but is not an expert (userType: ${anyUser.userType})`;
+        } else {
+          console.error(`⚠️ User with ID ${expertId} does not exist in database`);
+          if (isFrontendGeneratedId) {
+            errorMessage = `Invalid expert ID. The ID "${expertId}" appears to be a frontend-generated ID that doesn't exist in the database. Please use the actual database ID from the registration response.`;
+          } else {
+            errorMessage = `Expert with ID ${expertId} does not exist`;
+          }
+        }
       }
-      return res.status(404).json({ message: 'Expert not found' });
+      
+      return res.status(404).json({ 
+        success: false,
+        message: errorMessage,
+        error: errorMessage
+      });
     }
 
     console.log(`✅ Expert found: ${expert.name} (ID: ${expert.id})`);
