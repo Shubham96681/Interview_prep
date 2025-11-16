@@ -178,7 +178,8 @@ app.post('/api/auth/register', upload.fields([
         hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
         resumePath: resumePath || null,
         profilePhotoPath: profilePhotoPath || null,
-        certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null
+        certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
+        isActive: true // Explicitly set isActive to true for all new users
       }
     });
 
@@ -430,12 +431,37 @@ app.get('/api/experts', validatePagination, async (req, res) => {
 // Get expert by ID
 app.get('/api/experts/:id', validateObjectId, async (req, res) => {
   try {
+    // Check if user is authenticated and viewing their own profile
+    let isOwnProfile = false;
+    let authenticatedUserId = null;
+    
+    try {
+      // Try to authenticate the request (optional - won't fail if no token)
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        authenticatedUserId = decoded.userId;
+        isOwnProfile = authenticatedUserId === req.params.id;
+      }
+    } catch (authError) {
+      // If authentication fails, continue without it (public access)
+      // This allows viewing expert profiles without login
+    }
+
+    // Build where clause: allow viewing own profile even if isActive is false
+    const whereClause = {
+      id: req.params.id,
+      userType: 'expert'
+    };
+
+    // If not viewing own profile, require isActive to be true
+    if (!isOwnProfile) {
+      whereClause.isActive = true;
+    }
+
     const expert = await prisma.user.findFirst({
-      where: {
-        id: req.params.id,
-        userType: 'expert',
-        isActive: true
-      },
+      where: whereClause,
       select: {
         id: true,
         name: true,
@@ -451,7 +477,11 @@ app.get('/api/experts/:id', validateObjectId, async (req, res) => {
         proficiency: true,
         experience: true,
         yearsOfExperience: true,
-        profilePhotoPath: true
+        profilePhotoPath: true,
+        timezone: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        daysAvailable: true
       }
     });
 
