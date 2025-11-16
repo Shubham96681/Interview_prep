@@ -521,7 +521,9 @@ class RobustServer {
             resumePath: resumePath || null,
             profilePhotoPath: profilePhotoPath || null,
             certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
-            isActive: true // Explicitly set isActive to true for all new users
+            // Experts require admin approval before appearing in directory
+            // Candidates are active by default
+            isActive: userType === 'expert' ? false : true
           }
         });
 
@@ -1112,6 +1114,16 @@ class RobustServer {
             success: false,
             error: 'Invalid expert ID',
             message: 'Expert not found'
+          });
+        }
+        
+        // Check if expert is approved (isActive) before allowing booking
+        if (!expert.isActive) {
+          console.error('❌ Expert not approved:', expertId, 'expert:', expert.name);
+          return res.status(403).json({
+            success: false,
+            error: 'Expert not approved',
+            message: 'This expert profile is pending admin approval and cannot be booked yet. Please check back later.'
           });
         }
         

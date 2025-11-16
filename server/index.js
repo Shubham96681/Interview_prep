@@ -195,7 +195,9 @@ app.post('/api/auth/register', upload.fields([
         resumePath: resumePath || null,
         profilePhotoPath: profilePhotoPath || null,
         certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
-        isActive: true // Explicitly set isActive to true for all new users
+        // Experts require admin approval before appearing in directory
+        // Candidates are active by default
+        isActive: userType === 'expert' ? false : true
       }
     });
 

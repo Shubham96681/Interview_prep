@@ -33,6 +33,8 @@ interface Expert {
   workingHoursStart?: string;
   workingHoursEnd?: string;
   daysAvailable?: string;
+  isActive?: boolean;
+  isVerified?: boolean;
 }
 
 export default function ExpertProfile() {
@@ -355,6 +357,13 @@ export default function ExpertProfile() {
             description: conflictMessage,
             duration: 5000
           });
+        } else if (response.status === 403 || response.error === 'Expert not approved') {
+          // Handle approval error
+          const errorMessage = response.message || response.error || 'This expert profile is pending admin approval and cannot be booked yet.';
+          toast.error('Booking Unavailable', {
+            description: errorMessage,
+            duration: 5000
+          });
         } else {
           toast.error(response.error || 'Failed to book session');
         }
@@ -368,6 +377,14 @@ export default function ExpertProfile() {
         const conflictMessage = conflictData.message || 'This time slot is already booked. Please choose a different time.';
         toast.error('Time slot unavailable', {
           description: conflictMessage,
+          duration: 5000
+        });
+      } else if (error?.response?.status === 403 || error?.status === 403) {
+        // Handle approval error
+        const errorData = error?.response?.data || error?.data || {};
+        const errorMessage = errorData.message || 'This expert profile is pending admin approval and cannot be booked yet.';
+        toast.error('Booking Unavailable', {
+          description: errorMessage,
           duration: 5000
         });
       } else {
@@ -543,18 +560,35 @@ export default function ExpertProfile() {
                     </div>
                     <p className="text-gray-600">per hour session</p>
                     
+                    {/* Show approval status message if expert is not approved */}
+                    {expert.isActive === false && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                        <div className="flex items-center gap-2 text-yellow-800 mb-2">
+                          <Clock className="h-5 w-5" />
+                          <span className="font-semibold">Profile Pending Approval</span>
+                        </div>
+                        <p className="text-sm text-yellow-700">
+                          This expert profile is currently under review by our admin team. 
+                          Booking will be available once the profile is approved.
+                        </p>
+                      </div>
+                    )}
+                    
                     <Button 
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 h-12"
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 h-12 disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => setShowBooking(true)}
+                      disabled={expert.isActive === false}
                     >
-                      Book a Session
+                      {expert.isActive === false ? 'Booking Unavailable' : 'Book a Session'}
                     </Button>
                     
-                    <div className="text-xs text-gray-500 space-y-1">
-                      <p>✓ Instant confirmation</p>
-                      <p>✓ Free cancellation 24h before</p>
-                      <p>✓ Satisfaction guaranteed</p>
-                    </div>
+                    {expert.isActive !== false && (
+                      <div className="text-xs text-gray-500 space-y-1">
+                        <p>✓ Instant confirmation</p>
+                        <p>✓ Free cancellation 24h before</p>
+                        <p>✓ Satisfaction guaranteed</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
             ) : (
