@@ -75,25 +75,7 @@ export default function ExpertProfileEdit({ isOpen, onClose, user, onUpdate }: E
 
     setIsLoading(true);
     try {
-      // For now, simulate a successful update since we don't have a full backend
-      // In a real app, this would make an API call to update the profile
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
-      
-      // Create updated user object
-      const updatedUser = {
-        ...user,
-        hourlyRate: parseFloat(hourlyRate),
-        timezone: availability.timezone,
-        workingHoursStart: availability.workingHours?.start || '09:00',
-        workingHoursEnd: availability.workingHours?.end || '17:00',
-        daysAvailable: JSON.stringify(availability.daysAvailable)
-      };
-
-      toast.success('Profile updated successfully!');
-      onUpdate(updatedUser);
-      onClose();
-      
-      // Make actual API call to update profile
+      // Make API call to update profile
       const formData = new FormData();
       formData.append('hourlyRate', hourlyRate);
       formData.append('timezone', availability.timezone);
@@ -101,10 +83,45 @@ export default function ExpertProfileEdit({ isOpen, onClose, user, onUpdate }: E
       formData.append('workingHoursEnd', availability.workingHours.end);
       formData.append('daysAvailable', JSON.stringify(availability.daysAvailable));
       
-      await apiService.updateProfile(formData);
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error('Failed to update profile. Please try again.');
+      console.log('📤 Updating profile with data:', {
+        hourlyRate,
+        timezone: availability.timezone,
+        workingHoursStart: availability.workingHours.start,
+        workingHoursEnd: availability.workingHours.end,
+        daysAvailable: availability.daysAvailable
+      });
+      
+      const response = await apiService.updateProfile(formData);
+      
+      if (response.success && response.data) {
+        const updatedUserData = response.data.user || response.data;
+        
+        // Transform the backend response to match the Expert interface
+        const updatedUser = {
+          ...user,
+          hourlyRate: updatedUserData.hourlyRate || parseFloat(hourlyRate),
+          timezone: updatedUserData.timezone || availability.timezone,
+          workingHoursStart: updatedUserData.workingHoursStart || availability.workingHours.start,
+          workingHoursEnd: updatedUserData.workingHoursEnd || availability.workingHours.end,
+          daysAvailable: updatedUserData.daysAvailable || JSON.stringify(availability.daysAvailable),
+          // Update other fields if they were returned
+          name: updatedUserData.name || user.name,
+          bio: updatedUserData.bio || user.bio,
+          company: updatedUserData.company || user.company,
+          title: updatedUserData.title || user.title,
+          avatar: updatedUserData.avatar || updatedUserData.profilePhotoPath || user.avatar
+        };
+
+        console.log('✅ Profile updated successfully:', updatedUser);
+        toast.success('Profile updated successfully!');
+        onUpdate(updatedUser);
+        onClose();
+      } else {
+        throw new Error(response.error || 'Failed to update profile');
+      }
+    } catch (error: any) {
+      console.error('❌ Error updating profile:', error);
+      toast.error(error.message || 'Failed to update profile. Please try again.');
     } finally {
       setIsLoading(false);
     }

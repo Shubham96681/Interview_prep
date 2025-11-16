@@ -217,10 +217,19 @@ class ApiService {
   }
 
   async updateProfile(userData: FormData) {
+    // Get token for authentication
+    const token = localStorage.getItem('token');
+    const headers: HeadersInit = {};
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Don't set Content-Type for FormData - browser will set it with boundary
     return this.request('/api/users/profile', {
       method: 'PUT',
       body: userData,
-      headers: {}, // Don't set Content-Type for FormData
+      headers
     });
   }
 
