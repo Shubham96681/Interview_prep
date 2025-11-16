@@ -41,6 +41,19 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
 
   // Setup real-time updates
   useEffect(() => {
+    // Validate user ID before connecting
+    if (!user?.id) {
+      console.error('❌ CandidateDashboard: Cannot connect to realtime - user ID missing');
+      return;
+    }
+    
+    // Reject frontend-generated IDs
+    if (user.id.startsWith('user-')) {
+      console.error('❌ CandidateDashboard: Cannot connect to realtime - frontend-generated ID detected:', user.id);
+      console.error('❌ User must have a valid database ID. Please log out and log back in.');
+      return;
+    }
+    
     // Connect to real-time service
     realtimeService.connect(user.id);
 

@@ -25,7 +25,20 @@ class RealtimeService {
     return RealtimeService.instance;
   }
 
-  async connect(userId: string = 'cmguho5y30000mb9sp9zy6gwe'): Promise<void> {
+  async connect(userId: string): Promise<void> {
+    // Validate userId - must be provided and not a frontend-generated ID
+    if (!userId) {
+      console.error('❌ RealtimeService: userId is required');
+      return;
+    }
+    
+    // Reject frontend-generated IDs
+    if (userId.startsWith('user-')) {
+      console.error('❌ RealtimeService: Frontend-generated ID detected! Cannot connect with:', userId);
+      console.error('❌ This ID will not work with the backend. User must have a valid database ID.');
+      return;
+    }
+
     if (this.isConnected) {
       return;
     }

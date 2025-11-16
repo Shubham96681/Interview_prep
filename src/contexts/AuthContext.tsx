@@ -78,7 +78,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const login = (userData: User) => {
-    // Store token if available
+    // Validate that userData has a valid ID (not a frontend-generated one)
+    if (userData.id && userData.id.startsWith('user-')) {
+      console.error('❌ AuthContext: Frontend-generated ID detected! This should not happen:', userData.id);
+      console.error('❌ User data:', userData);
+      // Don't proceed with frontend-generated IDs - they won't work with the backend
+      return;
+    }
+    
+    // Store token if available (token is optional - may already be in localStorage from registration)
     if (userData.token) {
       localStorage.setItem('token', userData.token);
       console.log('✅ AuthContext: Token saved:', userData.token.substring(0, 20) + '...');
@@ -89,8 +97,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         console.error('❌ AuthContext: Token not saved correctly!');
       }
     } else {
-      console.error('❌ AuthContext: No token in userData:', userData);
+      // Token might already be in localStorage from registration/login
+      const existingToken = localStorage.getItem('token');
+      if (existingToken) {
+        console.log('✅ AuthContext: Using existing token from localStorage');
+      } else {
+        console.warn('⚠️ AuthContext: No token in userData or localStorage - user may need to log in again');
+      }
     }
+    
+    // Validate user ID exists and is a valid database ID (not frontend-generated)
+    if (!userData.id) {
+      console.error('❌ AuthContext: User data missing ID!', userData);
+      return;
+    }
+    
     // Also store in authService for compatibility
     authService.login(userData);
     setUser(userData);

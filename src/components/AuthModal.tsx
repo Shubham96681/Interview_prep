@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,8 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User, Mail, Lock, Briefcase, Sparkles, Star } from 'lucide-react';
+import { Mail, Lock, Star, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { User as UserType, authService } from '@/lib/auth';
 import { apiService } from '@/lib/apiService';
@@ -20,20 +19,12 @@ interface AuthModalProps {
   defaultRole?: 'candidate' | 'expert';
 }
 
-export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'candidate' }: AuthModalProps) {
+export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defaultRole = 'candidate' }: AuthModalProps) {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [userType, setUserType] = useState<'candidate' | 'expert'>(defaultRole);
-  const [company, setCompany] = useState('');
-  const [title, setTitle] = useState('');
   const [showRegistration, setShowRegistration] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setUserType(defaultRole);
-  }, [defaultRole]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,42 +113,9 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
     setIsLoading(false);
   };
 
-  const handleSignup = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !password || !name) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-
-    const userData: UserType = {
-      id: `user-${Date.now()}`,
-      email,
-      name,
-      userType,
-      company: company || 'Tech Corp',
-      title: title || 'Software Engineer',
-      avatar: '',
-      rating: 0,
-      totalSessions: 0,
-      hourlyRate: 0,
-      isVerified: false,
-      yearsOfExperience: 0,
-      proficiency: 'Beginner',
-      timezone: 'UTC',
-      workingHoursStart: '09:00',
-      workingHoursEnd: '17:00',
-      daysAvailable: '["monday","tuesday","wednesday","thursday","friday"]',
-      resumePath: '',
-      profilePhotoPath: '',
-      certificationPaths: ''
-    };
-
-    toast.success(`🚀 Account created successfully!`, {
-      description: `Welcome to InterviewAce, ${userData.name}!`,
-    });
-    onLogin(userType, userData);
-    onClose();
-  };
+  // REMOVED: handleSignup function - Registration should always go through RegistrationForm
+  // which properly handles backend registration and returns actual database IDs
+  // This prevents frontend-generated IDs from being created
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -261,108 +219,20 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="user-type" className="text-white font-medium">I am a</Label>
-                    <Select value={userType} onValueChange={(value: 'candidate' | 'expert') => setUserType(value)}>
-                      <SelectTrigger className="bg-white/10 backdrop-blur-sm border-white/20 text-white focus:border-blue-400 focus:ring-blue-400/20">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-white/20 backdrop-blur-xl">
-                        <SelectItem value="candidate" className="text-white hover:bg-white/10">
-                          🎯 Student/Candidate (Looking for interview practice)
-                        </SelectItem>
-                        <SelectItem value="expert" className="text-white hover:bg-white/10">
-                          👨‍🏫 Expert (Offering interview coaching)
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <p className="text-white/70 mb-4">
+                      Click the button below to open the registration form
+                    </p>
+                    <Button
+                      type="button"
+                      onClick={() => setShowRegistration(true)}
+                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                    >
+                      Open Registration Form
+                    </Button>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name" className="text-white font-medium">Full Name</Label>
-                    <div className="relative group">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-400 transition-colors duration-300" />
-                      <Input
-                        id="signup-name"
-                        type="text"
-                        placeholder="Enter your full name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email" className="text-white font-medium">Email</Label>
-                    <div className="relative group">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-400 transition-colors duration-300" />
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        placeholder="Enter your email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password" className="text-white font-medium">Password</Label>
-                    <div className="relative group">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-400 transition-colors duration-300" />
-                      <Input
-                        id="signup-password"
-                        type="password"
-                        placeholder="Create a password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                      />
-                    </div>
-                  </div>
-
-                  {userType === 'expert' && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="company" className="text-white font-medium">Company</Label>
-                        <div className="relative group">
-                          <Briefcase className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-400 transition-colors duration-300" />
-                          <Input
-                            id="company"
-                            type="text"
-                            placeholder="Current company"
-                            value={company}
-                            onChange={(e) => setCompany(e.target.value)}
-                            className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="title" className="text-white font-medium">Job Title</Label>
-                        <Input
-                          id="title"
-                          type="text"
-                          placeholder="Your current role"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white transition-all duration-300 hover:scale-105 hover:shadow-xl py-6 text-lg font-semibold"
-                  >
-                    <Sparkles className="mr-2 h-5 w-5" />
-                    Create Account
-                  </Button>
-                </form>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

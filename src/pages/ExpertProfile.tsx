@@ -53,49 +53,56 @@ export default function ExpertProfile() {
 
 
 
-  // Get current user
+  // Get current user - prefer AuthContext, fallback to authService
   useEffect(() => {
-    // Always try to get user from auth service first (this works for test users)
-    const authUser = authService.getCurrentUser();
+    // First, try AuthContext (most reliable - uses backend-validated user)
     if (authUser) {
-      setCurrentUser(authUser);
-      return;
+      // Validate that the user has a valid database ID
+      if (authUser.id && !authUser.id.startsWith('user-')) {
+        setCurrentUser(authUser);
+        return;
+      } else if (authUser.id && authUser.id.startsWith('user-')) {
+        console.error('❌ ExpertProfile: AuthContext user has frontend-generated ID:', authUser.id);
+        console.error('❌ This should not happen. User needs to log out and log back in.');
+      }
     }
 
-    // If no auth user, try backend API with token
+    // Fallback to authService (for backward compatibility)
+    const localAuthUser = authService.getCurrentUser();
+    if (localAuthUser) {
+      // Validate that the user has a valid database ID
+      if (localAuthUser.id && !localAuthUser.id.startsWith('user-')) {
+        setCurrentUser(localAuthUser);
+        return;
+      } else if (localAuthUser.id && localAuthUser.id.startsWith('user-')) {
+        console.error('❌ ExpertProfile: Local auth user has frontend-generated ID:', localAuthUser.id);
+        console.error('❌ Clearing invalid user data. User needs to log in again.');
+        authService.logout();
+        localStorage.removeItem('token');
+      }
+    }
+
+    // If no valid user, try backend API with token
     const token = localStorage.getItem('token');
     if (token) {
       // Try to get user from backend API
       apiService.getCurrentUser()
         .then(response => {
           if (response.success && response.data) {
-            setCurrentUser(response.data);
-          } else {
-            throw new Error('Failed to get user');
+            const userData = response.data.data || response.data;
+            // Validate the user has a valid database ID
+            if (userData.id && !userData.id.startsWith('user-')) {
+              setCurrentUser(userData);
+            } else {
+              console.error('❌ ExpertProfile: Backend returned invalid user ID:', userData.id);
+            }
           }
         })
         .catch(error => {
           console.error('Error fetching user:', error);
-          // Fallback to candidate user if API fails
-        const testCandidate = {
-          id: 'candidate-001',
-          email: 'john@example.com',
-          name: 'John Doe',
-          userType: 'candidate' as const
-        };
-        setCurrentUser(testCandidate);
-      });
-    } else {
-      // No token and no auth user - default to candidate
-      const testCandidate = {
-        id: 'candidate-001',
-        email: 'john@example.com',
-        name: 'John Doe',
-        userType: 'candidate' as const
-      };
-      setCurrentUser(testCandidate);
+        });
     }
-  }, [id]);
+  }, [id, authUser]);
 
   // Fetch expert data
   useEffect(() => {
@@ -107,6 +114,15 @@ export default function ExpertProfile() {
     const mockExpert = mockExperts.find(e => e.id === id);
     if (mockExpert) {
       setExpert(mockExpert);
+      setLoading(false);
+      return;
+    }
+    
+    // Validate ID - reject frontend-generated IDs
+    if (id && id.startsWith('user-')) {
+      console.error('❌ ExpertProfile: Frontend-generated ID detected:', id);
+      console.error('❌ This ID will not work with the backend. Please use a valid database ID.');
+      setExpert(null);
       setLoading(false);
       return;
     }
