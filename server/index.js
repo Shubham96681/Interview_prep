@@ -513,7 +513,17 @@ app.get('/api/experts/:id', async (req, res) => {
     }
 
     console.log(`✅ Expert found: ${expert.name} (ID: ${expert.id})`);
-    res.json(expert);
+    
+    // Return expert data with proper structure
+    const expertResponse = {
+      ...expert,
+      // Ensure arrays are properly formatted
+      skills: expert.skills ? (typeof expert.skills === 'string' ? JSON.parse(expert.skills) : expert.skills) : [],
+      proficiency: expert.proficiency ? (typeof expert.proficiency === 'string' ? JSON.parse(expert.proficiency) : expert.proficiency) : [],
+      daysAvailable: expert.daysAvailable ? (typeof expert.daysAvailable === 'string' ? JSON.parse(expert.daysAvailable) : expert.daysAvailable) : []
+    };
+    
+    res.json(expertResponse);
   } catch (error) {
     console.error('Get expert error:', error);
     res.status(500).json({ message: 'Internal server error' });

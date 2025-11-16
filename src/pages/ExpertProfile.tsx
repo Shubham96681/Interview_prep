@@ -101,9 +101,7 @@ export default function ExpertProfile() {
   useEffect(() => {
     if (!id) return;
     
-    
     setLoading(true);
-    
     
     // First try to find in mock data (for test users)
     const mockExpert = mockExperts.find(e => e.id === id);
@@ -113,26 +111,75 @@ export default function ExpertProfile() {
       return;
     }
     
-    // If not found in mock data, try to fetch from backend
-    const token = localStorage.getItem('token');
-    if (token) {
-      apiService.getExpert(id)
-        .then(response => {
-          if (response.success && response.data) {
-            setExpert(response.data);
-          } else {
-            setExpert(null);
+    // Always try to fetch from backend (public access is allowed)
+    // The backend will handle authentication if token is present
+    console.log(`🔍 Fetching expert profile for ID: ${id}`);
+    apiService.getExpert(id)
+      .then(response => {
+        console.log(`📥 Expert API response:`, response);
+        if (response.success && response.data) {
+          // Transform the backend response to match the Expert interface
+          const expertData = response.data;
+          
+          // Helper function to safely parse JSON strings or return arrays
+          const parseJsonField = (field: any, defaultValue: any[] = []): any[] => {
+            if (!field) return defaultValue;
+            if (Array.isArray(field)) return field;
+            if (typeof field === 'string') {
+              try {
+                return JSON.parse(field);
+              } catch {
+                return defaultValue;
+              }
+            }
+            return defaultValue;
+          };
+          
+          // Parse daysAvailable for availability display
+          const daysAvailable = parseJsonField(expertData.daysAvailable, []);
+          const availability: string[] = [];
+          if (daysAvailable.length > 0 && expertData.workingHoursStart && expertData.workingHoursEnd) {
+            const daysMap: { [key: string]: string } = {
+              monday: 'Mon', tuesday: 'Tue', wednesday: 'Wed', 
+              thursday: 'Thu', friday: 'Fri', saturday: 'Sat', sunday: 'Sun'
+            };
+            daysAvailable.forEach((day: string) => {
+              const dayName = daysMap[day.toLowerCase()] || day;
+              availability.push(`${dayName}: ${expertData.workingHoursStart} - ${expertData.workingHoursEnd}`);
+            });
           }
-        })
-        .catch(() => {
+          
+          setExpert({
+            id: expertData.id,
+            name: expertData.name || 'Unknown',
+            title: expertData.title || '',
+            company: expertData.company || '',
+            bio: expertData.bio || '',
+            avatar: expertData.avatar || expertData.profilePhotoPath || '',
+            rating: expertData.rating || 0,
+            reviewCount: expertData.totalSessions || 0, // Use totalSessions as review count approximation
+            hourlyRate: expertData.hourlyRate || 0,
+            experience: expertData.experience || expertData.yearsOfExperience || '',
+            languages: ['English'], // Default language
+            specialties: parseJsonField(expertData.proficiency || expertData.skills, []),
+            availability: availability.length > 0 ? availability : ['Available on request'],
+            timezone: expertData.timezone,
+            workingHoursStart: expertData.workingHoursStart,
+            workingHoursEnd: expertData.workingHoursEnd,
+            daysAvailable: expertData.daysAvailable
+          });
+        } else {
+          console.error(`❌ Expert not found in API response:`, response);
           setExpert(null);
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
-    }
+        }
+      })
+      .catch((error) => {
+        console.error(`❌ Error fetching expert:`, error);
+        setExpert(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [id]);
 
   if (loading) {
