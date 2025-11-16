@@ -3,6 +3,8 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const config = require('./config/server');
 const databaseService = require('./services/database');
 const realtimeService = require('./services/realtime');
@@ -81,6 +83,9 @@ class RobustServer {
     // JSON parsing
     this.app.use(express.json());
     
+    // URL-encoded parsing for form data
+    this.app.use(express.urlencoded({ extended: true }));
+    
     // Create uploads directories if they don't exist
     const uploadsDir = path.join(__dirname, 'uploads');
     const recordingsDir = path.join(uploadsDir, 'recordings');
@@ -90,6 +95,18 @@ class RobustServer {
     if (!fs.existsSync(recordingsDir)) {
       fs.mkdirSync(recordingsDir, { recursive: true });
     }
+    
+    // Configure multer for file uploads
+    const storage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, uploadsDir);
+      },
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+      }
+    });
+    this.upload = multer({ storage: storage });
     
     // Serve static files from uploads directory
     this.app.use('/uploads', express.static(uploadsDir));
@@ -200,6 +217,147 @@ class RobustServer {
           success: false,
           message: 'Internal server error',
           error: error.message
+        });
+      }
+    });
+
+    // Registration endpoint
+    this.app.post('/api/auth/register', this.upload.fields([
+      { name: 'resume', maxCount: 1 },
+      { name: 'profilePhoto', maxCount: 1 },
+      { name: 'expertProfilePhoto', maxCount: 1 },
+      { name: 'certification_0', maxCount: 1 },
+      { name: 'certification_1', maxCount: 1 },
+      { name: 'certification_2', maxCount: 1 }
+    ]), async (req, res) => {
+      try {
+        console.log('📝 Registration request received');
+        console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+        console.log('📝 Files:', req.files ? Object.keys(req.files) : 'No files');
+        
+        const { email, password, name, userType, role, phone, company, title, bio, experience, skills, yearsOfExperience, proficiency, hourlyRate, expertBio, expertSkills, currentRole } = req.body;
+
+        // Use userType if provided, otherwise fall back to role
+        const finalUserType = userType || role;
+
+        if (!email || !password || !name || !finalUserType) {
+          console.error('❌ Missing required fields:', { email: !!email, password: !!password, name: !!name, userType: !!finalUserType, role: !!role });
+          return res.status(400).json({ 
+            success: false,
+            message: 'Missing required fields: email, password, name, and userType (or role) are required' 
+          });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Invalid email format' 
+          });
+        }
+
+        // Validate password length
+        if (password.length < 6) {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Password must be at least 6 characters' 
+          });
+        }
+
+        console.log(`🔍 Checking if user exists: ${email}`);
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+          where: { email }
+        });
+
+        if (existingUser) {
+          console.error(`❌ User already exists: ${email}`);
+          return res.status(400).json({ 
+            success: false,
+            message: 'User already exists with this email' 
+          });
+        }
+
+        console.log(`✅ User does not exist, proceeding with registration for: ${email}`);
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Handle file uploads
+        const resumePath = req.files?.resume?.[0]?.filename;
+        const profilePhotoPath = req.files?.profilePhoto?.[0]?.filename || req.files?.expertProfilePhoto?.[0]?.filename;
+        const certificationPaths = [];
+        
+        // Handle multiple certification files
+        for (let i = 0; i < 3; i++) {
+          const certFile = req.files?.[`certification_${i}`]?.[0];
+          if (certFile) {
+            certificationPaths.push(certFile.filename);
+          }
+        }
+
+        // Parse skills and proficiency - store as JSON strings for SQLite
+        const skillsJson = skills ? JSON.stringify(skills.split(',').map(s => s.trim())) : null;
+        let proficiencyJson = null;
+        if (proficiency) {
+          try {
+            proficiencyJson = typeof proficiency === 'string' ? JSON.stringify(JSON.parse(proficiency)) : JSON.stringify(proficiency);
+          } catch (e) {
+            console.warn('Failed to parse proficiency:', e);
+            proficiencyJson = JSON.stringify([proficiency]);
+          }
+        }
+
+        // Create user
+        const user = await prisma.user.create({
+          data: {
+            email,
+            password: hashedPassword,
+            name,
+            userType: finalUserType,
+            phone: phone || null,
+            company: company || null,
+            title: title || null,
+            bio: bio || expertBio || null,
+            experience: experience || yearsOfExperience || null,
+            skills: skillsJson,
+            proficiency: proficiencyJson,
+            hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
+            resumePath: resumePath || null,
+            profilePhotoPath: profilePhotoPath || null,
+            certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
+            isActive: true // Explicitly set isActive to true for all new users
+          }
+        });
+
+        // Generate JWT token
+        const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+        const token = jwt.sign(
+          { userId: user.id, email: user.email, userType: user.userType },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        // Remove password from response
+        const { password: _, ...userWithoutPassword } = user;
+
+        console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
+        console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
+
+        res.status(201).json({
+          success: true,
+          message: 'User registered successfully',
+          user: userWithoutPassword,
+          token
+        });
+      } catch (error) {
+        console.error('❌ Registration error:', error);
+        console.error('❌ Error stack:', error.stack);
+        res.status(500).json({ 
+          success: false,
+          message: 'Internal server error',
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
       }
     });
