@@ -130,16 +130,29 @@ app.post('/api/auth/register', upload.fields([
   { name: 'certification_2', maxCount: 1 }
 ]), validateRegistration, async (req, res) => {
   try {
+    console.log('📝 Registration request received');
+    console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('📝 Files:', req.files ? Object.keys(req.files) : 'No files');
+    
     const { email, password, name, userType, phone, company, title, bio, experience, skills, yearsOfExperience, proficiency, hourlyRate, expertBio, expertSkills, currentRole } = req.body;
 
+    if (!email || !password || !name || !userType) {
+      console.error('❌ Missing required fields:', { email: !!email, password: !!password, name: !!name, userType: !!userType });
+      return res.status(400).json({ message: 'Missing required fields: email, password, name, and userType are required' });
+    }
+
+    console.log(`🔍 Checking if user exists: ${email}`);
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email }
     });
 
     if (existingUser) {
+      console.error(`❌ User already exists: ${email}`);
       return res.status(400).json({ message: 'User already exists with this email' });
     }
+
+    console.log(`✅ User does not exist, proceeding with registration for: ${email}`);
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -193,14 +206,21 @@ app.post('/api/auth/register', upload.fields([
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
+    console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
+    console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
+
     res.status(201).json({
       message: 'User registered successfully',
       user: userWithoutPassword,
       token
     });
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('❌ Registration error:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({ 
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
