@@ -28,9 +28,22 @@ const validateRegistration = [
     .withMessage('Password must be at least 6 characters')
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Password must contain at least one lowercase letter, one uppercase letter, and one number'),
+  // Accept both 'role' and 'userType' for backward compatibility
+  body('userType')
+    .optional()
+    .isIn(['candidate', 'expert', 'admin'])
+    .withMessage('UserType must be either candidate, expert, or admin'),
   body('role')
+    .optional()
     .isIn(['candidate', 'expert'])
     .withMessage('Role must be either candidate or expert'),
+  // Custom validation to ensure at least one of role or userType is provided
+  body().custom((value) => {
+    if (!value.userType && !value.role) {
+      throw new Error('Either userType or role must be provided');
+    }
+    return true;
+  }),
   handleValidationErrors
 ];
 

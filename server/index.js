@@ -134,11 +134,14 @@ app.post('/api/auth/register', upload.fields([
     console.log('📝 Request body:', JSON.stringify(req.body, null, 2));
     console.log('📝 Files:', req.files ? Object.keys(req.files) : 'No files');
     
-    const { email, password, name, userType, phone, company, title, bio, experience, skills, yearsOfExperience, proficiency, hourlyRate, expertBio, expertSkills, currentRole } = req.body;
+    const { email, password, name, userType, role, phone, company, title, bio, experience, skills, yearsOfExperience, proficiency, hourlyRate, expertBio, expertSkills, currentRole } = req.body;
 
-    if (!email || !password || !name || !userType) {
-      console.error('❌ Missing required fields:', { email: !!email, password: !!password, name: !!name, userType: !!userType });
-      return res.status(400).json({ message: 'Missing required fields: email, password, name, and userType are required' });
+    // Use userType if provided, otherwise fall back to role
+    const finalUserType = userType || role;
+
+    if (!email || !password || !name || !finalUserType) {
+      console.error('❌ Missing required fields:', { email: !!email, password: !!password, name: !!name, userType: !!finalUserType, role: !!role });
+      return res.status(400).json({ message: 'Missing required fields: email, password, name, and userType (or role) are required' });
     }
 
     console.log(`🔍 Checking if user exists: ${email}`);
@@ -180,7 +183,7 @@ app.post('/api/auth/register', upload.fields([
         email,
         password: hashedPassword,
         name,
-        userType,
+        userType: finalUserType,
         phone: phone || null,
         company: company || null,
         title: title || null,
