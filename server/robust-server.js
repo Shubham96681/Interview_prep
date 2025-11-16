@@ -186,7 +186,7 @@ class RobustServer {
       if (isProduction) {
         // In production, only log important requests
         if (req.path.startsWith('/api/auth/') || req.path.startsWith('/api/users/')) {
-          console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+      console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
         }
       } else {
         // In development, log all requests
@@ -1459,7 +1459,7 @@ class RobustServer {
         const { page = 1, limit = 10, search = '', skills = '', minRating = 0 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        const where: any = {
+        const where = {
           userType: 'expert',
           isActive: true
         };
@@ -1537,8 +1537,8 @@ class RobustServer {
           prisma.user.count({ where })
         ]);
 
-        res.json({
-          success: true,
+      res.json({
+        success: true,
           data: {
             experts,
             pagination: {
