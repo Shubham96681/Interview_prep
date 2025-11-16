@@ -55,6 +55,30 @@ export default function ExpertProfileEdit({ isOpen, onClose, user, onUpdate }: E
     if (user) {
       setHourlyRate(user.hourlyRate?.toString() || '');
       
+      // Safely parse daysAvailable - handle both string and array formats
+      let parsedDaysAvailable = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']; // default
+      
+      if (user.daysAvailable) {
+        if (Array.isArray(user.daysAvailable)) {
+          // Already an array, use it directly
+          parsedDaysAvailable = user.daysAvailable;
+        } else if (typeof user.daysAvailable === 'string') {
+          // Try to parse as JSON string
+          const trimmed = user.daysAvailable.trim();
+          if (trimmed && trimmed !== 'null' && trimmed !== '') {
+            try {
+              const parsed = JSON.parse(trimmed);
+              if (Array.isArray(parsed)) {
+                parsedDaysAvailable = parsed;
+              }
+            } catch (e) {
+              console.warn('Failed to parse daysAvailable as JSON:', user.daysAvailable, e);
+              // Use default value on parse error
+            }
+          }
+        }
+      }
+      
       // Set availability with proper structure
       setAvailability({
         timezone: user.timezone || 'UTC',
@@ -62,7 +86,7 @@ export default function ExpertProfileEdit({ isOpen, onClose, user, onUpdate }: E
           start: user.workingHoursStart || '09:00',
           end: user.workingHoursEnd || '17:00'
         },
-        daysAvailable: user.daysAvailable ? JSON.parse(user.daysAvailable) : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+        daysAvailable: parsedDaysAvailable
       });
     }
   }, [user]);

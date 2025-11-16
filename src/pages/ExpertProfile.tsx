@@ -182,7 +182,11 @@ export default function ExpertProfile() {
             timezone: expertData.timezone,
             workingHoursStart: expertData.workingHoursStart,
             workingHoursEnd: expertData.workingHoursEnd,
-            daysAvailable: expertData.daysAvailable
+            // daysAvailable can be an array (from backend) or a string (from localStorage)
+            // ExpertProfileEdit will handle both formats
+            daysAvailable: Array.isArray(expertData.daysAvailable) 
+              ? JSON.stringify(expertData.daysAvailable) 
+              : (expertData.daysAvailable || '["monday","tuesday","wednesday","thursday","friday"]')
           });
         } else {
           console.error(`❌ Expert not found in API response:`, response);
