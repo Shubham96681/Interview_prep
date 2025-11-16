@@ -187,38 +187,45 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       }
       
       console.log('✅ Registration successful, user ID:', actualUserId);
-      toast.success('Registration successful! Please log in.');
-        
-        // Create user data object for the callback - USE ACTUAL DATABASE ID
-        const userData: UserData = {
-          id: actualUserId, // Always use the database ID, never fallback
-          email,
-          name,
-          userType: activeTab,
-          company: activeTab === 'expert' ? company : undefined,
-          title: activeTab === 'expert' ? title : undefined,
-          phone,
-          bio: activeTab === 'candidate' ? bio : expertBio,
-          experience: activeTab === 'candidate' ? experience : yearsOfExperience,
-          skills: activeTab === 'candidate' ? skills.split(',').map(s => s.trim()).filter(s => s) : expertSkills.split(',').map(s => s.trim()).filter(s => s),
-          avatar: '',
-          rating: 0,
-          totalSessions: 0,
-          hourlyRate: activeTab === 'expert' ? parseFloat(hourlyRate) || 0 : 0,
-          isVerified: false,
-          yearsOfExperience: activeTab === 'expert' ? parseInt(yearsOfExperience) || 0 : undefined,
-          proficiency: activeTab === 'expert' ? proficiency.join(',') : undefined,
-          timezone: 'UTC',
-          workingHoursStart: '09:00',
-          workingHoursEnd: '17:00',
-          daysAvailable: '["monday","tuesday","wednesday","thursday","friday"]',
-          resumePath: '',
-          profilePhotoPath: '',
-          certificationPaths: ''
-        };
-        
-        onRegister(userData);
-        onClose();
+      
+      // Store token if provided
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        console.log('✅ Token saved:', data.token.substring(0, 20) + '...');
+      }
+      
+      // Create user data object with actual database data
+      const userData: UserData = {
+        id: actualUserId, // Always use the database ID, never fallback
+        email: data.user?.email || email,
+        name: data.user?.name || name,
+        userType: data.user?.userType || activeTab,
+        company: data.user?.company || (activeTab === 'expert' ? company : undefined),
+        title: data.user?.title || (activeTab === 'expert' ? title : undefined),
+        phone: data.user?.phone || phone,
+        bio: data.user?.bio || (activeTab === 'candidate' ? bio : expertBio),
+        experience: data.user?.experience || (activeTab === 'candidate' ? experience : yearsOfExperience),
+        skills: data.user?.skills ? (typeof data.user.skills === 'string' ? JSON.parse(data.user.skills) : data.user.skills) : (activeTab === 'candidate' ? skills.split(',').map(s => s.trim()).filter(s => s) : expertSkills.split(',').map(s => s.trim()).filter(s => s)),
+        avatar: data.user?.avatar || data.user?.profilePhotoPath || '',
+        rating: data.user?.rating || 0,
+        totalSessions: data.user?.totalSessions || 0,
+        hourlyRate: data.user?.hourlyRate || (activeTab === 'expert' ? parseFloat(hourlyRate) || 0 : 0),
+        isVerified: data.user?.isVerified || false,
+        yearsOfExperience: data.user?.yearsOfExperience || (activeTab === 'expert' ? parseInt(yearsOfExperience) || 0 : undefined),
+        proficiency: data.user?.proficiency ? (typeof data.user.proficiency === 'string' ? JSON.parse(data.user.proficiency) : data.user.proficiency) : (activeTab === 'expert' ? proficiency : undefined),
+        timezone: data.user?.timezone || 'UTC',
+        workingHoursStart: data.user?.workingHoursStart || '09:00',
+        workingHoursEnd: data.user?.workingHoursEnd || '17:00',
+        daysAvailable: data.user?.daysAvailable || '["monday","tuesday","wednesday","thursday","friday"]',
+        resumePath: data.user?.resumePath || '',
+        profilePhotoPath: data.user?.profilePhotoPath || '',
+        certificationPaths: data.user?.certificationPaths || '',
+        token: data.token // Include token in userData
+      };
+      
+      toast.success(`Registration successful! Welcome ${userData.name}!`);
+      onRegister(userData);
+      onClose();
         // Reset form
         setEmail('');
         setPassword('');

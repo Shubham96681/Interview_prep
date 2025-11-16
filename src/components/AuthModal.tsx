@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +21,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'candidate' }: AuthModalProps) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -371,8 +373,33 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
         isOpen={showRegistration}
         onClose={() => setShowRegistration(false)}
         onRegister={(userData: UserType) => {
-          toast.success(`Registration successful! Welcome ${userData.name}!`);
+          // Store token if available
+          if (userData.token) {
+            localStorage.setItem('token', userData.token);
+            console.log('✅ Token saved after registration:', userData.token.substring(0, 20) + '...');
+          }
+          
+          // Store user in authService
+          authService.login(userData);
+          
+          // Call onLogin to update global auth state
+          onLogin(userData.userType as 'candidate' | 'expert' | 'admin', userData);
+          
+          // Close registration modal
           setShowRegistration(false);
+          onClose();
+          
+          // Navigate based on user type
+          if (userData.userType === 'expert') {
+            // Navigate to expert profile page
+            console.log('✅ Navigating to expert profile:', `/expert/${userData.id}`);
+            navigate(`/expert/${userData.id}`);
+            toast.success(`Welcome ${userData.name}! You can now edit your profile.`);
+          } else {
+            // Navigate to dashboard for candidates
+            navigate('/dashboard');
+            toast.success(`Welcome ${userData.name}!`);
+          }
         }}
       />
     </Dialog>
