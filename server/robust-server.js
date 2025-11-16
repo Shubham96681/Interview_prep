@@ -362,6 +362,114 @@ class RobustServer {
       }
     });
 
+    // Profile update endpoint (authenticated users can update their own profile)
+    this.app.put('/api/users/profile', this.upload.single('profilePhoto'), async (req, res) => {
+      try {
+        console.log('📝 Profile update request received');
+        
+        // Get user ID from token
+        const token = req.headers.authorization?.replace('Bearer ', '');
+        if (!token) {
+          return res.status(401).json({
+            success: false,
+            message: 'Authentication required'
+          });
+        }
+
+        // Verify JWT token
+        let userId;
+        try {
+          const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production';
+          const decoded = jwt.verify(token, JWT_SECRET);
+          userId = decoded.userId;
+          console.log(`✅ Authenticated user ID: ${userId}`);
+        } catch (tokenError) {
+          console.error('❌ Token verification failed:', tokenError);
+          return res.status(401).json({
+            success: false,
+            message: 'Invalid or expired token'
+          });
+        }
+
+        const { name, bio, experience, skills, hourlyRate, company, title, timezone, workingHoursStart, workingHoursEnd, daysAvailable } = req.body;
+
+        const updateData = {};
+        if (name) updateData.name = name;
+        if (bio) updateData.bio = bio;
+        if (experience) updateData.experience = experience;
+        if (skills) {
+          updateData.skills = typeof skills === 'string' 
+            ? JSON.stringify(skills.split(',').map(s => s.trim()))
+            : JSON.stringify(skills);
+        }
+        if (hourlyRate) updateData.hourlyRate = parseFloat(hourlyRate);
+        if (company) updateData.company = company;
+        if (title) updateData.title = title;
+        if (timezone) updateData.timezone = timezone;
+        if (workingHoursStart) updateData.workingHoursStart = workingHoursStart;
+        if (workingHoursEnd) updateData.workingHoursEnd = workingHoursEnd;
+        if (daysAvailable) {
+          updateData.daysAvailable = typeof daysAvailable === 'string' 
+            ? daysAvailable 
+            : JSON.stringify(daysAvailable);
+        }
+
+        if (req.file) {
+          updateData.profilePhotoPath = req.file.filename;
+        }
+
+        console.log(`📝 Updating profile for user: ${userId}`);
+        console.log(`📝 Update data:`, JSON.stringify(updateData, null, 2));
+
+        const user = await prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            userType: true,
+            phone: true,
+            company: true,
+            title: true,
+            avatar: true,
+            bio: true,
+            experience: true,
+            skills: true,
+            rating: true,
+            totalSessions: true,
+            hourlyRate: true,
+            isVerified: true,
+            yearsOfExperience: true,
+            proficiency: true,
+            resumePath: true,
+            profilePhotoPath: true,
+            certificationPaths: true,
+            timezone: true,
+            workingHoursStart: true,
+            workingHoursEnd: true,
+            daysAvailable: true
+          }
+        });
+
+        console.log(`✅ Profile updated successfully for user: ${user.email}`);
+
+        res.json({ 
+          success: true,
+          message: 'Profile updated successfully', 
+          user 
+        });
+      } catch (error) {
+        console.error('❌ Update profile error:', error);
+        console.error('❌ Error stack:', error.stack);
+        res.status(500).json({ 
+          success: false,
+          message: 'Internal server error',
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    });
+
     this.app.get('/api/auth/me', async (req, res) => {
       try {
         const token = req.headers.authorization?.replace('Bearer ', '');
