@@ -167,12 +167,12 @@ class RobustServer {
     };
     
     // Configure multer with file size limits (10MB max)
-    const maxFileSize = 10 * 1024 * 1024; // 10MB
+    this.maxFileSize = 10 * 1024 * 1024; // 10MB - store as instance variable for reuse
     this.upload = multer({ 
       storage: storage,
       fileFilter: fileFilter,
       limits: {
-        fileSize: maxFileSize,
+        fileSize: this.maxFileSize,
         files: 5 // Max 5 files per request
       }
     });
