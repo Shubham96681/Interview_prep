@@ -1276,28 +1276,257 @@ class RobustServer {
       }
     });
 
-    // Experts endpoint
-    this.app.get('/api/experts', (req, res) => {
-      res.json({
-        success: true,
-        data: [
-          {
-            id: 'cmgnfskqx0001mbh0inzrgmsy',
-            name: 'Jane Smith',
-            title: 'Senior Software Engineer',
-            company: 'Tech Corp',
-            rating: 4.8,
-            reviewCount: 150,
-            hourlyRate: 75,
-            specialties: ['React', 'Node.js', 'TypeScript'],
-            bio: 'Experienced software engineer with 10+ years in full-stack development.',
-            avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
-            experience: '10+ years',
-            languages: ['English', 'Spanish'],
-            availability: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+    // Get expert by ID endpoint (CRITICAL: Must be before /api/experts to avoid route conflict)
+    this.app.get('/api/experts/:id', async (req, res) => {
+      try {
+        const expertId = req.params.id;
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        // Basic validation - ensure ID is provided
+        if (!expertId || expertId.trim() === '') {
+          return res.status(400).json({ 
+            success: false,
+            message: 'Expert ID is required' 
+          });
+        }
+
+        // Check if user is authenticated and viewing their own profile
+        let isOwnProfile = false;
+        let authenticatedUserId = null;
+        
+        try {
+          // Try to authenticate the request (optional - won't fail if no token)
+          const authHeader = req.headers.authorization;
+          if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.substring(7);
+            const JWT_SECRET = process.env.JWT_SECRET;
+            if (JWT_SECRET && JWT_SECRET !== 'your-super-secret-jwt-key-change-this-in-production') {
+              const decoded = jwt.verify(token, JWT_SECRET);
+              authenticatedUserId = decoded.userId;
+              isOwnProfile = authenticatedUserId === expertId;
+              if (!isProduction) {
+                console.log(`🔍 Expert lookup: ID=${expertId}, Authenticated=${!!authenticatedUserId}, OwnProfile=${isOwnProfile}`);
+              }
+            }
           }
-        ]
-      });
+        } catch (authError) {
+          // If authentication fails, continue without it (public access)
+          // This allows viewing expert profiles without login
+          if (!isProduction) {
+            console.log(`🔍 Expert lookup (public): ID=${expertId}`);
+          }
+        }
+
+        // Build where clause: allow viewing own profile even if isActive is false
+        let whereClause = {
+          id: expertId,
+          userType: 'expert'
+        };
+
+        // If not viewing own profile, require isActive to be true
+        if (!isOwnProfile) {
+          whereClause.isActive = true;
+        }
+
+        if (!isProduction) {
+          console.log(`🔍 Searching for expert with where clause:`, JSON.stringify(whereClause));
+        }
+
+        const expert = await prisma.user.findFirst({
+          where: whereClause,
+          select: {
+            id: true,
+            name: true,
+            title: true,
+            company: true,
+            bio: true,
+            avatar: true,
+            rating: true,
+            totalSessions: true,
+            hourlyRate: true,
+            isVerified: true,
+            skills: true,
+            proficiency: true,
+            experience: true,
+            yearsOfExperience: true,
+            profilePhotoPath: true,
+            timezone: true,
+            workingHoursStart: true,
+            workingHoursEnd: true,
+            daysAvailable: true,
+            isActive: true
+          }
+        });
+
+        // If expert not found, provide detailed error information
+        if (!expert) {
+          if (!isProduction) {
+            console.error(`❌ Expert not found: ID=${expertId}, isOwnProfile=${isOwnProfile}, whereClause=`, whereClause);
+          }
+          
+          // Check if this looks like a frontend-generated ID
+          const isFrontendGeneratedId = /^user-\d+$/.test(expertId);
+          
+          // Try to find the user without the isActive filter to see if they exist
+          const userExists = await prisma.user.findFirst({
+            where: { id: expertId, userType: 'expert' },
+            select: { id: true, isActive: true, userType: true }
+          });
+          
+          let errorMessage = 'Expert not found';
+          if (userExists) {
+            if (!isProduction) {
+              console.error(`⚠️ User exists but doesn't match criteria: isActive=${userExists.isActive}, userType=${userExists.userType}`);
+            }
+            if (!userExists.isActive && !isOwnProfile) {
+              errorMessage = 'Expert profile is not active';
+            }
+          } else {
+            // Check if user exists with different userType
+            const anyUser = await prisma.user.findFirst({
+              where: { id: expertId },
+              select: { id: true, userType: true, isActive: true }
+            });
+            if (anyUser) {
+              if (!isProduction) {
+                console.error(`⚠️ User exists but is not an expert: userType=${anyUser.userType}`);
+              }
+              errorMessage = `User found but is not an expert (userType: ${anyUser.userType})`;
+            } else {
+              if (!isProduction) {
+                console.error(`⚠️ User with ID ${expertId} does not exist in database`);
+              }
+              if (isFrontendGeneratedId) {
+                errorMessage = `Invalid expert ID. The ID "${expertId}" appears to be a frontend-generated ID that doesn't exist in the database. Please use the actual database ID from the registration response.`;
+              } else {
+                errorMessage = `Expert with ID ${expertId} does not exist`;
+              }
+            }
+          }
+          
+          return res.status(404).json({ 
+            success: false,
+            message: errorMessage,
+            error: errorMessage
+          });
+        }
+
+        if (!isProduction) {
+          console.log(`✅ Expert found: ${expert.name} (ID: ${expert.id})`);
+        }
+        
+        // Return expert data with proper structure
+        const expertResponse = {
+          ...expert,
+          // Ensure arrays are properly formatted
+          skills: expert.skills ? (typeof expert.skills === 'string' ? JSON.parse(expert.skills) : expert.skills) : [],
+          proficiency: expert.proficiency ? (typeof expert.proficiency === 'string' ? JSON.parse(expert.proficiency) : expert.proficiency) : [],
+          daysAvailable: expert.daysAvailable ? (typeof expert.daysAvailable === 'string' ? JSON.parse(expert.daysAvailable) : expert.daysAvailable) : []
+        };
+        
+        res.json(expertResponse);
+      } catch (error) {
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (isProduction) {
+          console.error('❌ Get expert error:', error.message);
+        } else {
+          console.error('❌ Get expert error:', error);
+          console.error('❌ Error stack:', error.stack);
+        }
+        res.status(500).json({ 
+          success: false,
+          message: 'Internal server error',
+          error: isProduction ? undefined : error.message
+        });
+      }
+    });
+
+    // Experts endpoint (list all experts)
+    this.app.get('/api/experts', async (req, res) => {
+      try {
+        const { page = 1, limit = 10, search = '', skills = '', minRating = 0 } = req.query;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+
+        const where = {
+          userType: 'expert',
+          isActive: true,
+          rating: { gte: parseFloat(minRating) }
+        };
+
+        const orConditions = [];
+
+        if (search) {
+          orConditions.push(
+            { name: { contains: search, mode: 'insensitive' } },
+            { company: { contains: search, mode: 'insensitive' } },
+            { title: { contains: search, mode: 'insensitive' } }
+          );
+        }
+
+        if (skills) {
+          const skillsArray = skills.split(',').map(s => s.trim());
+          // For SQLite, we need to use string contains since skills is stored as JSON
+          skillsArray.forEach(skill => {
+            orConditions.push({
+              skills: { contains: skill }
+            });
+          });
+        }
+
+        if (orConditions.length > 0) {
+          where.OR = orConditions;
+        }
+
+        const [experts, total] = await Promise.all([
+          prisma.user.findMany({
+            where,
+            skip,
+            take: parseInt(limit),
+            select: {
+              id: true,
+              name: true,
+              title: true,
+              company: true,
+              bio: true,
+              avatar: true,
+              rating: true,
+              totalSessions: true,
+              hourlyRate: true,
+              isVerified: true,
+              skills: true,
+              proficiency: true,
+              profilePhotoPath: true
+            },
+            orderBy: { rating: 'desc' }
+          }),
+          prisma.user.count({ where })
+        ]);
+
+        res.json({
+          success: true,
+          data: {
+            experts,
+            pagination: {
+              page: parseInt(page),
+              limit: parseInt(limit),
+              total,
+              pages: Math.ceil(total / parseInt(limit))
+            }
+          }
+        });
+      } catch (error) {
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (isProduction) {
+          console.error('❌ Get experts error:', error.message);
+        } else {
+          console.error('❌ Get experts error:', error);
+        }
+        res.status(500).json({ 
+          success: false,
+          message: 'Internal server error',
+          error: isProduction ? undefined : error.message
+        });
+      }
     });
 
     // Admin endpoints - Simple admin check (in production, use proper JWT auth)
