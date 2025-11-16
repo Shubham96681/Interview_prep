@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,26 +7,114 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Search, Filter, ArrowLeft, Sparkles, Users, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ExpertCard from '@/components/ExpertCard';
-import { mockExperts } from '@/lib/mockData';
+import { apiService } from '@/lib/apiService';
+
+interface Expert {
+  id: string;
+  name: string;
+  title: string;
+  company: string;
+  bio: string;
+  avatar?: string;
+  profilePhotoPath?: string;
+  rating: number;
+  totalSessions: number;
+  hourlyRate: number;
+  skills?: string | string[];
+  proficiency?: string | string[];
+  specialties?: string[];
+}
 
 export default function ExpertDirectory() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpecialty, setSelectedSpecialty] = useState('all');
   const [priceRange, setPriceRange] = useState('all');
+  const [experts, setExperts] = useState<Expert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Fetch experts from API
+  useEffect(() => {
+    const fetchExperts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        console.log('🔍 Fetching experts from API...');
+        const response = await apiService.getExperts();
+        
+        if (response.success && response.data) {
+          const expertsData = response.data.experts || response.data;
+          console.log(`✅ Fetched ${expertsData.length} experts from API`);
+          
+          // Transform backend data to match frontend format
+          const transformedExperts = expertsData.map((expert: any) => {
+            // Parse JSON fields
+            const parseJsonField = (field: any, defaultValue: any[] = []): string[] => {
+              if (!field) return defaultValue;
+              if (Array.isArray(field)) return field;
+              if (typeof field === 'string') {
+                try {
+                  const parsed = JSON.parse(field);
+                  return Array.isArray(parsed) ? parsed : defaultValue;
+                } catch {
+                  return defaultValue;
+                }
+              }
+              return defaultValue;
+            };
+
+            const skills = parseJsonField(expert.skills, []);
+            const proficiency = parseJsonField(expert.proficiency, []);
+            const specialties = proficiency.length > 0 ? proficiency : skills;
+
+            return {
+              id: expert.id,
+              name: expert.name || 'Unknown',
+              title: expert.title || '',
+              company: expert.company || '',
+              bio: expert.bio || '',
+              avatar: expert.avatar || expert.profilePhotoPath || '',
+              rating: expert.rating || 0,
+              totalSessions: expert.totalSessions || 0,
+              hourlyRate: expert.hourlyRate || 0,
+              specialties: specialties,
+              skills: skills,
+              proficiency: proficiency
+            };
+          });
+          
+          setExperts(transformedExperts);
+        } else {
+          console.error('❌ Failed to fetch experts:', response);
+          setError('Failed to load experts. Please try again.');
+        }
+      } catch (err: any) {
+        console.error('❌ Error fetching experts:', err);
+        setError('Failed to load experts. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExperts();
+  }, []);
+
+  // Extract all specialties from experts
   const specialties = Array.from(
-    new Set(mockExperts.flatMap(expert => expert.specialties))
+    new Set(experts.flatMap(expert => expert.specialties || []))
   );
 
-  const filteredExperts = mockExperts.filter(expert => {
-    const matchesSearch = expert.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  // Filter experts based on search and filters
+  const filteredExperts = experts.filter(expert => {
+    const matchesSearch = !searchQuery || 
+                         expert.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          expert.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          expert.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         expert.specialties.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+                         (expert.specialties || []).some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesSpecialty = selectedSpecialty === 'all' || 
-                            expert.specialties.includes(selectedSpecialty);
+                            (expert.specialties || []).includes(selectedSpecialty);
     
     const matchesPrice = priceRange === 'all' ||
                         (priceRange === 'under-100' && expert.hourlyRate < 100) ||
@@ -164,7 +252,35 @@ export default function ExpertDirectory() {
         </div>
 
         {/* Expert Grid */}
-        {filteredExperts.length > 0 ? (
+        {loading ? (
+          <Card className="border-0 shadow-2xl bg-white/10 backdrop-blur-xl border border-white/20 animate-in slide-in-from-bottom duration-1000 delay-600">
+            <CardContent className="p-16 text-center">
+              <div className="text-white/40 mb-6">
+                <Users className="h-16 w-16 mx-auto animate-pulse" />
+              </div>
+              <h3 className="text-2xl font-semibold text-white mb-4">Loading experts...</h3>
+              <p className="text-white/60 text-lg">Please wait while we fetch the latest experts</p>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Card className="border-0 shadow-2xl bg-white/10 backdrop-blur-xl border border-white/20 animate-in slide-in-from-bottom duration-1000 delay-600">
+            <CardContent className="p-16 text-center">
+              <div className="text-red-400 mb-6">
+                <Users className="h-16 w-16 mx-auto" />
+              </div>
+              <h3 className="text-2xl font-semibold text-white mb-4">Error loading experts</h3>
+              <p className="text-white/60 text-lg mb-6">{error}</p>
+              <Button 
+                variant="outline" 
+                className="bg-white/10 backdrop-blur-sm border-white/20 text-white hover:bg-white/20 transition-all duration-300 hover:scale-105 px-8 py-3"
+                onClick={() => window.location.reload()}
+              >
+                <Sparkles className="mr-2 h-5 w-5" />
+                Retry
+              </Button>
+            </CardContent>
+          </Card>
+        ) : filteredExperts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredExperts.map((expert, index) => (
               <div 

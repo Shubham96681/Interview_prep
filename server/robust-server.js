@@ -1447,11 +1447,23 @@ class RobustServer {
         const { page = 1, limit = 10, search = '', skills = '', minRating = 0 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        const where = {
+        const where: any = {
           userType: 'expert',
-          isActive: true,
-          rating: { gte: parseFloat(minRating) }
+          isActive: true
         };
+        
+        // Only filter by rating if minRating is provided and > 0
+        // This ensures new experts (with null or 0 rating) are included by default
+        const minRatingValue = parseFloat(minRating);
+        if (minRatingValue > 0) {
+          // When filtering by rating, include both rated experts and null ratings
+          // SQLite handles null comparisons differently, so we use OR
+          where.OR = [
+            { rating: { gte: minRatingValue } },
+            { rating: null }
+          ];
+        }
+        // If minRating is 0 or not provided, don't filter by rating (include all)
 
         const orConditions = [];
 
@@ -1473,8 +1485,19 @@ class RobustServer {
           });
         }
 
+        // Merge OR conditions properly
         if (orConditions.length > 0) {
-          where.OR = orConditions;
+          if (where.OR && minRatingValue > 0) {
+            // We have both rating OR and search/skills OR - need to combine with AND
+            where.AND = [
+              { OR: where.OR }, // Rating conditions
+              { OR: orConditions } // Search/skills conditions
+            ];
+            delete where.OR;
+          } else {
+            // Only search/skills OR conditions
+            where.OR = orConditions;
+          }
         }
 
         const [experts, total] = await Promise.all([

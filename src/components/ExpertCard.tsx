@@ -3,11 +3,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Star, MapPin, Clock, DollarSign, Sparkles, Award } from 'lucide-react';
-import { Expert } from '@/lib/mockData';
 import { useNavigate } from 'react-router-dom';
 
 interface ExpertCardProps {
-  expert: Expert;
+  expert: {
+    id: string;
+    name: string;
+    title: string;
+    company: string;
+    bio: string;
+    avatar?: string;
+    rating: number;
+    totalSessions: number;
+    reviewCount?: number;
+    hourlyRate: number;
+    experience?: string;
+    languages?: string[];
+    specialties?: string[];
+  };
 }
 
 export default function ExpertCard({ expert }: ExpertCardProps) {
@@ -46,7 +59,7 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
                 <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                 <span className="font-bold text-gray-800">{expert.rating}</span>
               </div>
-              <span className="text-gray-500">({expert.reviewCount} reviews)</span>
+              <span className="text-gray-500">({expert.reviewCount || expert.totalSessions || 0} reviews)</span>
             </div>
           </div>
           
@@ -69,31 +82,35 @@ export default function ExpertCard({ expert }: ExpertCardProps) {
             <span>{expert.experience}</span>
           </div>
           
-          <div className="flex items-center gap-3 text-gray-600">
-            <MapPin className="h-4 w-4 text-purple-500" />
-            <span>{expert.languages.join(', ')}</span>
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap gap-2">
-          {expert.specialties.slice(0, 3).map((specialty, index) => (
-            <Badge 
-              key={index} 
-              variant="secondary" 
-              className="bg-blue-100 text-blue-800 border-blue-200 hover:scale-110 transition-transform duration-300 px-3 py-1"
-            >
-              {specialty}
-            </Badge>
-          ))}
-          {expert.specialties.length > 3 && (
-            <Badge 
-              variant="outline" 
-              className="border-gray-300 text-gray-600 hover:scale-110 transition-transform duration-300 px-3 py-1"
-            >
-              +{expert.specialties.length - 3} more
-            </Badge>
+          {expert.languages && expert.languages.length > 0 && (
+            <div className="flex items-center gap-3 text-gray-600">
+              <MapPin className="h-4 w-4 text-purple-500" />
+              <span>{expert.languages.join(', ')}</span>
+            </div>
           )}
         </div>
+        
+        {(expert.specialties && expert.specialties.length > 0) && (
+          <div className="flex flex-wrap gap-2">
+            {expert.specialties.slice(0, 3).map((specialty, index) => (
+              <Badge 
+                key={index} 
+                variant="secondary" 
+                className="bg-blue-100 text-blue-800 border-blue-200 hover:scale-110 transition-transform duration-300 px-3 py-1"
+              >
+                {specialty}
+              </Badge>
+            ))}
+            {expert.specialties.length > 3 && (
+              <Badge 
+                variant="outline" 
+                className="border-gray-300 text-gray-600 hover:scale-110 transition-transform duration-300 px-3 py-1"
+              >
+                +{expert.specialties.length - 3} more
+              </Badge>
+            )}
+          </div>
+        )}
         
         <div className="pt-4">
           <Button 
