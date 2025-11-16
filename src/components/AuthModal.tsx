@@ -373,12 +373,7 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole = 'can
         isOpen={showRegistration}
         onClose={() => setShowRegistration(false)}
         onRegister={(userData: UserType) => {
-          // Store token if available
-          if (userData.token) {
-            localStorage.setItem('token', userData.token);
-            console.log('✅ Token saved after registration:', userData.token.substring(0, 20) + '...');
-          }
-          
+          // Token is already stored in localStorage by RegistrationForm
           // Store user in authService
           authService.login(userData);
           

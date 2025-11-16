@@ -219,8 +219,7 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
         daysAvailable: data.user?.daysAvailable || '["monday","tuesday","wednesday","thursday","friday"]',
         resumePath: data.user?.resumePath || '',
         profilePhotoPath: data.user?.profilePhotoPath || '',
-        certificationPaths: data.user?.certificationPaths || '',
-        token: data.token // Include token in userData
+        certificationPaths: data.user?.certificationPaths || ''
       };
       
       toast.success(`Registration successful! Welcome ${userData.name}!`);
