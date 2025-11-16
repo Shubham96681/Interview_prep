@@ -193,9 +193,9 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
         localStorage.setItem('token', data.token);
         console.log('✅ Token saved:', data.token.substring(0, 20) + '...');
       }
-      
+        
       // Create user data object with actual database data
-      const userData: UserData = {
+        const userData: UserData = {
         id: actualUserId, // Always use the database ID, never fallback
         email: data.user?.email || email,
         name: data.user?.name || name,
@@ -220,11 +220,11 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
         resumePath: data.user?.resumePath || '',
         profilePhotoPath: data.user?.profilePhotoPath || '',
         certificationPaths: data.user?.certificationPaths || ''
-      };
-      
+        };
+        
       toast.success(`Registration successful! Welcome ${userData.name}!`);
-      onRegister(userData);
-      onClose();
+        onRegister(userData);
+        onClose();
         // Reset form
         setEmail('');
         setPassword('');

@@ -43,8 +43,29 @@ export default function ExpertDirectory() {
         console.log('🔍 Fetching experts from API...');
         const response = await apiService.getExperts();
         
+        console.log('📥 Full API response:', response);
+        
         if (response.success && response.data) {
-          const expertsData = response.data.experts || response.data;
+          // Handle different response structures
+          let expertsData = null;
+          if (Array.isArray(response.data)) {
+            // Direct array response
+            expertsData = response.data;
+          } else if (response.data.experts && Array.isArray(response.data.experts)) {
+            // Nested structure: { data: { experts: [...], pagination: {...} } }
+            expertsData = response.data.experts;
+          } else if (Array.isArray(response.data.data)) {
+            // Double nested: { data: { data: [...] } }
+            expertsData = response.data.data;
+          }
+          
+          if (!expertsData || !Array.isArray(expertsData)) {
+            console.error('❌ Invalid experts data structure:', response.data);
+            setError('Invalid response format from server');
+            setLoading(false);
+            return;
+          }
+          
           console.log(`✅ Fetched ${expertsData.length} experts from API`);
           
           // Transform backend data to match frontend format
