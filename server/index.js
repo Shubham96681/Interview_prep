@@ -429,8 +429,15 @@ app.get('/api/experts', validatePagination, async (req, res) => {
 });
 
 // Get expert by ID
-app.get('/api/experts/:id', validateObjectId, async (req, res) => {
+app.get('/api/experts/:id', async (req, res) => {
   try {
+    const expertId = req.params.id;
+    
+    // Basic validation - ensure ID is provided
+    if (!expertId || expertId.trim() === '') {
+      return res.status(400).json({ message: 'Expert ID is required' });
+    }
+
     // Check if user is authenticated and viewing their own profile
     let isOwnProfile = false;
     let authenticatedUserId = null;
@@ -442,16 +449,18 @@ app.get('/api/experts/:id', validateObjectId, async (req, res) => {
         const token = authHeader.substring(7);
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         authenticatedUserId = decoded.userId;
-        isOwnProfile = authenticatedUserId === req.params.id;
+        isOwnProfile = authenticatedUserId === expertId;
+        console.log(`🔍 Expert lookup: ID=${expertId}, Authenticated=${!!authenticatedUserId}, OwnProfile=${isOwnProfile}`);
       }
     } catch (authError) {
       // If authentication fails, continue without it (public access)
       // This allows viewing expert profiles without login
+      console.log(`🔍 Expert lookup (public): ID=${expertId}`);
     }
 
     // Build where clause: allow viewing own profile even if isActive is false
     const whereClause = {
-      id: req.params.id,
+      id: expertId,
       userType: 'expert'
     };
 
@@ -459,6 +468,8 @@ app.get('/api/experts/:id', validateObjectId, async (req, res) => {
     if (!isOwnProfile) {
       whereClause.isActive = true;
     }
+
+    console.log(`🔍 Searching for expert with where clause:`, JSON.stringify(whereClause));
 
     const expert = await prisma.user.findFirst({
       where: whereClause,
@@ -481,14 +492,27 @@ app.get('/api/experts/:id', validateObjectId, async (req, res) => {
         timezone: true,
         workingHoursStart: true,
         workingHoursEnd: true,
-        daysAvailable: true
+        daysAvailable: true,
+        isActive: true // Include isActive in response for debugging
       }
     });
 
     if (!expert) {
+      console.error(`❌ Expert not found: ID=${expertId}, isOwnProfile=${isOwnProfile}, whereClause=`, whereClause);
+      // Try to find the user without the isActive filter to see if they exist
+      const userExists = await prisma.user.findFirst({
+        where: { id: expertId, userType: 'expert' },
+        select: { id: true, isActive: true, userType: true }
+      });
+      if (userExists) {
+        console.error(`⚠️ User exists but doesn't match criteria: isActive=${userExists.isActive}, userType=${userExists.userType}`);
+      } else {
+        console.error(`⚠️ User with ID ${expertId} does not exist in database`);
+      }
       return res.status(404).json({ message: 'Expert not found' });
     }
 
+    console.log(`✅ Expert found: ${expert.name} (ID: ${expert.id})`);
     res.json(expert);
   } catch (error) {
     console.error('Get expert error:', error);
