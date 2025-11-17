@@ -215,6 +215,13 @@ class ApiService {
     });
   }
 
+  async updateSessionStatus(sessionId: string, status: string) {
+    return this.request(`/api/sessions/${sessionId}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  }
+
   async createSession(sessionData: {
     expertId: string;
     candidateId: string;

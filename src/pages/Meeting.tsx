@@ -125,6 +125,26 @@ export default function Meeting() {
     }
   };
 
+  // Refresh session data when returning from call
+  const handleCallEnd = async () => {
+    setIsInCall(false);
+    // Refresh session data to get updated status and recording
+    if (session?.id) {
+      try {
+        const response = await apiService.getSessionById(session.id);
+        if (response.success && response.data) {
+          setSession(response.data);
+          // If session is now completed, fetch reviews
+          if (response.data.status === 'completed') {
+            await fetchReviews(response.data.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error refreshing session data:', error);
+      }
+    }
+  };
+
   // Show loading state - check auth first
   if (authLoading) {
     return (
@@ -282,10 +302,7 @@ export default function Meeting() {
         <WebRTCVideoCall
           meetingId={meetingId || ''}
           sessionId={session?.id}
-          onEndCall={() => {
-            console.log('📞 Call ended, returning to meeting page');
-            setIsInCall(false);
-          }}
+          onEndCall={handleCallEnd}
         />
       </div>
     );

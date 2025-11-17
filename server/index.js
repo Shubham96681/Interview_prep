@@ -1357,9 +1357,33 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId, async (
       return res.status(404).json({ message: 'Session not found' });
     }
 
+    // Prepare update data
+    const updateData: any = { status };
+    
+    // If marking as in_progress, set actualStartTime
+    if (status === 'in_progress' && !session.actualStartTime) {
+      updateData.actualStartTime = new Date();
+    }
+    
+    // If marking as completed, set actualEndTime and calculate actualDuration
+    if (status === 'completed') {
+      const now = new Date();
+      updateData.actualEndTime = now;
+      
+      // Set actualStartTime if not already set (when both participants join)
+      if (!session.actualStartTime) {
+        updateData.actualStartTime = new Date(session.scheduledDate);
+      }
+      
+      // Calculate actual duration
+      const startTime = updateData.actualStartTime ? new Date(updateData.actualStartTime) : new Date(session.actualStartTime || session.scheduledDate);
+      const durationMinutes = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
+      updateData.actualDuration = Math.max(durationMinutes, 1); // At least 1 minute
+    }
+
     const updatedSession = await prisma.session.update({
       where: { id: sessionId },
-      data: { status },
+      data: updateData,
       include: {
         candidate: {
           select: { id: true, name: true, email: true }

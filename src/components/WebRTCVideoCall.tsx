@@ -1847,24 +1847,47 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     }
   };
 
-  const endCall = () => {
+  const endCall = async () => {
+    // Check if both participants joined (remoteStream exists means other participant was connected)
+    const bothParticipantsJoined = !!(remoteStream || remoteStreamRef.current);
+    
     // Stop recording before ending call to ensure it's uploaded
     if (mediaRecorderRef.current && isRecordingRef.current) {
       console.log('🛑 Stopping recording before ending call...');
       mediaRecorderRef.current.stop();
       isRecordingRef.current = false;
-      // Wait a moment for the upload to start before cleaning up
-      setTimeout(() => {
-        cleanup();
-        if (onEndCall) {
-          onEndCall();
+      
+      // Wait for recording to stop and upload to start
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    // Mark session as completed if both participants joined and sessionId is available
+    if (sessionId && bothParticipantsJoined) {
+      try {
+        console.log('✅ Both participants joined - marking session as completed...');
+        // First update status to in_progress if not already set (to track start time)
+        // Then mark as completed
+        const response = await apiService.updateSessionStatus(sessionId, 'completed');
+        if (response.success) {
+          console.log('✅ Session marked as completed successfully');
+        } else {
+          console.error('❌ Failed to mark session as completed:', response.error);
         }
-      }, 1000);
-    } else {
-      cleanup();
-      if (onEndCall) {
-        onEndCall();
+      } catch (error) {
+        console.error('❌ Error marking session as completed:', error);
       }
+    } else {
+      if (!sessionId) {
+        console.log('⚠️ Cannot mark session as completed - sessionId not available');
+      }
+      if (!bothParticipantsJoined) {
+        console.log('⚠️ Cannot mark session as completed - both participants did not join');
+      }
+    }
+    
+    cleanup();
+    if (onEndCall) {
+      onEndCall();
     }
   };
 
