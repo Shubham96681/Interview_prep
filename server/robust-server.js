@@ -1414,6 +1414,68 @@ class RobustServer {
       }
     });
 
+    // Get session by ID (MUST come after /api/sessions/:sessionId/reviews to avoid route conflicts)
+    this.app.get('/api/sessions/:id', authenticateToken, ...validateObjectId('id'), async (req, res) => {
+      console.log('✅ Route matched: GET /api/sessions/:id');
+      try {
+        const sessionId = req.params.id;
+        const userId = req.user?.id;
+
+        console.log('📋 Fetching session by ID:', { sessionId, userId });
+
+        // Verify user has access to this session
+        const session = await prisma.session.findFirst({
+          where: {
+            id: sessionId,
+            OR: [
+              { candidateId: userId },
+              { expertId: userId }
+            ]
+          },
+          include: {
+            candidate: {
+              select: { id: true, name: true, email: true }
+            },
+            expert: {
+              select: { id: true, name: true, email: true, hourlyRate: true }
+            },
+            reviews: {
+              include: {
+                reviewer: {
+                  select: { id: true, name: true, email: true }
+                },
+                reviewee: {
+                  select: { id: true, name: true, email: true }
+                }
+              },
+              orderBy: { createdAt: 'desc' }
+            }
+          }
+        });
+
+        if (!session) {
+          console.error('❌ Session not found or access denied:', { sessionId, userId });
+          return res.status(404).json({
+            success: false,
+            message: 'Session not found or you do not have access to this session'
+          });
+        }
+
+        console.log('✅ Session fetched successfully:', { sessionId });
+        res.json({
+          success: true,
+          data: session
+        });
+      } catch (error) {
+        console.error('❌ Get session error:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Internal server error',
+          error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+      }
+    });
+
     // Create review
     this.app.post('/api/reviews', authenticateToken, ...validateReview, async (req, res) => {
       console.log('✅ Route matched: POST /api/reviews');
