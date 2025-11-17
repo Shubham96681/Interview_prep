@@ -65,7 +65,20 @@ app.use((req, res, next) => {
       query: req.query,
       params: req.params,
       bodyKeys: req.body ? Object.keys(req.body) : [],
-      hasAuth: !!req.headers.authorization
+      hasAuth: !!req.headers.authorization,
+      originalUrl: req.originalUrl
+    });
+  }
+  next();
+});
+
+// Debug middleware to log route matching (temporary for debugging)
+app.use((req, res, next) => {
+  if (req.path.includes('/reviews') || req.path.includes('/sessions')) {
+    console.log(`🔍 Route check: ${req.method} ${req.path}`, {
+      matchesReviews: req.path === '/api/reviews',
+      matchesSessionReviews: req.path.match(/^\/api\/sessions\/[^\/]+\/reviews$/),
+      pathParts: req.path.split('/')
     });
   }
   next();
@@ -128,9 +141,25 @@ const upload = multer({
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 
+    success: true,
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    database: 'SQLite with Prisma'
+    database: 'SQLite with Prisma',
+    port: PORT,
+    message: 'Server is running!'
+  });
+});
+
+// Test endpoint to verify routes are registered
+app.get('/api/test-routes', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Routes test endpoint',
+    routes: {
+      'GET /api/sessions/:sessionId/reviews': 'Registered',
+      'POST /api/reviews': 'Registered',
+      timestamp: new Date().toISOString()
+    }
   });
 });
 
@@ -1477,6 +1506,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     const { sessionId, rating, comment, categories } = req.body;
     const reviewerId = req.user?.id;
 
+    console.log('✅ Route matched: POST /api/reviews');
     console.log('📝 Review submission:', { 
       sessionId, 
       reviewerId, 
