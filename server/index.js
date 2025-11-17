@@ -1752,7 +1752,19 @@ realtimeService.start();
 
 // 404 handler - MUST be last
 app.use('*', (req, res) => {
-  res.status(404).json({ message: 'Route not found' });
+  console.error('❌ 404 - Route not found:', {
+    method: req.method,
+    path: req.path,
+    originalUrl: req.originalUrl,
+    query: req.query,
+    params: req.params
+  });
+  res.status(404).json({ 
+    success: false,
+    message: 'Route not found',
+    path: req.path,
+    method: req.method
+  });
 });
 
 // Start server and initialize WebRTC
