@@ -3,13 +3,15 @@
 # Don't use set -e globally - we'll handle errors explicitly
 # set -e causes issues with pipes and subshells
 
-# Ensure output is unbuffered for SSH connections
+# Force unbuffered output for SSH - simple approach
 export PYTHONUNBUFFERED=1
-# Use unbuffered output if stdbuf is available
-if command -v stdbuf >/dev/null 2>&1; then
-    # Redirect stdout and stderr through stdbuf for unbuffered output
-    exec 1> >(stdbuf -oL -eL tee >(cat >&1))
-    exec 2> >(stdbuf -oL -eL tee >(cat >&2))
+# Use script command or simple unbuffered I/O
+if [ -t 1 ]; then
+    # Interactive terminal - no buffering needed
+    :
+else
+    # Non-interactive (SSH) - ensure line buffering
+    export NODE_OPTIONS="${NODE_OPTIONS} --no-warnings"
 fi
 
 echo "=== Starting Deployment for InterviewAce ==="
@@ -146,20 +148,15 @@ echo "   NPM version: $(npm --version 2>/dev/null || echo 'not found')"
 # Increase Node.js memory limit for build (EC2 has limited memory)
 export NODE_OPTIONS="--max-old-space-size=512"
 
-# Run build with timeout - use simpler approach that flushes output
+# Run build with timeout - simple direct execution
 echo "   Running: npm run build"
-echo "   (Output will appear below as build progresses)"
+echo "   (This may take 5-15 minutes, please wait...)"
 
-# Use timeout with explicit output flushing
-if timeout 1800 bash -c 'npm run build' 2>&1 | while IFS= read -r line; do
-    echo "$line"
-    # Force flush every line
-    [ -t 1 ] || true
-done; then
-    BUILD_EXIT_CODE=0
-else
-    BUILD_EXIT_CODE=${PIPESTATUS[0]}
-fi
+# Run build directly with timeout - let output stream naturally
+set +e  # Temporarily disable exit on error to handle timeout
+timeout 1800 npm run build
+BUILD_EXIT_CODE=$?
+set -e  # Re-enable exit on error
 
 if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo "✅ Build command completed at $(date)"
