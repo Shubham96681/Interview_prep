@@ -60,11 +60,12 @@ jobs:
         username: ec2-user
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
-        timeout: 2400s
-        command_timeout: 2400s
+        timeout: 3600s
+        command_timeout: 3600s
         script_stop: true
         debug: true
         fingerprint: ""
+        envs: NODE_OPTIONS
         script: |
           set -e
           

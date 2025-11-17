@@ -129,28 +129,27 @@ cd ..
 echo "🔨 Building frontend application..."
 echo "   This may take 5-15 minutes on EC2..."
 echo "   Starting build at $(date)..."
+echo "   Current memory: $(free -h | grep Mem | awk '{print $3 "/" $2}')"
 
 # Increase Node.js memory limit for build (EC2 has limited memory)
 export NODE_OPTIONS="--max-old-space-size=512"
 
 # Run build with timeout (30 minutes max) and better error handling
-# Use nohup to prevent hanging if SSH connection drops
-if timeout 1800 npm run build 2>&1 | tee /tmp/build.log; then
-    echo "✅ Build command completed"
-    cat /tmp/build.log | tail -20
+# Use stdbuf to ensure output is flushed immediately
+echo "   Running: npm run build"
+if stdbuf -oL -eL timeout 1800 npm run build 2>&1 | stdbuf -oL -eL tee /tmp/build.log; then
+    echo "✅ Build command completed at $(date)"
+    echo "   Build output summary:"
+    tail -30 /tmp/build.log | grep -E "(built|error|Error|✓|✗)" || tail -10 /tmp/build.log
 else
     BUILD_EXIT_CODE=$?
+    echo "❌ Build failed with exit code: $BUILD_EXIT_CODE at $(date)"
     if [ $BUILD_EXIT_CODE -eq 124 ]; then
         echo "❌ Build timed out after 30 minutes!"
-        echo "Last 50 lines of build output:"
-        tail -50 /tmp/build.log || true
-        exit 1
-    else
-        echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
-        echo "Last 50 lines of build output:"
-        tail -50 /tmp/build.log || true
-        exit 1
     fi
+    echo "Last 50 lines of build output:"
+    tail -50 /tmp/build.log || echo "No build log available"
+    exit 1
 fi
 
 # Verify build succeeded
@@ -210,18 +209,31 @@ cd ..
 
 # Restart backend server
 echo "🔄 Restarting backend server..."
-if pm2 list | grep -q "interview-prep-backend"; then
+echo "   Checking PM2 status..."
+pm2 list || echo "⚠️ PM2 not available or no processes"
+
+if pm2 list 2>/dev/null | grep -q "interview-prep-backend"; then
     echo "   Restarting existing PM2 process..."
-    pm2 restart interview-prep-backend --update-env
+    pm2 restart interview-prep-backend --update-env || {
+        echo "⚠️ Restart failed, trying to start fresh..."
+        pm2 delete interview-prep-backend 2>/dev/null || true
+        cd server
+        pm2 start npm --name "interview-prep-backend" -- start
+        cd ..
+    }
 else
     echo "   Starting new PM2 process..."
     cd server
-    pm2 start npm --name "interview-prep-backend" -- start
+    pm2 start npm --name "interview-prep-backend" -- start || {
+        echo "❌ Failed to start PM2 process"
+        exit 1
+    }
     cd ..
 fi
 
 # Save PM2 configuration
-pm2 save
+echo "   Saving PM2 configuration..."
+pm2 save || echo "⚠️ Failed to save PM2 configuration"
 
 # Wait a moment for server to start
 sleep 3
