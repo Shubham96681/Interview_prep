@@ -109,6 +109,17 @@ export default function Meeting() {
       const response = await apiService.getSessionReviews(sessionId);
       if (response.success && response.data?.reviews) {
         setReviews(response.data.reviews);
+        // Auto-show feedback form if coming from feedback button and user hasn't submitted
+        if (shouldShowFeedback && user) {
+          setTimeout(() => {
+            const userReview = response.data.reviews.find(
+              (r: any) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+            );
+            if (!userReview) {
+              setShowFeedbackForm(true);
+            }
+          }, 300);
+        }
       }
     } catch (error) {
       console.error('Error fetching reviews:', error);
