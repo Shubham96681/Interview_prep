@@ -1293,7 +1293,7 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 });
 
 // Get session by ID
-app.get('/api/sessions/:id', authenticateToken, validateObjectId, async (req, res) => {
+app.get('/api/sessions/:id', authenticateToken, validateObjectId('id'), async (req, res) => {
   try {
     const session = await prisma.session.findFirst({
       where: {
@@ -1336,7 +1336,7 @@ app.get('/api/sessions/:id', authenticateToken, validateObjectId, async (req, re
 });
 
 // Update session status
-app.put('/api/sessions/:id/status', authenticateToken, validateObjectId, async (req, res) => {
+app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), async (req, res) => {
   try {
     const { status } = req.body;
     const sessionId = req.params.id;
@@ -1540,7 +1540,7 @@ app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId(
 });
 
 // Get reviews for user
-app.get('/api/reviews/:userId', validateObjectId, validatePagination, async (req, res) => {
+app.get('/api/reviews/:userId', validateObjectId('userId'), validatePagination, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
