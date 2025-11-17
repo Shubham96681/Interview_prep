@@ -43,16 +43,30 @@ export default function MeetingChat({ socket, meetingId, isOpen, onToggle }: Mee
     if (!socket) return;
 
     const handleChatMessage = (data: { userId: string; userName: string; message: string; timestamp?: string }) => {
-      const newMessage: ChatMessage = {
-        id: `${Date.now()}-${Math.random()}`,
-        userId: data.userId,
-        userName: data.userName,
-        message: data.message,
-        timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
-        isOwn: data.userId === user?.id
-      };
-      
-      setMessages(prev => [...prev, newMessage]);
+      // Prevent duplicate messages by checking if we already have this message
+      // (in case server echoes back our own message)
+      setMessages(prev => {
+        const isDuplicate = prev.some(
+          msg => msg.userId === data.userId && 
+                 msg.message === data.message && 
+                 Math.abs(new Date(data.timestamp || Date.now()).getTime() - msg.timestamp.getTime()) < 2000
+        );
+        
+        if (isDuplicate) {
+          return prev; // Don't add duplicate
+        }
+        
+        const newMessage: ChatMessage = {
+          id: `${Date.now()}-${Math.random()}`,
+          userId: data.userId,
+          userName: data.userName,
+          message: data.message,
+          timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+          isOwn: data.userId === user?.id
+        };
+        
+        return [...prev, newMessage];
+      });
     };
 
     socket.on('chat-message', handleChatMessage);
