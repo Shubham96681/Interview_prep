@@ -324,13 +324,31 @@ class ApiService {
    */
   async getRecordingUrl(sessionId: string): Promise<string | null> {
     try {
-      const response = await this.request<{ recordingUrl: string }>(`/api/sessions/${sessionId}/recording`, {
+      const response = await this.request(`/api/sessions/${sessionId}/recording`, {
         method: 'GET'
       });
       
-      if (response.success && response.data?.recordingUrl) {
-        return response.data.recordingUrl;
+      console.log('📥 getRecordingUrl response:', response);
+      
+      // The apiService.request wraps the response
+      // Server returns: { success: true, data: { recordingUrl: "...", sessionId: "..." } }
+      // apiService.request wraps it: { success: true, data: { success: true, data: { recordingUrl: "...", sessionId: "..." } } }
+      if (response.success && response.data) {
+        // Check if it's the wrapped structure (nested data.data)
+        const nestedData = (response.data as any)?.data;
+        if (nestedData && nestedData.recordingUrl) {
+          console.log('✅ Found recordingUrl in nested structure');
+          return nestedData.recordingUrl;
+        }
+        // Or direct structure (response.data.recordingUrl)
+        const directData = response.data as any;
+        if (directData.recordingUrl) {
+          console.log('✅ Found recordingUrl in direct structure');
+          return directData.recordingUrl;
+        }
       }
+      
+      console.error('❌ Could not find recordingUrl in response:', response);
       return null;
     } catch (error) {
       console.error('Error getting recording URL:', error);
