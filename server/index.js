@@ -1339,12 +1339,18 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 
 // Get reviews for a session (MUST come before /api/sessions/:id to avoid route conflicts)
 app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
-  console.log('✅ Route matched: GET /api/sessions/:sessionId/reviews');
+  console.log('✅✅✅ Route matched: GET /api/sessions/:sessionId/reviews');
+  console.log('✅ Route handler executing:', { 
+    sessionId: req.params.sessionId, 
+    userId: req.user?.id,
+    path: req.path,
+    originalUrl: req.originalUrl
+  });
   try {
     const sessionId = req.params.sessionId;
     const userId = req.user?.id;
 
-    console.log('📋 Fetching reviews for session:', { sessionId, userId, path: req.path });
+    console.log('📋 Fetching reviews for session:', { sessionId, userId, path: req.path, params: req.params });
 
     // Verify user has access to this session
     const session = await prisma.session.findFirst({
