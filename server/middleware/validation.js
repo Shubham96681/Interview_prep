@@ -167,10 +167,13 @@ const validateObjectId = (paramName) => [
       if (/^[0-9a-fA-F]{24}$/.test(value)) {
         return true;
       }
-      // Accept Prisma ID format (starts with letters, contains alphanumeric)
-      if (/^[a-z0-9]+$/.test(value) && value.length > 10) {
+      // Accept Prisma ID format (alphanumeric, typically starts with letters, length > 10)
+      // Prisma IDs can be: cmhhtzlz30000n19n08cantxu, cmhrg6c7n0001n16a8o6obxyj, etc.
+      if (/^[a-z0-9]+$/i.test(value) && value.length >= 10 && value.length <= 50) {
         return true;
       }
+      // Log validation failure for debugging
+      console.error(`❌ Invalid ${paramName} format:`, { value, length: value?.length });
       throw new Error(`Invalid ${paramName} format`);
     }),
   handleValidationErrors

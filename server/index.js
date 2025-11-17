@@ -57,6 +57,20 @@ app.use(helmet());
 app.use(compression());
 app.use(morgan('combined'));
 
+// Request logging middleware for debugging (production-safe)
+app.use((req, res, next) => {
+  // Log API requests for debugging
+  if (req.path.startsWith('/api/')) {
+    console.log(`📥 ${req.method} ${req.path}`, {
+      query: req.query,
+      params: req.params,
+      bodyKeys: req.body ? Object.keys(req.body) : [],
+      hasAuth: !!req.headers.authorization
+    });
+  }
+  next();
+});
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -1296,9 +1310,9 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
-    const userId = req.user.userId;
+    const userId = req.user?.id;
 
-    console.log('📋 Fetching reviews for session:', { sessionId, userId });
+    console.log('📋 Fetching reviews for session:', { sessionId, userId, path: req.path });
 
     // Verify user has access to this session
     const session = await prisma.session.findFirst({
@@ -1355,8 +1369,8 @@ app.get('/api/sessions/:id', authenticateToken, validateObjectId('id'), async (r
       where: {
         id: req.params.id,
         OR: [
-          { candidateId: req.user.userId },
-          { expertId: req.user.userId }
+          { candidateId: req.user.id },
+          { expertId: req.user.id }
         ]
       },
       include: {
@@ -1396,7 +1410,7 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
   try {
     const { status } = req.body;
     const sessionId = req.params.id;
-    const userId = req.user.userId;
+    const userId = req.user.id;
 
     // Verify user has access to this session
     const session = await prisma.session.findFirst({
@@ -1461,9 +1475,16 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
 app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => {
   try {
     const { sessionId, rating, comment, categories } = req.body;
-    const reviewerId = req.user.userId;
+    const reviewerId = req.user?.id;
 
-    console.log('📝 Review submission:', { sessionId, reviewerId, rating, commentLength: comment?.length });
+    console.log('📝 Review submission:', { 
+      sessionId, 
+      reviewerId, 
+      rating, 
+      commentLength: comment?.length,
+      path: req.path,
+      bodyKeys: Object.keys(req.body)
+    });
 
     // Verify session exists and user participated
     // Allow feedback even if session is not marked completed (in case status update failed)
