@@ -1615,6 +1615,18 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       // Monitor recorder state
       recorder.onstart = () => {
         console.log('✅ MediaRecorder started, state:', recorder.state);
+        
+        // Mark session as in_progress when recording starts (both participants joined)
+        if (sessionId && (remoteStream || remoteStreamRef.current)) {
+          try {
+            console.log('✅ Both participants joined - marking session as in_progress...');
+            apiService.updateSessionStatus(sessionId, 'in_progress').catch(error => {
+              console.error('❌ Error marking session as in_progress:', error);
+            });
+          } catch (error) {
+            console.error('❌ Error marking session as in_progress:', error);
+          }
+        }
       };
       
       recorder.onerror = (event) => {
