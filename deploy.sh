@@ -127,14 +127,29 @@ cd ..
 
 # Build frontend
 echo "🔨 Building frontend application..."
-npm run build
+echo "   This may take 5-15 minutes on EC2..."
+echo "   Starting build at $(date)..."
+
+# Run build with timeout (30 minutes max) and better error handling
+if timeout 1800 npm run build 2>&1; then
+    echo "✅ Build command completed"
+else
+    BUILD_EXIT_CODE=$?
+    if [ $BUILD_EXIT_CODE -eq 124 ]; then
+        echo "❌ Build timed out after 30 minutes!"
+        exit 1
+    else
+        echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
+        exit 1
+    fi
+fi
 
 # Verify build succeeded
 if [ ! -d "dist" ] || [ ! -f "dist/index.html" ]; then
     echo "❌ Frontend build failed! dist/ directory not found."
     exit 1
 fi
-echo "✅ Frontend build successful"
+echo "✅ Frontend build successful at $(date)"
 
 # Setup environment variables for server (if .env doesn't exist)
 if [ ! -f server/.env ]; then
