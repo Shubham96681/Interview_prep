@@ -1426,7 +1426,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     // Determine reviewee (the other participant)
     const revieweeId = session.candidateId === reviewerId ? session.expertId : session.candidateId;
 
-    // Check if review already exists
+    // Check if review already exists - if it does, update it instead of creating new
     const existingReview = await prisma.review.findFirst({
       where: {
         sessionId,
@@ -1434,28 +1434,47 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
       }
     });
 
+    let review;
     if (existingReview) {
-      return res.status(400).json({ message: 'Review already exists for this session' });
-    }
-
-    const review = await prisma.review.create({
-      data: {
-        sessionId,
-        reviewerId,
-        revieweeId,
-        rating: parseInt(rating),
-        comment,
-        categories: categories ? JSON.stringify(categories.split(',').map(c => c.trim())) : null
-      },
-      include: {
-        reviewer: {
-          select: { id: true, name: true }
+      // Update existing review
+      review = await prisma.review.update({
+        where: { id: existingReview.id },
+        data: {
+          rating: parseInt(rating),
+          comment,
+          categories: categories ? JSON.stringify(categories.split(',').map(c => c.trim())) : null,
+          updatedAt: new Date()
         },
-        reviewee: {
-          select: { id: true, name: true }
+        include: {
+          reviewer: {
+            select: { id: true, name: true }
+          },
+          reviewee: {
+            select: { id: true, name: true }
+          }
         }
-      }
-    });
+      });
+    } else {
+      // Create new review
+      review = await prisma.review.create({
+        data: {
+          sessionId,
+          reviewerId,
+          revieweeId,
+          rating: parseInt(rating),
+          comment,
+          categories: categories ? JSON.stringify(categories.split(',').map(c => c.trim())) : null
+        },
+        include: {
+          reviewer: {
+            select: { id: true, name: true }
+          },
+          reviewee: {
+            select: { id: true, name: true }
+          }
+        }
+      });
+    }
 
     // Update session with feedback
     await prisma.session.update({
