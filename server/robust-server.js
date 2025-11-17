@@ -97,7 +97,8 @@ class RobustServer {
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     
     // Trust proxy (required for rate limiting behind Nginx)
-    this.app.set('trust proxy', true);
+    // Trust only the first proxy (Nginx on localhost)
+    this.app.set('trust proxy', 1);
     
     // Rate limiting for API endpoints (production-level protection)
     const apiLimiter = rateLimit({
