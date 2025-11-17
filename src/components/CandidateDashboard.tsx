@@ -85,9 +85,7 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
   // Exclude sessions with recordings from upcoming (recordings mean session is completed)
   const upcomingSessions = sessions.filter(session => 
     (session.status === 'upcoming' || session.status === 'scheduled') && 
-    !session.recordingUrl && 
-    session.status !== 'in_progress' &&
-    session.status !== 'completed'
+    !session.recordingUrl
   );
   // Include sessions that are completed OR have recordings (recordings indicate completion)
   const completedSessions = sessions.filter(session => 
