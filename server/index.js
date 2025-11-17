@@ -77,8 +77,10 @@ app.use((req, res, next) => {
   if (req.path.includes('/reviews') || req.path.includes('/sessions')) {
     console.log(`🔍 Route check: ${req.method} ${req.path}`, {
       matchesReviews: req.path === '/api/reviews',
-      matchesSessionReviews: req.path.match(/^\/api\/sessions\/[^\/]+\/reviews$/),
-      pathParts: req.path.split('/')
+      matchesSessionReviews: /^\/api\/sessions\/[^\/]+\/reviews$/.test(req.path),
+      pathParts: req.path.split('/'),
+      pathLength: req.path.split('/').length,
+      originalUrl: req.originalUrl
     });
   }
   next();
