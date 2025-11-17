@@ -176,6 +176,17 @@ app.get('/api/test-sessions/:testId/reviews', (req, res) => {
   });
 });
 
+// TEMPORARY: Direct test route without auth/validation to verify route matching
+app.get('/api/sessions/:sessionId/reviews-test', (req, res) => {
+  console.log('✅✅✅ TEST ROUTE MATCHED (no auth/validation):', req.params);
+  res.json({
+    success: true,
+    message: 'Test route matched successfully',
+    sessionId: req.params.sessionId,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Check if email exists endpoint
 app.get('/api/auth/check-email', async (req, res) => {
   try {
@@ -1349,13 +1360,15 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 });
 
 // Get reviews for a session (MUST come before /api/sessions/:id to avoid route conflicts)
+// CRITICAL: This route MUST be registered BEFORE /api/sessions/:id
 app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
-  console.log('✅✅✅ Route matched: GET /api/sessions/:sessionId/reviews');
+  console.log('✅✅✅✅✅ Route matched: GET /api/sessions/:sessionId/reviews');
   console.log('✅ Route handler executing:', { 
     sessionId: req.params.sessionId, 
     userId: req.user?.id,
     path: req.path,
-    originalUrl: req.originalUrl
+    originalUrl: req.originalUrl,
+    params: req.params
   });
   try {
     const sessionId = req.params.sessionId;
