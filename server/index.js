@@ -1292,7 +1292,63 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
   }
 });
 
-// Get session by ID
+// Get reviews for a session (MUST come before /api/sessions/:id to avoid route conflicts)
+app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const userId = req.user.userId;
+
+    console.log('📋 Fetching reviews for session:', { sessionId, userId });
+
+    // Verify user has access to this session
+    const session = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        OR: [
+          { candidateId: userId },
+          { expertId: userId }
+        ]
+      }
+    });
+
+    if (!session) {
+      console.error('❌ Session not found or access denied:', { sessionId, userId });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Session not found or you do not have access to this session' 
+      });
+    }
+
+    // Get all reviews for this session
+    const reviews = await prisma.review.findMany({
+      where: { sessionId },
+      include: {
+        reviewer: {
+          select: { id: true, name: true, email: true }
+        },
+        reviewee: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    console.log('✅ Reviews fetched successfully:', { sessionId, reviewCount: reviews.length });
+    res.json({ 
+      success: true,
+      data: { reviews } 
+    });
+  } catch (error) {
+    console.error('❌ Get session reviews error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Get session by ID (MUST come after more specific routes like /reviews)
 app.get('/api/sessions/:id', authenticateToken, validateObjectId('id'), async (req, res) => {
   try {
     const session = await prisma.session.findFirst({
@@ -1358,7 +1414,7 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
     }
 
     // Prepare update data
-    const updateData: any = { status };
+    const updateData = { status };
     
     // If marking as in_progress, set actualStartTime
     if (status === 'in_progress' && !session.actualStartTime) {
@@ -1407,6 +1463,8 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     const { sessionId, rating, comment, categories } = req.body;
     const reviewerId = req.user.userId;
 
+    console.log('📝 Review submission:', { sessionId, reviewerId, rating, commentLength: comment?.length });
+
     // Verify session exists and user participated
     // Allow feedback even if session is not marked completed (in case status update failed)
     const session = await prisma.session.findFirst({
@@ -1420,7 +1478,11 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     });
 
     if (!session) {
-      return res.status(404).json({ message: 'Session not found or you do not have access to this session' });
+      console.error('❌ Session not found or access denied:', { sessionId, reviewerId });
+      return res.status(404).json({ 
+        success: false,
+        message: 'Session not found or you do not have access to this session' 
+      });
     }
 
     // Determine reviewee (the other participant)
@@ -1486,56 +1548,19 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
       }
     });
 
+    console.log('✅ Review saved successfully:', { reviewId: review.id, isUpdate: !!existingReview });
     res.status(existingReview ? 200 : 201).json({ 
       success: true,
       message: existingReview ? 'Review updated successfully' : 'Review created successfully', 
       data: review 
     });
   } catch (error) {
-    console.error('Create review error:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Get reviews for a session
-app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
-  try {
-    const sessionId = req.params.sessionId;
-    const userId = req.user.userId;
-
-    // Verify user has access to this session
-    const session = await prisma.session.findFirst({
-      where: {
-        id: sessionId,
-        OR: [
-          { candidateId: userId },
-          { expertId: userId }
-        ]
-      }
+    console.error('❌ Create review error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
-
-    if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
-    }
-
-    // Get all reviews for this session
-    const reviews = await prisma.review.findMany({
-      where: { sessionId },
-      include: {
-        reviewer: {
-          select: { id: true, name: true, email: true }
-        },
-        reviewee: {
-          select: { id: true, name: true, email: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    res.json({ reviews });
-  } catch (error) {
-    console.error('Get session reviews error:', error);
-    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
