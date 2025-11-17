@@ -16,7 +16,7 @@ export default defineConfig({
   },
   build: {
     sourcemap: false, // Disable source maps in production to speed up build and reduce memory
-    minify: 'terser', // Use terser for better minification
+    minify: 'esbuild', // Use esbuild (default, faster and already included)
     rollupOptions: {
       output: {
         manualChunks: {
