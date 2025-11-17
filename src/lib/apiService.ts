@@ -114,7 +114,7 @@ class ApiService {
       };
 
       // Add authorization header if token exists
-      let token = localStorage.getItem('token');
+      let token: string | null = localStorage.getItem('token');
       
       // Fallback: Check if token is stored in user object
       if (!token) {
@@ -122,10 +122,10 @@ class ApiService {
           const userStr = localStorage.getItem('user');
           if (userStr) {
             const user = JSON.parse(userStr);
-            if (user && user.token) {
+            if (user && user.token && typeof user.token === 'string') {
               token = user.token;
-              // Also save it separately for future use
-              localStorage.setItem('token', token);
+              // Also save it separately for future use (token is guaranteed to be string here)
+              localStorage.setItem('token', token as string);
               console.log('🔑 Token found in user object, saved to localStorage');
             }
           }
