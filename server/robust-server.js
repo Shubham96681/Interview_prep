@@ -3002,11 +3002,20 @@ class RobustServer {
         // If it's an S3 URL, generate a fresh signed URL
         if (session.recordingUrl.includes('s3.amazonaws.com') || session.recordingUrl.includes('amazonaws.com')) {
           try {
+            console.log(`🔄 Processing S3 URL: ${session.recordingUrl.substring(0, 100)}...`);
+            
             // Extract S3 key from URL
             // URL format: https://bucket.s3.region.amazonaws.com/key?params
             // Or: https://bucket.s3.region.amazonaws.com/key
             // Or: https://s3.region.amazonaws.com/bucket/key?params
-            const urlObj = new URL(session.recordingUrl);
+            // Pre-signed URLs have query parameters that we need to ignore
+            
+            // Remove query parameters first
+            const urlWithoutParams = session.recordingUrl.split('?')[0];
+            console.log(`📝 URL without params: ${urlWithoutParams}`);
+            
+            // Parse the URL
+            const urlObj = new URL(urlWithoutParams);
             let key = urlObj.pathname;
             
             // Remove leading slash if present
@@ -3014,30 +3023,38 @@ class RobustServer {
               key = key.substring(1);
             }
             
+            console.log(`🔑 Extracted pathname: ${key}`);
+            
             // If the pathname doesn't start with 'recordings/', try to extract from full path
             if (!key.startsWith('recordings/')) {
               // Try to find 'recordings/' in the path
               const recordingsIndex = key.indexOf('recordings/');
               if (recordingsIndex !== -1) {
                 key = key.substring(recordingsIndex);
+                console.log(`✅ Found recordings/ at index ${recordingsIndex}, extracted key: ${key}`);
               } else {
                 // If no 'recordings/' found, use the full pathname (minus leading slash)
                 console.warn('⚠️ Could not find "recordings/" in URL path, using full pathname:', key);
               }
             }
             
-            if (key) {
+            if (key && key.length > 0) {
               console.log(`🔄 Generating fresh signed URL for S3 key: ${key}`);
               
               // Generate fresh signed URL (valid for 7 days)
               accessibleUrl = await s3Service.getSignedUrl(key, 604800); // 7 days
-              console.log(`✅ Fresh signed URL generated`);
+              console.log(`✅ Fresh signed URL generated successfully`);
             } else {
-              console.warn('⚠️ Could not extract S3 key from URL:', session.recordingUrl);
+              console.error('❌ Could not extract S3 key from URL:', session.recordingUrl);
               // Return original URL as fallback
             }
           } catch (s3Error) {
             console.error('❌ Error generating fresh signed URL:', s3Error);
+            console.error('   Error details:', {
+              message: s3Error.message,
+              stack: s3Error.stack,
+              url: session.recordingUrl
+            });
             // Return original URL as fallback
           }
         }

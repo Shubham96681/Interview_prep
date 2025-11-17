@@ -344,42 +344,44 @@ class ApiService {
    */
   async openRecordingUrl(sessionId: string, fallbackUrl?: string): Promise<void> {
     try {
+      console.log(`🔄 Getting fresh recording URL for session: ${sessionId}`);
+      
       // Always get a fresh signed URL from the backend
       const freshUrl = await this.getRecordingUrl(sessionId);
       
       if (freshUrl) {
+        console.log(`✅ Got fresh URL, opening in new tab`);
         // Open the fresh URL
-        window.open(freshUrl, '_blank');
-      } else if (fallbackUrl) {
-        // If backend fails, try fallback but also check if it's expired
-        console.warn('Using fallback URL, but it may be expired');
+        const newWindow = window.open(freshUrl, '_blank');
         
-        // Try to open fallback URL
-        const newWindow = window.open(fallbackUrl, '_blank');
-        
-        // Check if the URL might be expired (S3 URLs with expired tokens show XML error)
-        // We can't directly detect this, but we can set up a listener
-        if (newWindow) {
-          // After a short delay, check if we need to regenerate
-          setTimeout(async () => {
-            // If the window is still open and might have an error, try to get fresh URL again
-            // Note: We can't directly check the content due to CORS, but we can retry
-            try {
-              const retryUrl = await this.getRecordingUrl(sessionId);
-              if (retryUrl && retryUrl !== fallbackUrl) {
-                // Close the old window and open with fresh URL
-                newWindow.close();
-                window.open(retryUrl, '_blank');
-              }
-            } catch (e) {
-              // Ignore retry errors
-            }
-          }, 1000);
+        // If opening failed, try again after a short delay
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+          console.warn('⚠️ Popup blocked or failed, retrying...');
+          // Retry once after a short delay
+          setTimeout(() => {
+            window.open(freshUrl, '_blank');
+          }, 500);
         }
       } else {
-        throw new Error('No recording URL available');
+        // Backend failed to generate fresh URL
+        console.error('❌ Failed to get fresh URL from backend');
+        
+        if (fallbackUrl) {
+          console.warn('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
+          
+          // Check if fallback URL looks like an expired S3 URL
+          if (fallbackUrl.includes('amazonaws.com') && fallbackUrl.includes('?')) {
+            // This is likely an expired pre-signed URL
+            throw new Error('Recording URL has expired. Please refresh the page and try again, or contact support if the issue persists.');
+          }
+          
+          // Try to open fallback URL
+          window.open(fallbackUrl, '_blank');
+        } else {
+          throw new Error('No recording URL available');
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error opening recording URL:', error);
       throw error;
     }
