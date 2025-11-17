@@ -15,6 +15,8 @@ const webrtcService = require('./services/webrtcService');
 const s3Service = require('./services/s3Service');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { authenticateToken } = require('./middleware/auth-prisma');
+const { validateObjectId, validateReview } = require('./middleware/validation');
 
 class RobustServer {
   constructor() {
