@@ -303,10 +303,9 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
       <div className="bg-white rounded-lg shadow-sm border">
         <Tabs defaultValue="upcoming" className="w-full">
           <div className="border-b border-gray-200 px-6 py-4">
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="upcoming">Upcoming Sessions</TabsTrigger>
               <TabsTrigger value="completed">Completed Sessions</TabsTrigger>
-              <TabsTrigger value="recordings">Recordings & Feedback</TabsTrigger>
               <TabsTrigger value="reviews">Reviews & Ratings</TabsTrigger>
             </TabsList>
           </div>
@@ -511,88 +510,6 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                   <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-gray-600 mb-2">No completed sessions</h3>
                   <p className="text-gray-500">Your completed coaching sessions will appear here.</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="recordings" className="space-y-4 p-6">
-            {completedSessions.filter(s => s.recordingUrl || s.isRecordingEnabled).length > 0 ? (
-              completedSessions
-                .filter(s => s.recordingUrl || s.isRecordingEnabled)
-                .map(session => (
-                  <Card key={session.id} className="border-0 shadow-md">
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <Avatar className="h-12 w-12">
-                            <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face" />
-                            <AvatarFallback>{session.candidateName ? session.candidateName.split(' ').map(n => n[0]).join('') : 'C'}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h3 className="font-semibold text-gray-900">{session.candidateName || 'Candidate'}</h3>
-                            <p className="text-sm text-gray-600 capitalize">{session.sessionType || session.type}</p>
-                            <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
-                              <span>{formatDate(session.scheduledDate || session.date || '', session.time)}</span>
-                              {session.isRecordingEnabled && (
-                                <span className="text-green-600">Recording Enabled</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          {session.recordingUrl ? (
-                            <Button 
-                              size="sm" 
-                              className="bg-blue-600 hover:bg-blue-700"
-                              onClick={async () => {
-                                try {
-                                  // Get fresh signed URL from backend
-                                  const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
-                                    method: 'GET'
-                                  });
-                                  
-                                  if (response.success && response.data?.recordingUrl) {
-                                    window.open(response.data.recordingUrl, '_blank');
-                                  } else {
-                                    // Fallback to stored URL
-                                    window.open(session.recordingUrl, '_blank');
-                                  }
-                                } catch (error) {
-                                  // Silently fallback to stored URL
-                                  window.open(session.recordingUrl, '_blank');
-                                }
-                              }}
-                            >
-                              <Video className="h-4 w-4 mr-2" />
-                              Watch Recording
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-gray-500 flex items-center">
-                              Processing recording...
-                            </span>
-                          )}
-                          {session.meetingId && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => navigate(`/meeting/${session.meetingId}`)}
-                            >
-                              <MessageSquare className="h-4 w-4 mr-2" />
-                              View Feedback
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-            ) : (
-              <Card className="border-0 shadow-md">
-                <CardContent className="p-12 text-center">
-                  <Video className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-600 mb-2">No recordings available</h3>
-                  <p className="text-gray-500">Session recordings will appear here after your sessions are completed.</p>
                 </CardContent>
               </Card>
             )}
