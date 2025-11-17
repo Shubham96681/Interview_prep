@@ -165,6 +165,17 @@ app.get('/api/test-routes', (req, res) => {
   });
 });
 
+// Test endpoint with similar pattern to verify route matching works
+app.get('/api/test-sessions/:testId/reviews', (req, res) => {
+  console.log('✅ Test route matched:', req.params);
+  res.json({
+    success: true,
+    message: 'Test route works',
+    testId: req.params.testId,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Check if email exists endpoint
 app.get('/api/auth/check-email', async (req, res) => {
   try {
