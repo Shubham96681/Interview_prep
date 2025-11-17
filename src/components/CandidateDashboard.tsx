@@ -346,10 +346,10 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                           <Button 
                             variant="default" 
                             size="sm"
-                            onClick={() => navigate(`/meeting/${session.meetingId}`)}
+                            onClick={() => navigate(`/meeting/${session.meetingId}?tab=feedback`)}
                           >
                             <MessageSquare className="h-4 w-4 mr-2" />
-                            View Feedback
+                            Feedback
                           </Button>
                         )}
                         {session.recordingUrl && (

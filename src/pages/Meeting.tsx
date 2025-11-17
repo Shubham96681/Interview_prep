@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Video, Users, Clock, Calendar, Star, MessageSquare } from 'lucide-react';
@@ -7,11 +7,11 @@ import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
 import WebRTCVideoCall from '@/components/WebRTCVideoCall';
 import FeedbackForm from '@/components/FeedbackForm';
-import { toast } from 'sonner';
 
 export default function Meeting() {
   const { meetingId } = useParams<{ meetingId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -19,6 +19,9 @@ export default function Meeting() {
   const [isInCall, setIsInCall] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  
+  // Check if we should show feedback section from URL parameter
+  const shouldShowFeedback = searchParams.get('tab') === 'feedback';
 
   // Cleanup effect: ensure video call is ended when component unmounts
   // MUST be called before any conditional returns to maintain hook order
@@ -70,8 +73,8 @@ export default function Meeting() {
           });
           setSession(sessionData);
           
-          // Fetch reviews if session is completed
-          if (sessionData.status === 'completed' && sessionData.id) {
+          // Fetch reviews if session is completed or if we're showing feedback tab
+          if ((sessionData.status === 'completed' || shouldShowFeedback) && sessionData.id) {
             fetchReviews(sessionData.id);
           }
         } else {
@@ -99,7 +102,7 @@ export default function Meeting() {
     };
 
     fetchSession();
-  }, [meetingId, navigate, authLoading]);
+  }, [meetingId, navigate, authLoading, shouldShowFeedback]);
 
   const fetchReviews = async (sessionId: string) => {
     try {
@@ -124,6 +127,18 @@ export default function Meeting() {
       }
     }
   };
+
+  // Scroll to feedback section when shouldShowFeedback changes
+  useEffect(() => {
+    if (shouldShowFeedback && session && reviews.length >= 0) {
+      setTimeout(() => {
+        const element = document.getElementById('feedback-section');
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 500);
+    }
+  }, [shouldShowFeedback, session, reviews.length]);
 
   // Refresh session data when returning from call
   const handleCallEnd = async () => {
@@ -476,15 +491,15 @@ export default function Meeting() {
               </div>
             )}
 
-            {/* Feedback Section - Show when session is completed */}
-            {session.status === 'completed' && (
-              <div className="border-t pt-6 space-y-6">
+            {/* Feedback Section - Show when session is completed or when tab=feedback */}
+            {(session.status === 'completed' || shouldShowFeedback) && (
+              <div className="border-t pt-6 space-y-6" id="feedback-section">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold flex items-center gap-2">
                     <MessageSquare className="h-5 w-5" />
                     Session Feedback
                   </h3>
-                  {!showFeedbackForm && (
+                  {!showFeedbackForm && user && (
                     <Button
                       variant="outline"
                       onClick={() => {
@@ -495,34 +510,41 @@ export default function Meeting() {
                         if (!userReview) {
                           setShowFeedbackForm(true);
                         } else {
-                          toast.info('You have already submitted feedback for this session');
+                          setShowFeedbackForm(true); // Show form anyway so they can see their feedback
                         }
                       }}
                     >
-                      Provide Feedback
+                      {reviews.find((r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id) 
+                        ? 'Update Feedback' 
+                        : 'Provide Feedback'}
                     </Button>
                   )}
                 </div>
 
+
                 {/* Feedback Form */}
-                {showFeedbackForm && user && (() => {
+                {(showFeedbackForm || (shouldShowFeedback && user)) && user && (() => {
                   const isCandidate = user.id === session.candidateId || user.id === session.candidate?.id;
                   const revieweeName = isCandidate
                     ? session.expertName || session.expert?.name || 'Expert'
                     : session.candidateName || session.candidate?.name || 'Candidate';
                   
-                  return (
-                    <FeedbackForm
-                      sessionId={session.id}
-                      revieweeName={revieweeName}
-                      onFeedbackSubmitted={handleFeedbackSubmitted}
-                      existingReview={
-                        reviews.find(
-                          (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
-                        ) || null
-                      }
-                    />
+                  const userReview = reviews.find(
+                    (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
                   );
+                  
+                  // Show form if explicitly requested or if user hasn't submitted feedback yet
+                  if (showFeedbackForm || !userReview) {
+                    return (
+                      <FeedbackForm
+                        sessionId={session.id}
+                        revieweeName={revieweeName}
+                        onFeedbackSubmitted={handleFeedbackSubmitted}
+                        existingReview={userReview || null}
+                      />
+                    );
+                  }
+                  return null;
                 })()}
 
                 {/* Display Reviews */}
