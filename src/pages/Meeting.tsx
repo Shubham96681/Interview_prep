@@ -488,28 +488,25 @@ export default function Meeting() {
                 </div>
 
                 {/* Feedback Form */}
-                {showFeedbackForm && user && (
-                  <FeedbackForm
-                    sessionId={session.id}
-                    reviewerId={user.id}
-                    revieweeId={
-                      user.id === session.candidateId || user.id === session.candidate?.id
-                        ? session.expertId || session.expert?.id
-                        : session.candidateId || session.candidate?.id
-                    }
-                    revieweeName={
-                      user.id === session.candidateId || user.id === session.candidate?.id
-                        ? session.expertName || session.expert?.name || 'Expert'
-                        : session.candidateName || session.candidate?.name || 'Candidate'
-                    }
-                    onFeedbackSubmitted={handleFeedbackSubmitted}
-                    existingReview={
-                      reviews.find(
-                        (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
-                      ) || null
-                    }
-                  />
-                )}
+                {showFeedbackForm && user && (() => {
+                  const isCandidate = user.id === session.candidateId || user.id === session.candidate?.id;
+                  const revieweeName = isCandidate
+                    ? session.expertName || session.expert?.name || 'Expert'
+                    : session.candidateName || session.candidate?.name || 'Candidate';
+                  
+                  return (
+                    <FeedbackForm
+                      sessionId={session.id}
+                      revieweeName={revieweeName}
+                      onFeedbackSubmitted={handleFeedbackSubmitted}
+                      existingReview={
+                        reviews.find(
+                          (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+                        ) || null
+                      }
+                    />
+                  );
+                })()}
 
                 {/* Display Reviews */}
                 {reviews.length > 0 && (

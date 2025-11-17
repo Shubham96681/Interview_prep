@@ -9,8 +9,6 @@ import { apiService } from '@/lib/apiService';
 
 interface FeedbackFormProps {
   sessionId: string;
-  reviewerId: string;
-  revieweeId: string;
   revieweeName: string;
   onFeedbackSubmitted: () => void;
   existingReview?: {
@@ -22,8 +20,6 @@ interface FeedbackFormProps {
 
 export default function FeedbackForm({
   sessionId,
-  reviewerId,
-  revieweeId,
   revieweeName,
   onFeedbackSubmitted,
   existingReview
