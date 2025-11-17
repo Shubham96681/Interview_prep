@@ -15,7 +15,8 @@ export default defineConfig({
     },
   },
   build: {
-    sourcemap: true, // Enable source maps for debugging
+    sourcemap: false, // Disable source maps in production to speed up build and reduce memory
+    minify: 'terser', // Use terser for better minification
     rollupOptions: {
       output: {
         manualChunks: {
@@ -23,6 +24,8 @@ export default defineConfig({
         },
       },
     },
+    // Optimize for lower memory usage
+    chunkSizeWarningLimit: 1000,
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom'],

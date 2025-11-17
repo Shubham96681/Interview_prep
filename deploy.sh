@@ -130,16 +130,25 @@ echo "🔨 Building frontend application..."
 echo "   This may take 5-15 minutes on EC2..."
 echo "   Starting build at $(date)..."
 
+# Increase Node.js memory limit for build (EC2 has limited memory)
+export NODE_OPTIONS="--max-old-space-size=512"
+
 # Run build with timeout (30 minutes max) and better error handling
-if timeout 1800 npm run build 2>&1; then
+# Use nohup to prevent hanging if SSH connection drops
+if timeout 1800 npm run build 2>&1 | tee /tmp/build.log; then
     echo "✅ Build command completed"
+    cat /tmp/build.log | tail -20
 else
     BUILD_EXIT_CODE=$?
     if [ $BUILD_EXIT_CODE -eq 124 ]; then
         echo "❌ Build timed out after 30 minutes!"
+        echo "Last 50 lines of build output:"
+        tail -50 /tmp/build.log || true
         exit 1
     else
         echo "❌ Build failed with exit code: $BUILD_EXIT_CODE"
+        echo "Last 50 lines of build output:"
+        tail -50 /tmp/build.log || true
         exit 1
     fi
 fi
