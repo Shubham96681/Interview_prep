@@ -1337,6 +1337,7 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 
 // Get reviews for a session (MUST come before /api/sessions/:id to avoid route conflicts)
 app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
+  console.log('✅ Route matched: GET /api/sessions/:sessionId/reviews');
   try {
     const sessionId = req.params.sessionId;
     const userId = req.user?.id;
