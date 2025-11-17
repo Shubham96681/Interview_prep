@@ -1354,7 +1354,7 @@ class RobustServer {
     });
 
     // Get reviews for a session (MUST come before /api/sessions/:id to avoid route conflicts)
-    this.app.get('/api/sessions/:sessionId/reviews', authenticateToken, ...validateObjectId('sessionId'), async (req, res) => {
+    this.app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
       console.log('✅✅✅ Route matched: GET /api/sessions/:sessionId/reviews');
       try {
         const sessionId = req.params.sessionId;
@@ -1411,7 +1411,7 @@ class RobustServer {
     });
 
     // Create review
-    this.app.post('/api/reviews', authenticateToken, ...validateReview, async (req, res) => {
+    this.app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => {
       console.log('✅ Route matched: POST /api/reviews');
       try {
         const { sessionId, rating, comment, categories } = req.body;
