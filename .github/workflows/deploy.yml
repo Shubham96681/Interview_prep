@@ -141,17 +141,13 @@ jobs:
           echo "📦 Running deployment script..."
           echo "   (This will take several minutes, output will appear below)"
           
-          # Use script command to ensure proper output flushing in SSH
-          if command -v script >/dev/null 2>&1; then
-              script -q -c "./deploy.sh" /dev/null
+          # Run deploy script directly - it handles its own output
+          # The script command can cause exit code issues, so run directly
+          if ./deploy.sh; then
+              DEPLOY_EXIT_CODE=0
           else
-              # Fallback: run directly with explicit flushing
-              bash -x ./deploy.sh 2>&1 | while IFS= read -r line; do
-                  echo "$line"
-              done
+              DEPLOY_EXIT_CODE=$?
           fi
-          
-          DEPLOY_EXIT_CODE=${PIPESTATUS[0]}
           
           if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
               echo "❌ Deployment script failed with exit code: $DEPLOY_EXIT_CODE"
