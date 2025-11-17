@@ -425,10 +425,9 @@ class RobustServer {
           if (!isProduction) {
             console.error(`❌ User already exists: ${sanitizedEmail}`);
           }
-          // Don't reveal if email exists (security best practice)
           return res.status(400).json({ 
             success: false,
-            message: 'Registration failed. Please check your information and try again.' 
+            message: 'This email already exists. Please use a different email.' 
           });
         }
 

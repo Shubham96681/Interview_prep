@@ -152,7 +152,7 @@ app.post('/api/auth/register', upload.fields([
 
     if (existingUser) {
       console.error(`❌ User already exists: ${email}`);
-      return res.status(400).json({ message: 'User already exists with this email' });
+      return res.status(400).json({ message: 'This email already exists. Please use a different email.' });
     }
 
     console.log(`✅ User does not exist, proceeding with registration for: ${email}`);
