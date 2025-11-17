@@ -114,7 +114,26 @@ class ApiService {
       };
 
       // Add authorization header if token exists
-      const token = localStorage.getItem('token');
+      let token = localStorage.getItem('token');
+      
+      // Fallback: Check if token is stored in user object
+      if (!token) {
+        try {
+          const userStr = localStorage.getItem('user');
+          if (userStr) {
+            const user = JSON.parse(userStr);
+            if (user && user.token) {
+              token = user.token;
+              // Also save it separately for future use
+              localStorage.setItem('token', token);
+              console.log('🔑 Token found in user object, saved to localStorage');
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing user object:', e);
+        }
+      }
+      
       if (token) {
         requestOptions.headers = {
           ...requestOptions.headers,
@@ -122,7 +141,7 @@ class ApiService {
         };
         console.log('🔑 Token found, adding to headers:', token.substring(0, 20) + '...');
       } else {
-        console.warn('⚠️ No token found in localStorage!');
+        console.warn('⚠️ No token found in localStorage or user object!');
       }
 
       console.log('Making request to:', url, 'with options:', {
