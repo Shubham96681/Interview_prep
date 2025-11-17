@@ -333,6 +333,8 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_pass_request_headers on;
         proxy_cache_bypass \$http_upgrade;
         proxy_read_timeout 86400;
         proxy_request_buffering off;
@@ -350,6 +352,8 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Authorization \$http_authorization;
+        proxy_pass_request_headers on;
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 86400;
