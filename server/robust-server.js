@@ -490,6 +490,18 @@ class RobustServer {
         // Handle file uploads with validation
         const resumePath = req.files?.resume?.[0]?.filename;
         const profilePhotoPath = req.files?.profilePhoto?.[0]?.filename || req.files?.expertProfilePhoto?.[0]?.filename;
+        
+        // Validate profile photo is required
+        if (!profilePhotoPath) {
+          if (!isProduction) {
+            console.error('❌ Profile photo is required');
+          }
+          return res.status(400).json({ 
+            success: false,
+            message: 'Profile photo is required' 
+          });
+        }
+        
         const certificationPaths = [];
         
         // Validate and handle multiple certification files

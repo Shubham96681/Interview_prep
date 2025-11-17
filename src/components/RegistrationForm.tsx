@@ -233,6 +233,17 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       return;
     }
 
+    // Validate profile photo is uploaded
+    if (activeTab === 'candidate' && !profilePhoto) {
+      toast.error('Profile photo is required');
+      return;
+    }
+
+    if (activeTab === 'expert' && !expertProfilePhoto) {
+      toast.error('Profile photo is required');
+      return;
+    }
+
     const formData = new FormData();
     
     // Common fields
@@ -250,7 +261,8 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       formData.append('bio', bio);
       
       if (resume) formData.append('resume', resume);
-      if (profilePhoto) formData.append('profilePhoto', profilePhoto);
+      // Profile photo is now required, so we can safely append it
+      formData.append('profilePhoto', profilePhoto!);
       certifications.forEach((cert, index) => {
         formData.append(`certification_${index}`, cert);
       });
@@ -264,7 +276,8 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       formData.append('expertBio', expertBio);
       formData.append('expertSkills', expertSkills);
       
-      if (expertProfilePhoto) formData.append('expertProfilePhoto', expertProfilePhoto);
+      // Profile photo is now required, so we can safely append it
+      formData.append('expertProfilePhoto', expertProfilePhoto!);
     }
 
     const response = await apiService.register(formData);
@@ -475,7 +488,7 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                     Documents & Photos
                   </CardTitle>
                   <CardDescription>
-                    Upload your resume, photo, and certifications (optional)
+                    Upload your resume, profile photo (required), and certifications (optional)
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -516,7 +529,7 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
 
                   {/* Profile Photo Upload */}
                   <div>
-                    <Label>Profile Photo</Label>
+                    <Label>Profile Photo *</Label>
                     <div className="mt-2">
                       {profilePhoto ? (
                         <div className="flex items-center gap-2 p-3 border rounded-lg">
@@ -532,9 +545,10 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                           </Button>
                         </div>
                       ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                          <Camera className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                          <p className="text-sm text-gray-600 mb-2">Upload profile photo</p>
+                        <div className="border-2 border-dashed border-red-300 rounded-lg p-6 text-center bg-red-50">
+                          <Camera className="h-8 w-8 mx-auto mb-2 text-red-400" />
+                          <p className="text-sm text-red-600 mb-1 font-medium">Profile photo is required *</p>
+                          <p className="text-xs text-gray-500 mb-2">Please upload your profile photo</p>
                           <Input
                             type="file"
                             accept="image/*"
@@ -543,6 +557,7 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                               if (file) handleFileUpload(file, 'photo');
                             }}
                             className="max-w-xs mx-auto"
+                            required
                           />
                         </div>
                       )}
@@ -824,8 +839,11 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Camera className="h-5 w-5" />
-                    Profile Photo
+                    Profile Photo *
                   </CardTitle>
+                  <CardDescription>
+                    Profile photo is required
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {expertProfilePhoto ? (
@@ -842,9 +860,10 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                       </Button>
                     </div>
                   ) : (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                      <Camera className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm text-gray-600 mb-2">Upload profile photo</p>
+                    <div className="border-2 border-dashed border-red-300 rounded-lg p-6 text-center bg-red-50">
+                      <Camera className="h-8 w-8 mx-auto mb-2 text-red-400" />
+                      <p className="text-sm text-red-600 mb-1 font-medium">Profile photo is required *</p>
+                      <p className="text-xs text-gray-500 mb-2">Please upload your profile photo</p>
                       <Input
                         type="file"
                         accept="image/*"
@@ -853,6 +872,7 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                           if (file) handleFileUpload(file, 'expertPhoto');
                         }}
                         className="max-w-xs mx-auto"
+                        required
                       />
                     </div>
                   )}

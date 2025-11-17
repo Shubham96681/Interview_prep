@@ -206,12 +206,18 @@ app.post('/api/auth/register', upload.fields([
 
     console.log(`✅ User does not exist, proceeding with registration for: ${email}`);
 
+    // Validate profile photo is required
+    const profilePhotoPath = req.files?.profilePhoto?.[0]?.filename || req.files?.expertProfilePhoto?.[0]?.filename;
+    if (!profilePhotoPath) {
+      console.error('❌ Profile photo is required');
+      return res.status(400).json({ message: 'Profile photo is required' });
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Handle file uploads
     const resumePath = req.files?.resume?.[0]?.filename;
-    const profilePhotoPath = req.files?.profilePhoto?.[0]?.filename || req.files?.expertProfilePhoto?.[0]?.filename;
     const certificationPaths = [];
     
     // Handle multiple certification files
