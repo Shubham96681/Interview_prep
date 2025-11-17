@@ -120,6 +120,55 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Check if email exists endpoint
+app.get('/api/auth/check-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    if (!email) {
+      return res.status(400).json({ 
+        exists: false,
+        message: 'Email parameter is required' 
+      });
+    }
+
+    // Sanitize email
+    const sanitizedEmail = email.trim().toLowerCase();
+    
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitizedEmail)) {
+      return res.status(400).json({ 
+        exists: false,
+        message: 'Invalid email format' 
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email: sanitizedEmail }
+    });
+
+    if (existingUser) {
+      return res.json({ 
+        exists: true,
+        message: 'This email already exists. Please use a different email.' 
+      });
+    }
+
+    return res.json({ 
+      exists: false,
+      message: 'Email is available' 
+    });
+  } catch (error) {
+    console.error('❌ Error checking email:', error);
+    return res.status(500).json({ 
+      exists: false,
+      message: 'Error checking email availability' 
+    });
+  }
+});
+
 // Authentication routes
 app.post('/api/auth/register', upload.fields([
   { name: 'resume', maxCount: 1 },

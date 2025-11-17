@@ -179,6 +179,12 @@ class ApiService {
     });
   }
 
+  async checkEmail(email: string): Promise<ApiResponse<{ exists: boolean; message: string }>> {
+    return this.request(`/api/auth/check-email?email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+    });
+  }
+
   async getCurrentUser() {
     return this.request('/api/auth/me');
   }

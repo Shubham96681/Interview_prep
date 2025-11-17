@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -49,10 +49,15 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
   
   // Common fields
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState<string>('');
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  
+  // Debounce timer ref
+  const emailCheckTimer = useRef<NodeJS.Timeout | null>(null);
   
   // Candidate specific fields
   const [resume, setResume] = useState<File | null>(null);
@@ -125,8 +130,98 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
     setProficiency(prev => prev.filter(s => s !== skill));
   };
 
+  // Email validation function
+  const validateEmail = async (emailValue: string) => {
+    // Basic email format check
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailValue) {
+      setEmailError('');
+      setIsCheckingEmail(false);
+      return;
+    }
+
+    if (!emailRegex.test(emailValue)) {
+      setEmailError('');
+      setIsCheckingEmail(false);
+      return; // Don't check invalid emails
+    }
+
+    setIsCheckingEmail(true);
+    
+    try {
+      const response = await apiService.checkEmail(emailValue);
+      
+      if (response.success && response.data) {
+        if (response.data.exists) {
+          setEmailError(response.data.message || 'This email already exists. Please use a different email.');
+        } else {
+          setEmailError('');
+        }
+      } else {
+        // On error, don't show error message (to avoid false positives)
+        setEmailError('');
+      }
+    } catch (error) {
+      // On error, don't show error message
+      setEmailError('');
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
+  // Debounced email validation
+  useEffect(() => {
+    // Clear previous timer
+    if (emailCheckTimer.current) {
+      clearTimeout(emailCheckTimer.current);
+    }
+
+    // Set new timer
+    emailCheckTimer.current = setTimeout(() => {
+      validateEmail(email);
+    }, 500); // Wait 500ms after user stops typing
+
+    // Cleanup function
+    return () => {
+      if (emailCheckTimer.current) {
+        clearTimeout(emailCheckTimer.current);
+      }
+    };
+  }, [email]);
+
+  // Clear email error when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      setEmailError('');
+      setEmail('');
+      setIsCheckingEmail(false);
+    }
+  }, [isOpen]);
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEmail = e.target.value;
+    setEmail(newEmail);
+    // Clear error immediately when user starts typing
+    if (emailError) {
+      setEmailError('');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Wait for email check to complete if in progress
+    if (isCheckingEmail) {
+      toast.error('Please wait while we check your email...');
+      return;
+    }
+    
+    // Check if email has error before submitting
+    if (emailError) {
+      toast.error(emailError);
+      return;
+    }
     
     if (password !== confirmPassword) {
       toast.error('Passwords do not match');
@@ -294,9 +389,16 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         id="candidate-email"
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={handleEmailChange}
                         required
+                        className={emailError ? 'border-red-500' : ''}
                       />
+                      {isCheckingEmail && (
+                        <p className="text-sm text-gray-500 mt-1">Checking email availability...</p>
+                      )}
+                      {emailError && (
+                        <p className="text-sm text-red-500 mt-1">{emailError}</p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="candidate-phone">Phone Number</Label>
@@ -550,9 +652,16 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         id="expert-email"
                         type="email"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={handleEmailChange}
                         required
+                        className={emailError ? 'border-red-500' : ''}
                       />
+                      {isCheckingEmail && (
+                        <p className="text-sm text-gray-500 mt-1">Checking email availability...</p>
+                      )}
+                      {emailError && (
+                        <p className="text-sm text-red-500 mt-1">{emailError}</p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="expert-phone">Phone Number</Label>
