@@ -140,6 +140,21 @@ class WebRTCService {
           socketId: socket.id
         });
       });
+
+      // Handle chat messages
+      socket.on('chat-message', ({ meetingId, userId, userName, message, timestamp }) => {
+        console.log(`💬 Chat message from ${userName} (${userId}) in meeting ${meetingId}: ${message}`);
+        const messageData = {
+          userId,
+          userName,
+          message,
+          timestamp: timestamp || new Date().toISOString()
+        };
+        // Broadcast chat message to all users in the meeting room (including sender for consistency)
+        socket.to(meetingId).emit('chat-message', messageData);
+        // Also send back to sender to ensure consistency (in case local state wasn't updated)
+        socket.emit('chat-message', messageData);
+      });
     });
 
     console.log('✅ WebRTC signaling service initialized');

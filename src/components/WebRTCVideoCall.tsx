@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Video, VideoOff, Mic, MicOff, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
+import { Video, VideoOff, Mic, MicOff, PhoneOff, Monitor, MonitorOff, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { io, Socket } from 'socket.io-client';
 import { apiService } from '@/lib/apiService';
+import MeetingChat from './MeetingChat';
 
 interface WebRTCVideoCallProps {
   meetingId: string;
@@ -33,6 +34,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const [error, setError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [recordingStarted, setRecordingStarted] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   
   // All refs - must be called in same order
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -2044,6 +2046,15 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           {isScreenSharing ? <MonitorOff className="h-5 w-5" /> : <Monitor className="h-5 w-5" />}
         </Button>
 
+        <Button
+          variant={isChatOpen ? "default" : "outline"}
+          size="lg"
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className="rounded-full"
+        >
+          <MessageSquare className="h-5 w-5" />
+        </Button>
+
         {!isRecording ? (
           <Button
             variant="outline"
@@ -2147,6 +2158,14 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           </CardContent>
         </Card>
       )}
+
+      {/* Chat Component */}
+      <MeetingChat
+        socket={socket}
+        meetingId={meetingId}
+        isOpen={isChatOpen}
+        onToggle={() => setIsChatOpen(!isChatOpen)}
+      />
     </div>
   );
 }
