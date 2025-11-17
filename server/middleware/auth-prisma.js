@@ -48,16 +48,55 @@ const authenticateToken = async (req, res, next) => {
         const tokenParts = token.split('-');
         if (tokenParts.length >= 3 && tokenParts[0] === 'token') {
           // Format: token-{userId}-{timestamp}
-          // Try to find user by checking if the middle part looks like a user ID
-          // For now, we'll try to get user from email in localStorage or use a fallback
-          // Since we can't access localStorage from backend, we'll allow the request through
-          // and let the endpoint handle user lookup
-          console.log('⚠️ Test token format detected, allowing request (endpoint will handle user lookup)');
-          // For test tokens, we'll skip user verification and let the endpoint handle it
-          // This is a temporary solution for development/testing
-          return next(); // Skip authentication for test tokens
+          // Extract userId (the part between 'token' and the timestamp)
+          const extractedUserId = tokenParts.slice(1, -1).join('-'); // Join all parts except first and last
+          console.log('⚠️ Test token format detected, extracted userId:', extractedUserId);
+          
+          // Try to fetch the user from database
+          try {
+            user = await prisma.user.findUnique({
+              where: { id: extractedUserId },
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                userType: true,
+                bio: true,
+                experience: true,
+                skills: true,
+                rating: true,
+                totalSessions: true,
+                hourlyRate: true,
+                isVerified: true,
+                yearsOfExperience: true,
+                proficiency: true,
+                timezone: true,
+                workingHoursStart: true,
+                workingHoursEnd: true,
+                daysAvailable: true,
+                createdAt: true,
+                updatedAt: true
+              }
+            });
+            
+            if (user) {
+              userId = user.id;
+              console.log('✅ Test token user found:', user.email);
+              req.user = user;
+              return next();
+            } else {
+              console.warn('⚠️ Test token userId not found in database:', extractedUserId);
+              // Still allow through, but req.user will be undefined
+              return next();
+            }
+          } catch (dbError) {
+            console.error('❌ Error fetching user for test token:', dbError);
+            // Still allow through, but req.user will be undefined
+            return next();
+          }
         } else if (token.startsWith('test-token-')) {
-          console.log('⚠️ Test token detected, allowing request');
+          console.log('⚠️ Generic test token detected, allowing request without user lookup');
+          // For generic test tokens, we can't extract userId, so just allow through
           return next(); // Skip authentication for test tokens
         }
       }
