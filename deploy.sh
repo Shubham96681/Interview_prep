@@ -145,7 +145,8 @@ BUILD_PID=$!
 # Monitor build progress
 BUILD_START=$(date +%s)
 TIMEOUT=1800  # 30 minutes
-CHECK_INTERVAL=30  # Check every 30 seconds
+LAST_PROGRESS=0
+PROGRESS_INTERVAL=30  # Show progress every 30 seconds
 
 while kill -0 $BUILD_PID 2>/dev/null; do
     ELAPSED=$(($(date +%s) - BUILD_START))
@@ -159,10 +160,11 @@ while kill -0 $BUILD_PID 2>/dev/null; do
     fi
     
     # Show progress every 30 seconds
-    if [ $((ELAPSED % CHECK_INTERVAL)) -eq 0 ]; then
+    if [ $((ELAPSED - LAST_PROGRESS)) -ge $PROGRESS_INTERVAL ]; then
         echo "   ⏳ Build in progress... (${ELAPSED}s elapsed)"
         # Show last few lines of output
         tail -3 /tmp/build.log 2>/dev/null | grep -v "^$" || true
+        LAST_PROGRESS=$ELAPSED
     fi
     
     sleep 5
