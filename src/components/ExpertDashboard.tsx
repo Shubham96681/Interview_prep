@@ -86,10 +86,17 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
   }, [user.id, fetchSessions]);
 
   // Filter sessions based on status
+  // Exclude sessions with recordings from upcoming (recordings mean session is completed)
   const upcomingSessions = sessions.filter(session => 
-    session.status === 'upcoming' || session.status === 'scheduled'
+    (session.status === 'upcoming' || session.status === 'scheduled') && 
+    !session.recordingUrl && 
+    session.status !== 'in_progress' &&
+    session.status !== 'completed'
   );
-  const completedSessions = sessions.filter(session => session.status === 'completed');
+  // Include sessions that are completed OR have recordings (recordings indicate completion)
+  const completedSessions = sessions.filter(session => 
+    session.status === 'completed' || !!session.recordingUrl
+  );
 
   const formatDate = (dateStr: string, timeStr?: string) => {
     if (!dateStr) return 'No date';
@@ -298,9 +305,10 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
       <div className="bg-white rounded-lg shadow-sm border">
         <Tabs defaultValue="upcoming" className="w-full">
           <div className="border-b border-gray-200 px-6 py-4">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="upcoming">Upcoming Sessions</TabsTrigger>
               <TabsTrigger value="completed">Completed Sessions</TabsTrigger>
+              <TabsTrigger value="recordings">Recordings & Feedback</TabsTrigger>
               <TabsTrigger value="reviews">Reviews & Ratings</TabsTrigger>
             </TabsList>
           </div>
