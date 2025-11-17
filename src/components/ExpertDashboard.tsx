@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, Star, Video, FileText, Users, DollarSign, TrendingUp, MessageSquare } from 'lucide-react';
+import { Calendar, Clock, Video, FileText, Users, DollarSign, TrendingUp, MessageSquare } from 'lucide-react';
 import { Session } from '@/lib/mockData';
 import { apiService } from '@/lib/apiService';
 import realtimeService from '@/lib/realtimeService';
@@ -303,10 +303,9 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
       <div className="bg-white rounded-lg shadow-sm border">
         <Tabs defaultValue="upcoming" className="w-full">
           <div className="border-b border-gray-200 px-6 py-4">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="upcoming">Upcoming Sessions</TabsTrigger>
               <TabsTrigger value="completed">Completed Sessions</TabsTrigger>
-              <TabsTrigger value="reviews">Reviews & Ratings</TabsTrigger>
             </TabsList>
           </div>
 
@@ -513,16 +512,6 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-
-          <TabsContent value="reviews" className="space-y-4 p-6">
-            <Card className="border-0 shadow-md">
-              <CardContent className="p-12 text-center">
-                <Star className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-gray-600 mb-2">No reviews yet</h3>
-                <p className="text-gray-500">Reviews and ratings from your students will appear here after completed sessions.</p>
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
       </div>
