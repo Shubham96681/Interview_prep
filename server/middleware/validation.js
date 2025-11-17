@@ -123,8 +123,8 @@ const validateReview = [
     .withMessage('Rating must be between 1 and 5'),
   body('comment')
     .trim()
-    .isLength({ min: 10, max: 1000 })
-    .withMessage('Comment must be between 10 and 1000 characters'),
+    .isLength({ min: 1, max: 1000 })
+    .withMessage('Comment must be between 1 and 1000 characters'),
   body('categories.professionalism')
     .optional()
     .isInt({ min: 1, max: 5 })
