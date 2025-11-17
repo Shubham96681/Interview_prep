@@ -134,19 +134,50 @@ echo "   Current memory: $(free -h | grep Mem | awk '{print $3 "/" $2}')"
 # Increase Node.js memory limit for build (EC2 has limited memory)
 export NODE_OPTIONS="--max-old-space-size=512"
 
-# Run build with timeout (30 minutes max) and better error handling
-# Use stdbuf to ensure output is flushed immediately
+# Run build with timeout and progress monitoring
 echo "   Running: npm run build"
-if stdbuf -oL -eL timeout 1800 npm run build 2>&1 | stdbuf -oL -eL tee /tmp/build.log; then
+echo "   Progress will be logged to /tmp/build.log"
+
+# Start build in background with logging
+(npm run build > /tmp/build.log 2>&1) &
+BUILD_PID=$!
+
+# Monitor build progress
+BUILD_START=$(date +%s)
+TIMEOUT=1800  # 30 minutes
+CHECK_INTERVAL=30  # Check every 30 seconds
+
+while kill -0 $BUILD_PID 2>/dev/null; do
+    ELAPSED=$(($(date +%s) - BUILD_START))
+    
+    if [ $ELAPSED -gt $TIMEOUT ]; then
+        echo "❌ Build timed out after $TIMEOUT seconds!"
+        kill -9 $BUILD_PID 2>/dev/null || true
+        echo "Last 50 lines of build output:"
+        tail -50 /tmp/build.log || echo "No build log available"
+        exit 1
+    fi
+    
+    # Show progress every 30 seconds
+    if [ $((ELAPSED % CHECK_INTERVAL)) -eq 0 ]; then
+        echo "   ⏳ Build in progress... (${ELAPSED}s elapsed)"
+        # Show last few lines of output
+        tail -3 /tmp/build.log 2>/dev/null | grep -v "^$" || true
+    fi
+    
+    sleep 5
+done
+
+# Wait for build to complete and get exit code
+wait $BUILD_PID
+BUILD_EXIT_CODE=$?
+
+if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo "✅ Build command completed at $(date)"
     echo "   Build output summary:"
-    tail -30 /tmp/build.log | grep -E "(built|error|Error|✓|✗)" || tail -10 /tmp/build.log
+    tail -20 /tmp/build.log | grep -E "(built|error|Error|✓|✗|dist/)" || tail -10 /tmp/build.log
 else
-    BUILD_EXIT_CODE=$?
     echo "❌ Build failed with exit code: $BUILD_EXIT_CODE at $(date)"
-    if [ $BUILD_EXIT_CODE -eq 124 ]; then
-        echo "❌ Build timed out after 30 minutes!"
-    fi
     echo "Last 50 lines of build output:"
     tail -50 /tmp/build.log || echo "No build log available"
     exit 1
