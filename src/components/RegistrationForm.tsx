@@ -52,7 +52,9 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
   const [emailError, setEmailError] = useState<string>('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string>('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   
@@ -196,8 +198,67 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       setEmailError('');
       setEmail('');
       setIsCheckingEmail(false);
+      setPasswordError('');
+      setConfirmPasswordError('');
     }
   }, [isOpen]);
+
+  // Password validation function
+  const validatePassword = (pwd: string): string => {
+    if (!pwd) {
+      return '';
+    }
+    
+    const errors: string[] = [];
+    
+    if (pwd.length < 6) {
+      errors.push('at least 6 characters');
+    }
+    
+    if (!/[a-z]/.test(pwd)) {
+      errors.push('one lowercase letter');
+    }
+    
+    if (!/[A-Z]/.test(pwd)) {
+      errors.push('one uppercase letter');
+    }
+    
+    if (!/\d/.test(pwd)) {
+      errors.push('one number');
+    }
+    
+    if (errors.length > 0) {
+      return `Password must contain ${errors.join(', ')}`;
+    }
+    
+    return '';
+  };
+
+  // Handle password change with validation
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    const error = validatePassword(value);
+    setPasswordError(error);
+    
+    // Also validate confirm password if it's been filled
+    if (confirmPassword) {
+      if (value !== confirmPassword) {
+        setConfirmPasswordError('Passwords do not match');
+      } else {
+        setConfirmPasswordError('');
+      }
+    }
+  };
+
+  // Handle confirm password change
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    if (password && value !== password) {
+      setConfirmPasswordError('Passwords do not match');
+    } else {
+      setConfirmPasswordError('');
+    }
+  };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
@@ -223,13 +284,17 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       return;
     }
     
-    if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
+    // Validate password
+    const passwordValidationError = validatePassword(password);
+    if (passwordValidationError) {
+      setPasswordError(passwordValidationError);
+      toast.error(passwordValidationError);
       return;
     }
-
-    if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    
+    if (password !== confirmPassword) {
+      setConfirmPasswordError('Passwords do not match');
+      toast.error('Passwords do not match');
       return;
     }
 
@@ -616,9 +681,18 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         id="candidate-password"
                         type="password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => handlePasswordChange(e.target.value)}
+                        className={passwordError ? 'border-red-500' : ''}
                         required
                       />
+                      {passwordError && (
+                        <p className="text-sm text-red-500 mt-1">{passwordError}</p>
+                      )}
+                      {!passwordError && password && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Password must contain: at least 6 characters, one lowercase letter, one uppercase letter, and one number
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="candidate-confirm-password">Confirm Password *</Label>
@@ -626,9 +700,13 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         id="candidate-confirm-password"
                         type="password"
                         value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onChange={(e) => handleConfirmPasswordChange(e.target.value)}
+                        className={confirmPasswordError ? 'border-red-500' : ''}
                         required
                       />
+                      {confirmPasswordError && (
+                        <p className="text-sm text-red-500 mt-1">{confirmPasswordError}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -895,9 +973,18 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         id="expert-password"
                         type="password"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => handlePasswordChange(e.target.value)}
+                        className={passwordError ? 'border-red-500' : ''}
                         required
                       />
+                      {passwordError && (
+                        <p className="text-sm text-red-500 mt-1">{passwordError}</p>
+                      )}
+                      {!passwordError && password && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Password must contain: at least 6 characters, one lowercase letter, one uppercase letter, and one number
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="expert-confirm-password">Confirm Password *</Label>
@@ -905,9 +992,13 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         id="expert-confirm-password"
                         type="password"
                         value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onChange={(e) => handleConfirmPasswordChange(e.target.value)}
+                        className={confirmPasswordError ? 'border-red-500' : ''}
                         required
                       />
+                      {confirmPasswordError && (
+                        <p className="text-sm text-red-500 mt-1">{confirmPasswordError}</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
