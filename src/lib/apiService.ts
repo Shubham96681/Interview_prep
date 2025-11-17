@@ -318,6 +318,73 @@ class ApiService {
     });
   }
 
+  /**
+   * Get a fresh signed URL for a session recording
+   * This automatically handles expired tokens by generating a new signed URL
+   */
+  async getRecordingUrl(sessionId: string): Promise<string | null> {
+    try {
+      const response = await this.request<{ recordingUrl: string }>(`/api/sessions/${sessionId}/recording`, {
+        method: 'GET'
+      });
+      
+      if (response.success && response.data?.recordingUrl) {
+        return response.data.recordingUrl;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting recording URL:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Open a recording URL with automatic regeneration if expired
+   * This function will always fetch a fresh URL from the backend before opening
+   */
+  async openRecordingUrl(sessionId: string, fallbackUrl?: string): Promise<void> {
+    try {
+      // Always get a fresh signed URL from the backend
+      const freshUrl = await this.getRecordingUrl(sessionId);
+      
+      if (freshUrl) {
+        // Open the fresh URL
+        window.open(freshUrl, '_blank');
+      } else if (fallbackUrl) {
+        // If backend fails, try fallback but also check if it's expired
+        console.warn('Using fallback URL, but it may be expired');
+        
+        // Try to open fallback URL
+        const newWindow = window.open(fallbackUrl, '_blank');
+        
+        // Check if the URL might be expired (S3 URLs with expired tokens show XML error)
+        // We can't directly detect this, but we can set up a listener
+        if (newWindow) {
+          // After a short delay, check if we need to regenerate
+          setTimeout(async () => {
+            // If the window is still open and might have an error, try to get fresh URL again
+            // Note: We can't directly check the content due to CORS, but we can retry
+            try {
+              const retryUrl = await this.getRecordingUrl(sessionId);
+              if (retryUrl && retryUrl !== fallbackUrl) {
+                // Close the old window and open with fresh URL
+                newWindow.close();
+                window.open(retryUrl, '_blank');
+              }
+            } catch (e) {
+              // Ignore retry errors
+            }
+          }, 1000);
+        }
+      } else {
+        throw new Error('No recording URL available');
+      }
+    } catch (error) {
+      console.error('Error opening recording URL:', error);
+      throw error;
+    }
+  }
+
   async uploadRecording(sessionId: string, recordingBlob: Blob): Promise<ApiResponse<{ recordingUrl: string; fileSize: number; filename: string }>> {
     try {
       const url = `${API_BASE_URL}/api/sessions/${sessionId}/upload-recording`;

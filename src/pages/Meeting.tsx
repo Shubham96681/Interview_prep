@@ -7,6 +7,7 @@ import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
 import WebRTCVideoCall from '@/components/WebRTCVideoCall';
 import FeedbackForm from '@/components/FeedbackForm';
+import { toast } from 'sonner';
 
 export default function Meeting() {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -477,22 +478,11 @@ export default function Meeting() {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      // Get fresh signed URL from backend
-                      const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
-                        method: 'GET'
-                      });
-                      
-                      if (response.success && response.data?.recordingUrl) {
-                        window.open(response.data.recordingUrl, '_blank');
-                      } else {
-                        // Fallback to stored URL
-                        console.log('Using stored recording URL (endpoint may not be available yet)');
-                        window.open(session.recordingUrl, '_blank');
-                      }
+                      // Always get fresh signed URL (handles expired tokens automatically)
+                      await apiService.openRecordingUrl(session.id, session.recordingUrl);
                     } catch (error) {
-                      // Silently fallback to stored URL - this is expected if endpoint isn't deployed yet
-                      console.log('Using stored recording URL (fresh URL endpoint not available)');
-                      window.open(session.recordingUrl, '_blank');
+                      console.error('Error opening recording:', error);
+                      toast.error('Failed to open recording. Please try again.');
                     }
                   }}
                 >

@@ -387,21 +387,11 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                               size="sm"
                               onClick={async () => {
                                 try {
-                                  // Get fresh signed URL from backend
-                                  const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
-                                    method: 'GET'
-                                  });
-                                  
-                                  if (response.success && response.data?.recordingUrl) {
-                                    window.open(response.data.recordingUrl, '_blank');
-                                  } else {
-                                    // Fallback to stored URL
-                                    window.open(session.recordingUrl, '_blank');
-                                  }
+                                  // Always get fresh signed URL (handles expired tokens automatically)
+                                  await apiService.openRecordingUrl(session.id, session.recordingUrl);
                                 } catch (error) {
-                                  console.error('Error getting recording URL:', error);
-                                  // Fallback to stored URL
-                                  window.open(session.recordingUrl, '_blank');
+                                  console.error('Error opening recording:', error);
+                                  toast.error('Failed to open recording. Please try again.');
                                 }
                               }}
                             >
@@ -472,20 +462,11 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                             size="sm"
                             onClick={async () => {
                               try {
-                                // Get fresh signed URL from backend
-                                const response = await apiService.request(`/api/sessions/${session.id}/recording`, {
-                                  method: 'GET'
-                                });
-                                
-                                if (response.success && response.data?.recordingUrl) {
-                                  window.open(response.data.recordingUrl, '_blank');
-                                } else {
-                                  // Fallback to stored URL
-                                  window.open(session.recordingUrl, '_blank');
-                                }
+                                // Always get fresh signed URL (handles expired tokens automatically)
+                                await apiService.openRecordingUrl(session.id, session.recordingUrl);
                               } catch (error) {
-                                // Silently fallback to stored URL
-                                window.open(session.recordingUrl, '_blank');
+                                console.error('Error opening recording:', error);
+                                toast.error('Failed to open recording. Please try again.');
                               }
                             }}
                           >
