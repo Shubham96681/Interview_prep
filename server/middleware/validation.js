@@ -116,8 +116,10 @@ const validateSessionBooking = [
 // Review validation
 const validateReview = [
   body('sessionId')
-    .isMongoId()
-    .withMessage('Valid session ID is required'),
+    .notEmpty()
+    .withMessage('Valid session ID is required')
+    .isString()
+    .withMessage('Session ID must be a string'),
   body('rating')
     .isInt({ min: 1, max: 5 })
     .withMessage('Rating must be between 1 and 5'),
@@ -148,11 +150,24 @@ const validateReview = [
   handleValidationErrors
 ];
 
-// MongoDB ObjectId validation
+// Prisma ID validation (accepts both MongoDB ObjectId and Prisma IDs)
 const validateObjectId = (paramName) => [
   param(paramName)
-    .isMongoId()
-    .withMessage(`Valid ${paramName} is required`),
+    .notEmpty()
+    .withMessage(`${paramName} is required`)
+    .isString()
+    .withMessage(`${paramName} must be a string`)
+    .custom((value) => {
+      // Accept MongoDB ObjectId format (24 hex characters)
+      if (/^[0-9a-fA-F]{24}$/.test(value)) {
+        return true;
+      }
+      // Accept Prisma ID format (starts with letters, contains alphanumeric)
+      if (/^[a-z0-9]+$/.test(value) && value.length > 10) {
+        return true;
+      }
+      throw new Error(`Invalid ${paramName} format`);
+    }),
   handleValidationErrors
 ];
 
