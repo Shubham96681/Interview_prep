@@ -3,10 +3,13 @@
 # Don't use set -e globally - we'll handle errors explicitly
 # set -e causes issues with pipes and subshells
 
-# Ensure output is unbuffered
+# Ensure output is unbuffered for SSH connections
 export PYTHONUNBUFFERED=1
+# Use unbuffered output if stdbuf is available
 if command -v stdbuf >/dev/null 2>&1; then
-    exec stdbuf -oL -eL "$0" "$@"
+    # Redirect stdout and stderr through stdbuf for unbuffered output
+    exec 1> >(stdbuf -oL -eL tee >(cat >&1))
+    exec 2> >(stdbuf -oL -eL tee >(cat >&2))
 fi
 
 echo "=== Starting Deployment for InterviewAce ==="
