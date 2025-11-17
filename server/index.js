@@ -1498,7 +1498,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
 });
 
 // Get reviews for a session
-app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId, async (req, res) => {
+app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId('sessionId'), async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
     const userId = req.user.userId;
