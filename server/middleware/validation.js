@@ -157,7 +157,6 @@ const validateReview = [
 
 // Prisma ID validation (accepts both MongoDB ObjectId and Prisma IDs)
 const validateObjectId = (paramName) => {
-  console.log(`🔍 Setting up validateObjectId for param: ${paramName}`);
   return [
     param(paramName)
       .notEmpty()
@@ -165,16 +164,13 @@ const validateObjectId = (paramName) => {
       .isString()
       .withMessage(`${paramName} must be a string`)
       .custom((value, { req }) => {
-        console.log(`🔍 Validating ${paramName}:`, { value, length: value?.length, path: req.path });
         // Accept MongoDB ObjectId format (24 hex characters)
         if (/^[0-9a-fA-F]{24}$/.test(value)) {
-          console.log(`✅ ${paramName} validated as MongoDB ObjectId`);
           return true;
         }
         // Accept Prisma ID format (alphanumeric, typically starts with letters, length > 10)
         // Prisma IDs can be: cmhhtzlz30000n19n08cantxu, cmhrg6c7n0001n16a8o6obxyj, etc.
         if (/^[a-z0-9]+$/i.test(value) && value.length >= 10 && value.length <= 50) {
-          console.log(`✅ ${paramName} validated as Prisma ID`);
           return true;
         }
         // Log validation failure for debugging
