@@ -4,15 +4,31 @@ const prisma = require('../lib/prisma');
 // Middleware to verify JWT token or test token
 const authenticateToken = async (req, res, next) => {
   try {
+    console.log('🔐 Auth middleware - Request:', {
+      method: req.method,
+      path: req.path,
+      headers: {
+        authorization: req.headers['authorization'] ? req.headers['authorization'].substring(0, 30) + '...' : 'NOT PRESENT',
+        'content-type': req.headers['content-type'],
+        'user-agent': req.headers['user-agent']?.substring(0, 50)
+      }
+    });
+    
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
+      console.error('❌ Auth middleware - No token found:', {
+        authHeader: authHeader || 'undefined',
+        allHeaders: Object.keys(req.headers)
+      });
       return res.status(401).json({ 
         success: false,
         message: 'Access token required' 
       });
     }
+    
+    console.log('✅ Auth middleware - Token extracted:', token.substring(0, 20) + '...');
 
     let user = null;
     let userId = null;

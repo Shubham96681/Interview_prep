@@ -120,9 +120,16 @@ class ApiService {
           ...requestOptions.headers,
           'Authorization': `Bearer ${token}`,
         };
+        console.log('🔑 Token found, adding to headers:', token.substring(0, 20) + '...');
+      } else {
+        console.warn('⚠️ No token found in localStorage!');
       }
 
-      console.log('Making request to:', url, 'with options:', requestOptions);
+      console.log('Making request to:', url, 'with options:', {
+        method: requestOptions.method,
+        headers: requestOptions.headers,
+        body: requestOptions.body ? (typeof requestOptions.body === 'string' ? requestOptions.body.substring(0, 100) + '...' : '[FormData]') : undefined
+      });
 
       const response = await this.retryRequest(() => fetch(url, requestOptions));
 
