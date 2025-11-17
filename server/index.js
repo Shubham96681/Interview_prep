@@ -1616,7 +1616,7 @@ app.get('/api/notifications', authenticateToken, validatePagination, async (req,
 });
 
 // Mark notification as read
-app.put('/api/notifications/:id/read', authenticateToken, validateObjectId, async (req, res) => {
+app.put('/api/notifications/:id/read', authenticateToken, validateObjectId('id'), async (req, res) => {
   try {
     const notification = await prisma.notification.updateMany({
       where: {
