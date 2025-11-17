@@ -3,6 +3,12 @@
 # Don't use set -e globally - we'll handle errors explicitly
 # set -e causes issues with pipes and subshells
 
+# Ensure output is unbuffered
+export PYTHONUNBUFFERED=1
+if command -v stdbuf >/dev/null 2>&1; then
+    exec stdbuf -oL -eL "$0" "$@"
+fi
+
 echo "=== Starting Deployment for InterviewAce ==="
 echo "Timestamp: $(date)"
 echo "Deployment version: $(date +%Y%m%d-%H%M%S)"
@@ -130,58 +136,35 @@ echo "🔨 Building frontend application..."
 echo "   This may take 5-15 minutes on EC2..."
 echo "   Starting build at $(date)..."
 echo "   Current memory: $(free -h | grep Mem | awk '{print $3 "/" $2}')"
+echo "   Current directory: $(pwd)"
+echo "   Node version: $(node --version 2>/dev/null || echo 'not found')"
+echo "   NPM version: $(npm --version 2>/dev/null || echo 'not found')"
 
 # Increase Node.js memory limit for build (EC2 has limited memory)
 export NODE_OPTIONS="--max-old-space-size=512"
 
-# Run build with timeout and progress monitoring
+# Run build with timeout - use simpler approach that flushes output
 echo "   Running: npm run build"
-echo "   Progress will be logged to /tmp/build.log"
+echo "   (Output will appear below as build progresses)"
 
-# Start build in background with logging
-(npm run build > /tmp/build.log 2>&1) &
-BUILD_PID=$!
-
-# Monitor build progress
-BUILD_START=$(date +%s)
-TIMEOUT=1800  # 30 minutes
-LAST_PROGRESS=0
-PROGRESS_INTERVAL=30  # Show progress every 30 seconds
-
-while kill -0 $BUILD_PID 2>/dev/null; do
-    ELAPSED=$(($(date +%s) - BUILD_START))
-    
-    if [ $ELAPSED -gt $TIMEOUT ]; then
-        echo "❌ Build timed out after $TIMEOUT seconds!"
-        kill -9 $BUILD_PID 2>/dev/null || true
-        echo "Last 50 lines of build output:"
-        tail -50 /tmp/build.log || echo "No build log available"
-        exit 1
-    fi
-    
-    # Show progress every 30 seconds
-    if [ $((ELAPSED - LAST_PROGRESS)) -ge $PROGRESS_INTERVAL ]; then
-        echo "   ⏳ Build in progress... (${ELAPSED}s elapsed)"
-        # Show last few lines of output
-        tail -3 /tmp/build.log 2>/dev/null | grep -v "^$" || true
-        LAST_PROGRESS=$ELAPSED
-    fi
-    
-    sleep 5
-done
-
-# Wait for build to complete and get exit code
-wait $BUILD_PID
-BUILD_EXIT_CODE=$?
+# Use timeout with explicit output flushing
+if timeout 1800 bash -c 'npm run build' 2>&1 | while IFS= read -r line; do
+    echo "$line"
+    # Force flush every line
+    [ -t 1 ] || true
+done; then
+    BUILD_EXIT_CODE=0
+else
+    BUILD_EXIT_CODE=${PIPESTATUS[0]}
+fi
 
 if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo "✅ Build command completed at $(date)"
-    echo "   Build output summary:"
-    tail -20 /tmp/build.log | grep -E "(built|error|Error|✓|✗|dist/)" || tail -10 /tmp/build.log
+elif [ $BUILD_EXIT_CODE -eq 124 ]; then
+    echo "❌ Build timed out after 30 minutes!"
+    exit 1
 else
     echo "❌ Build failed with exit code: $BUILD_EXIT_CODE at $(date)"
-    echo "Last 50 lines of build output:"
-    tail -50 /tmp/build.log || echo "No build log available"
     exit 1
 fi
 
