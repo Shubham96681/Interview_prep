@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Video, Users, Clock, Calendar } from 'lucide-react';
+import { Video, Users, Clock, Calendar, Star, MessageSquare } from 'lucide-react';
 import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
 import WebRTCVideoCall from '@/components/WebRTCVideoCall';
+import FeedbackForm from '@/components/FeedbackForm';
+import { toast } from 'sonner';
 
 export default function Meeting() {
   const { meetingId } = useParams<{ meetingId: string }>();
@@ -15,6 +17,8 @@ export default function Meeting() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInCall, setIsInCall] = useState(false);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
   // Cleanup effect: ensure video call is ended when component unmounts
   // MUST be called before any conditional returns to maintain hook order
@@ -65,6 +69,11 @@ export default function Meeting() {
             meetingId: sessionData.meetingId
           });
           setSession(sessionData);
+          
+          // Fetch reviews if session is completed
+          if (sessionData.status === 'completed' && sessionData.id) {
+            fetchReviews(sessionData.id);
+          }
         } else {
           console.error('Session not found for meeting ID:', meetingId);
           console.error('Response:', response);
@@ -91,6 +100,30 @@ export default function Meeting() {
 
     fetchSession();
   }, [meetingId, navigate, authLoading]);
+
+  const fetchReviews = async (sessionId: string) => {
+    try {
+      const response = await apiService.getSessionReviews(sessionId);
+      if (response.success && response.data?.reviews) {
+        setReviews(response.data.reviews);
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    }
+  };
+
+  const handleFeedbackSubmitted = async () => {
+    if (session?.id) {
+      await fetchReviews(session.id);
+      setShowFeedbackForm(false);
+      
+      // Refresh session data to get updated reviews
+      const response = await apiService.getSessionById(session.id);
+      if (response.success && response.data) {
+        setSession(response.data);
+      }
+    }
+  };
 
   // Show loading state - check auth first
   if (authLoading) {
@@ -423,6 +456,115 @@ export default function Meeting() {
                   <Video className="h-4 w-4 mr-2" />
                   View Recording
                 </Button>
+              </div>
+            )}
+
+            {/* Feedback Section - Show when session is completed */}
+            {session.status === 'completed' && (
+              <div className="border-t pt-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5" />
+                    Session Feedback
+                  </h3>
+                  {!showFeedbackForm && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        // Check if user has already submitted feedback
+                        const userReview = reviews.find(
+                          (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+                        );
+                        if (!userReview) {
+                          setShowFeedbackForm(true);
+                        } else {
+                          toast.info('You have already submitted feedback for this session');
+                        }
+                      }}
+                    >
+                      Provide Feedback
+                    </Button>
+                  )}
+                </div>
+
+                {/* Feedback Form */}
+                {showFeedbackForm && user && (
+                  <FeedbackForm
+                    sessionId={session.id}
+                    reviewerId={user.id}
+                    revieweeId={
+                      user.id === session.candidateId || user.id === session.candidate?.id
+                        ? session.expertId || session.expert?.id
+                        : session.candidateId || session.candidate?.id
+                    }
+                    revieweeName={
+                      user.id === session.candidateId || user.id === session.candidate?.id
+                        ? session.expertName || session.expert?.name || 'Expert'
+                        : session.candidateName || session.candidate?.name || 'Candidate'
+                    }
+                    onFeedbackSubmitted={handleFeedbackSubmitted}
+                    existingReview={
+                      reviews.find(
+                        (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+                      ) || null
+                    }
+                  />
+                )}
+
+                {/* Display Reviews */}
+                {reviews.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="font-medium">Feedback from Participants</h4>
+                    {reviews.map((review) => (
+                      <Card key={review.id}>
+                        <CardContent className="pt-6">
+                          <div className="flex items-start justify-between mb-2">
+                            <div>
+                              <p className="font-medium">
+                                {review.reviewer?.name || 'Anonymous'}
+                              </p>
+                              <p className="text-sm text-gray-500">
+                                Feedback for {review.reviewee?.name || 'Participant'}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: review.rating }).map((_, i) => (
+                                <Star
+                                  key={i}
+                                  className="h-4 w-4 fill-yellow-400 text-yellow-400"
+                                />
+                              ))}
+                              {Array.from({ length: 5 - review.rating }).map((_, i) => (
+                                <Star
+                                  key={i + review.rating}
+                                  className="h-4 w-4 text-gray-300"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                          {review.comment && (
+                            <p className="text-sm text-gray-700 mt-2">{review.comment}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            {new Date(review.createdAt).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {reviews.length === 0 && !showFeedbackForm && (
+                  <p className="text-sm text-gray-500">
+                    No feedback has been submitted yet. Be the first to share your experience!
+                  </p>
+                )}
               </div>
             )}
           </CardContent>

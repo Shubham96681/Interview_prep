@@ -200,6 +200,21 @@ class ApiService {
     return this.request(`/api/sessions/meeting/${meetingId}`);
   }
 
+  async getSessionById(sessionId: string) {
+    return this.request(`/api/sessions/${sessionId}`);
+  }
+
+  async getSessionReviews(sessionId: string) {
+    return this.request(`/api/sessions/${sessionId}/reviews`);
+  }
+
+  async createReview(sessionId: string, rating: number, comment: string, categories?: string) {
+    return this.request('/api/reviews', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, rating, comment, categories }),
+    });
+  }
+
   async createSession(sessionData: {
     expertId: string;
     candidateId: string;

@@ -1309,6 +1309,17 @@ app.get('/api/sessions/:id', authenticateToken, validateObjectId, async (req, re
         },
         expert: {
           select: { id: true, name: true, email: true, hourlyRate: true }
+        },
+        reviews: {
+          include: {
+            reviewer: {
+              select: { id: true, name: true, email: true }
+            },
+            reviewee: {
+              select: { id: true, name: true, email: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     });
@@ -1435,6 +1446,48 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     res.status(201).json({ message: 'Review created successfully', review });
   } catch (error) {
     console.error('Create review error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get reviews for a session
+app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId, async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+    const userId = req.user.userId;
+
+    // Verify user has access to this session
+    const session = await prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        OR: [
+          { candidateId: userId },
+          { expertId: userId }
+        ]
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    // Get all reviews for this session
+    const reviews = await prisma.review.findMany({
+      where: { sessionId },
+      include: {
+        reviewer: {
+          select: { id: true, name: true, email: true }
+        },
+        reviewee: {
+          select: { id: true, name: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ reviews });
+  } catch (error) {
+    console.error('Get session reviews error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
