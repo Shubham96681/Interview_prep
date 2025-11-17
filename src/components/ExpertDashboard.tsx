@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, Star, Video, FileText, Users, DollarSign, TrendingUp } from 'lucide-react';
+import { Calendar, Clock, Star, Video, FileText, Users, DollarSign, TrendingUp, MessageSquare } from 'lucide-react';
 import { Session } from '@/lib/mockData';
 import { apiService } from '@/lib/apiService';
 import realtimeService from '@/lib/realtimeService';
@@ -452,6 +452,16 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        {session.meetingId && (
+                          <Button 
+                            variant="default" 
+                            size="sm"
+                            onClick={() => navigate(`/meeting/${session.meetingId}`)}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-2" />
+                            View Feedback
+                          </Button>
+                        )}
                         {session.recordingUrl && (
                           <Button 
                             variant="outline" 
