@@ -96,6 +96,9 @@ class RobustServer {
     // URL-encoded parsing for form data with size limit
     this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
     
+    // Trust proxy (required for rate limiting behind Nginx)
+    this.app.set('trust proxy', true);
+    
     // Rate limiting for API endpoints (production-level protection)
     const apiLimiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
