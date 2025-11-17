@@ -1408,19 +1408,19 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     const reviewerId = req.user.userId;
 
     // Verify session exists and user participated
+    // Allow feedback even if session is not marked completed (in case status update failed)
     const session = await prisma.session.findFirst({
       where: {
         id: sessionId,
         OR: [
           { candidateId: reviewerId },
           { expertId: reviewerId }
-        ],
-        status: 'completed'
+        ]
       }
     });
 
     if (!session) {
-      return res.status(404).json({ message: 'Session not found or not completed' });
+      return res.status(404).json({ message: 'Session not found or you do not have access to this session' });
     }
 
     // Determine reviewee (the other participant)
@@ -1467,7 +1467,11 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
       }
     });
 
-    res.status(201).json({ message: 'Review created successfully', review });
+    res.status(existingReview ? 200 : 201).json({ 
+      success: true,
+      message: existingReview ? 'Review updated successfully' : 'Review created successfully', 
+      data: review 
+    });
   } catch (error) {
     console.error('Create review error:', error);
     res.status(500).json({ message: 'Internal server error' });
