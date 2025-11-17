@@ -2955,6 +2955,111 @@ class RobustServer {
       }
     });
 
+    // Get fresh signed URL for a session recording
+    this.app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
+      try {
+        const { id } = req.params;
+        const userId = req.user?.id;
+        
+        // Get session with recording URL
+        const session = await prisma.session.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            recordingUrl: true,
+            candidateId: true,
+            expertId: true
+          }
+        });
+
+        if (!session) {
+          return res.status(404).json({
+            success: false,
+            message: 'Session not found'
+          });
+        }
+
+        // Check if user has access to this session (candidate, expert, or admin)
+        const isAdmin = req.user?.userType === 'admin';
+        const hasAccess = isAdmin || session.candidateId === userId || session.expertId === userId;
+        
+        if (!hasAccess) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied'
+          });
+        }
+
+        if (!session.recordingUrl) {
+          return res.status(404).json({
+            success: false,
+            message: 'No recording available for this session'
+          });
+        }
+
+        let accessibleUrl = session.recordingUrl;
+
+        // If it's an S3 URL, generate a fresh signed URL
+        if (session.recordingUrl.includes('s3.amazonaws.com') || session.recordingUrl.includes('amazonaws.com')) {
+          try {
+            // Extract S3 key from URL
+            // URL format: https://bucket.s3.region.amazonaws.com/key?params
+            // Or: https://bucket.s3.region.amazonaws.com/key
+            // Or: https://s3.region.amazonaws.com/bucket/key?params
+            const urlObj = new URL(session.recordingUrl);
+            let key = urlObj.pathname;
+            
+            // Remove leading slash if present
+            if (key.startsWith('/')) {
+              key = key.substring(1);
+            }
+            
+            // If the pathname doesn't start with 'recordings/', try to extract from full path
+            if (!key.startsWith('recordings/')) {
+              // Try to find 'recordings/' in the path
+              const recordingsIndex = key.indexOf('recordings/');
+              if (recordingsIndex !== -1) {
+                key = key.substring(recordingsIndex);
+              } else {
+                // If no 'recordings/' found, use the full pathname (minus leading slash)
+                console.warn('⚠️ Could not find "recordings/" in URL path, using full pathname:', key);
+              }
+            }
+            
+            if (key) {
+              console.log(`🔄 Generating fresh signed URL for S3 key: ${key}`);
+              
+              // Generate fresh signed URL (valid for 7 days)
+              accessibleUrl = await s3Service.getSignedUrl(key, 604800); // 7 days
+              console.log(`✅ Fresh signed URL generated`);
+            } else {
+              console.warn('⚠️ Could not extract S3 key from URL:', session.recordingUrl);
+              // Return original URL as fallback
+            }
+          } catch (s3Error) {
+            console.error('❌ Error generating fresh signed URL:', s3Error);
+            // Return original URL as fallback
+          }
+        }
+        // If it's a local URL, it should already be accessible via /uploads
+
+        res.json({
+          success: true,
+          data: {
+            recordingUrl: accessibleUrl,
+            sessionId: id
+          }
+        });
+      } catch (error) {
+        console.error('Error getting recording URL:', error);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to get recording URL',
+          error: error.message
+        });
+      }
+    });
+
     // Update recording URL for a session (admin or expert only)
     this.app.put('/api/sessions/:id/recording', checkAdmin, async (req, res) => {
       try {
