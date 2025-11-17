@@ -200,7 +200,10 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
                     <Button 
                       type="button" 
                       className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                      onClick={() => setShowRegistration(true)}
+                      onClick={() => {
+                        onClose();
+                        navigate('/register');
+                      }}
                     >
                       <Sparkles className="mr-2 h-4 w-4" />
                       Create New Account
@@ -226,7 +229,10 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
                     </p>
                     <Button
                       type="button"
-                      onClick={() => setShowRegistration(true)}
+                      onClick={() => {
+                        onClose();
+                        navigate('/register');
+                      }}
                       className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300"
                     >
                       Open Registration Form

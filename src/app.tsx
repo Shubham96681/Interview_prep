@@ -10,6 +10,7 @@ import ExpertDirectory from './pages/ExpertDirectory';
 import ExpertProfile from './pages/ExpertProfile';
 import Dashboard from './pages/Dashboard';
 import Meeting from './pages/Meeting';
+import Registration from './pages/Registration';
 import NotFound from './pages/NotFound';
 import ConnectionStatus from './components/ConnectionStatus';
 
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/" element={<ProtectedRoute requireAuth={false}><Index /></ProtectedRoute>} />
           <Route path="/experts" element={<ExpertDirectory />} />
           <Route path="/expert/:id" element={<ExpertProfile />} />
+          <Route path="/register" element={<ProtectedRoute requireAuth={false}><Registration /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute requireAuth={true}><Dashboard /></ProtectedRoute>} />
               <Route 
                 path="/meeting/:meetingId" 
