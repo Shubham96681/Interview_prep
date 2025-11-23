@@ -8,8 +8,8 @@
     "build": "tsc && vite build",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "start": "node start-robust-servers.js",
-    "start:backend": "cd server && node robust-server.js",
+    "start": "cd server && node index.js",
+    "start:backend": "cd server && node index.js",
     "start:frontend": "npm run dev"
   },
   "dependencies": {
