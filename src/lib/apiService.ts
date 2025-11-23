@@ -558,6 +558,36 @@ class ApiService {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return this.request(`/api/admin/financial/payouts?email=${encodeURIComponent(user.email || '')}`);
   }
+
+  // Monitoring endpoints
+  async getMonitoring(timeRange: string = '1h') {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/monitoring?email=${encodeURIComponent(user.email || '')}&timeRange=${timeRange}`);
+  }
+
+  async getMonitoringErrors(limit: number = 100) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/monitoring/errors?email=${encodeURIComponent(user.email || '')}&limit=${limit}`);
+  }
+
+  async getMonitoringActivity(limit: number = 100) {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    return this.request(`/api/admin/monitoring/activity?email=${encodeURIComponent(user.email || '')}&limit=${limit}`);
+  }
+
+  async recordVideoMetrics(quality: string, bitrate: number, bufferingTime: number) {
+    return this.request('/api/admin/monitoring/video', {
+      method: 'POST',
+      body: JSON.stringify({ quality, bitrate, bufferingTime }),
+    });
+  }
+
+  async recordCdnRequest(hit: boolean) {
+    return this.request('/api/admin/monitoring/cdn', {
+      method: 'POST',
+      body: JSON.stringify({ hit }),
+    });
+  }
 }
 
 // Create singleton instance

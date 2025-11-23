@@ -31,6 +31,9 @@ const prisma = require('./lib/prisma');
 // Import realtime service
 const realtimeService = require('./services/realtime');
 
+// Import monitoring service
+const monitoringService = require('./services/monitoring');
+
 // Import WebRTC service
 const webrtcService = require('./services/webrtcService');
 
@@ -74,6 +77,21 @@ app.use((req, res, next) => {
       });
     }
   });
+  next();
+});
+
+// API monitoring middleware - track request latency and errors
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  const endpoint = req.path;
+  
+  // Track response
+  res.on('finish', () => {
+    const duration = Date.now() - startTime;
+    const success = res.statusCode < 400;
+    monitoringService.recordApiRequest(duration, success, endpoint);
+  });
+  
   next();
 });
 
@@ -1860,6 +1878,115 @@ app.get('/api/realtime', (req, res) => {
 // Start realtime service
 realtimeService.start();
 
+// Update monitoring with realtime connections
+setInterval(() => {
+  const connectionCount = realtimeService.getTotalConnections();
+  monitoringService.updateWebSocketConnections(connectionCount);
+}, 5000);
+
+// Admin Monitoring Endpoints
+app.get('/api/admin/monitoring', authenticateToken, async (req, res) => {
+  try {
+    const { timeRange = '1h' } = req.query;
+    const metrics = monitoringService.getMetrics(timeRange);
+    
+    res.json({
+      success: true,
+      data: metrics
+    });
+  } catch (error) {
+    console.error('Error getting monitoring metrics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get monitoring metrics'
+    });
+  }
+});
+
+// Get error logs
+app.get('/api/admin/monitoring/errors', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const errors = monitoringService.getErrorLogs(parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: { errors }
+    });
+  } catch (error) {
+    console.error('Error getting error logs:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get error logs'
+    });
+  }
+});
+
+// Get activity logs
+app.get('/api/admin/monitoring/activity', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    const activities = monitoringService.getActivityLogs(parseInt(limit));
+    
+    res.json({
+      success: true,
+      data: { activities }
+    });
+  } catch (error) {
+    console.error('Error getting activity logs:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get activity logs'
+    });
+  }
+});
+
+// Update concurrent meetings count (called by WebRTC service)
+app.post('/api/admin/monitoring/meetings', authenticateToken, async (req, res) => {
+  try {
+    const { count } = req.body;
+    if (typeof count === 'number') {
+      monitoringService.updateConcurrentMeetings(count);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Record video playback metrics (called by frontend)
+app.post('/api/admin/monitoring/video', authenticateToken, async (req, res) => {
+  try {
+    const { quality, bitrate, bufferingTime } = req.body;
+    monitoringService.recordVideoPlayback(quality, bitrate, bufferingTime);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Record WebSocket metrics (called by WebRTC service)
+app.post('/api/admin/monitoring/websocket', authenticateToken, async (req, res) => {
+  try {
+    const { jitter, packetLoss, bitrate } = req.body;
+    monitoringService.recordWebSocketMetrics(jitter, packetLoss, bitrate);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Record CDN cache hit/miss
+app.post('/api/admin/monitoring/cdn', authenticateToken, async (req, res) => {
+  try {
+    const { hit } = req.body;
+    monitoringService.recordCdnRequest(hit === true);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 404 handler
 app.use('*', (req, res) => {
   console.error('❌ 404 - Route not found:', {
@@ -1880,6 +2007,14 @@ app.use('*', (req, res) => {
 // Global error handler - MUST be last (after all routes)
 app.use((err, req, res, next) => {
   console.error('❌ Unhandled error:', err);
+  
+  // Log error to monitoring service
+  monitoringService.logError(err, {
+    path: req.path,
+    method: req.method,
+    query: req.query,
+    params: req.params
+  });
   
   // Don't leak error details in production
   const message = process.env.NODE_ENV === 'production' 
@@ -1904,6 +2039,21 @@ const server = app.listen(PORT, () => {
   // Initialize WebRTC signaling service (Socket.IO)
   webrtcService.initialize(server);
   console.log(`✅ WebRTC/Socket.IO service initialized`);
+  
+  // Track active meetings for monitoring
+  setInterval(async () => {
+    try {
+      // Count active sessions (in_progress status)
+      const activeSessions = await prisma.session.count({
+        where: {
+          status: 'in_progress'
+        }
+      });
+      monitoringService.updateConcurrentMeetings(activeSessions);
+    } catch (error) {
+      console.error('Error updating concurrent meetings:', error);
+    }
+  }, 10000); // Update every 10 seconds
 });
 
 // Configure server for high concurrency

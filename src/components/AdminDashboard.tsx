@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video, Monitor, AlertTriangle, Wifi, HardDrive, Zap, BarChart3, Server } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
 import AddUserForm from './AddUserForm';
 
@@ -123,6 +123,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [userDetailOpen, setUserDetailOpen] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [monitoring, setMonitoring] = useState<any>(null);
+  const [monitoringTimeRange, setMonitoringTimeRange] = useState<'5m' | '15m' | '1h' | '24h'>('1h');
+  const [monitoringErrors, setMonitoringErrors] = useState<any[]>([]);
+  const [monitoringActivity, setMonitoringActivity] = useState<any[]>([]);
   const [financialSummary, setFinancialSummary] = useState<any>(null);
 
   useEffect(() => {
@@ -170,7 +174,38 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
   useEffect(() => {
     loadData();
+    loadMonitoring();
   }, [analyticsPeriod]);
+
+  useEffect(() => {
+    loadMonitoring();
+    const interval = setInterval(() => {
+      loadMonitoring();
+    }, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, [monitoringTimeRange]);
+
+  const loadMonitoring = async () => {
+    try {
+      const [monitoringRes, errorsRes, activityRes] = await Promise.all([
+        apiService.getMonitoring(monitoringTimeRange),
+        apiService.getMonitoringErrors(50),
+        apiService.getMonitoringActivity(50)
+      ]);
+
+      if (monitoringRes.success) {
+        setMonitoring(monitoringRes.data);
+      }
+      if (errorsRes.success) {
+        setMonitoringErrors(errorsRes.data?.errors || []);
+      }
+      if (activityRes.success) {
+        setMonitoringActivity(activityRes.data?.activities || []);
+      }
+    } catch (error) {
+      console.error('Error loading monitoring data:', error);
+    }
+  };
 
   const handleUpdateSession = async (sessionId: string, data: any) => {
     try {
@@ -338,6 +373,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
           <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="sessions">Sessions</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
@@ -843,6 +879,322 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                           return reviewDate.toDateString() === today.toDateString();
                         }).length}</div>
                       </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+
+        <TabsContent value="monitoring" className="space-y-4">
+          <div className="flex justify-between items-center mb-4">
+            <CardTitle>System Monitoring</CardTitle>
+            <Select value={monitoringTimeRange} onValueChange={(v: '5m' | '15m' | '1h' | '24h') => setMonitoringTimeRange(v)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5m">Last 5 min</SelectItem>
+                <SelectItem value="15m">Last 15 min</SelectItem>
+                <SelectItem value="1h">Last hour</SelectItem>
+                <SelectItem value="24h">Last 24h</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {monitoring && (
+            <>
+              {/* Load Testing */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5" />
+                    Load Testing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Max Concurrent Meetings</p>
+                      <p className="text-2xl font-bold">{monitoring.loadTesting?.maxConcurrentMeetings || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Current Concurrent Meetings</p>
+                      <p className="text-2xl font-bold">{monitoring.loadTesting?.currentConcurrentMeetings || 0}</p>
+                    </div>
+                  </div>
+                  {monitoring.loadTesting?.videoPlaybackLoad && monitoring.loadTesting.videoPlaybackLoad.length > 0 && (
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Recent Video Playback</p>
+                      <div className="space-y-1">
+                        {monitoring.loadTesting.videoPlaybackLoad.slice(-5).map((playback: any, idx: number) => (
+                          <div key={idx} className="text-xs flex justify-between">
+                            <span>Quality: {playback.quality || 'N/A'}</span>
+                            <span>Bitrate: {playback.bitrate ? `${Math.round(playback.bitrate / 1000)}kbps` : 'N/A'}</span>
+                            {playback.bufferingTime && <span>Buffering: {playback.bufferingTime.toFixed(2)}s</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* App Monitoring */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Monitor className="h-5 w-5" />
+                    App Monitoring
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">API Latency (avg)</p>
+                      <p className="text-2xl font-bold">{monitoring.appMonitoring?.apiLatency?.average || 0}ms</p>
+                      <p className="text-xs text-muted-foreground">P95: {monitoring.appMonitoring?.apiLatency?.p95 || 0}ms</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Error Rate</p>
+                      <p className={`text-2xl font-bold ${(monitoring.appMonitoring?.errorRate || 0) > 5 ? 'text-red-500' : 'text-green-500'}`}>
+                        {(monitoring.appMonitoring?.errorRate || 0).toFixed(2)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Requests</p>
+                      <p className="text-2xl font-bold">{monitoring.appMonitoring?.totalRequests || 0}</p>
+                      <p className="text-xs text-muted-foreground">{monitoring.appMonitoring?.failedRequests || 0} failed</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Server CPU</p>
+                      <p className={`text-2xl font-bold ${(monitoring.appMonitoring?.serverCpu?.current || 0) > 80 ? 'text-red-500' : 'text-green-500'}`}>
+                        {(monitoring.appMonitoring?.serverCpu?.current || 0).toFixed(1)}%
+                      </p>
+                      <p className="text-xs text-muted-foreground">Load: {monitoring.appMonitoring?.serverCpu?.loadAvg?.toFixed(2) || 0}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-2">Server Memory</p>
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-sm">
+                          <span>Used:</span>
+                          <span className="font-bold">{monitoring.appMonitoring?.serverMemory?.current?.used || 0} MB</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Total:</span>
+                          <span className="font-bold">{monitoring.appMonitoring?.serverMemory?.current?.total || 0} MB</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Usage:</span>
+                          <span className={`font-bold ${(monitoring.appMonitoring?.serverMemory?.current?.percent || 0) > 80 ? 'text-red-500' : 'text-green-500'}`}>
+                            {(monitoring.appMonitoring?.serverMemory?.current?.percent || 0).toFixed(1)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Real-Time Comms */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Wifi className="h-5 w-5" />
+                    Real-Time Communications
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">WebSocket Connections</p>
+                      <p className="text-2xl font-bold">{monitoring.realtimeComms?.websocketConnections || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Jitter (avg)</p>
+                      <p className="text-2xl font-bold">{monitoring.realtimeComms?.jitter?.average?.toFixed(2) || 0}ms</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Packet Loss (avg)</p>
+                      <p className={`text-2xl font-bold ${(monitoring.realtimeComms?.packetLoss?.average || 0) > 5 ? 'text-red-500' : 'text-green-500'}`}>
+                        {(monitoring.realtimeComms?.packetLoss?.average || 0).toFixed(2)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Bitrate (avg)</p>
+                      <p className="text-2xl font-bold">
+                        {monitoring.realtimeComms?.bitrate?.average ? `${Math.round(monitoring.realtimeComms.bitrate.average / 1000)}kbps` : '0kbps'}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Distributed Tracing */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Distributed Tracing
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">Service Latency</p>
+                    <div className="space-y-2">
+                      {monitoring.distributedTracing?.serviceLatency?.map((service: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center p-2 bg-muted rounded">
+                          <span className="font-medium">{service.service}</span>
+                          <div className="flex gap-4">
+                            <span className="text-sm">Avg: {service.average}ms</span>
+                            <span className="text-sm text-muted-foreground">Count: {service.count}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {monitoring.distributedTracing?.bottlenecks && monitoring.distributedTracing.bottlenecks.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium mb-2 text-red-500">Bottlenecks Detected</p>
+                      <div className="space-y-2">
+                        {monitoring.distributedTracing.bottlenecks.map((bottleneck: any, idx: number) => (
+                          <div key={idx} className={`p-2 rounded border ${bottleneck.severity === 'high' ? 'border-red-500 bg-red-50' : 'border-yellow-500 bg-yellow-50'}`}>
+                            <div className="flex justify-between">
+                              <span className="font-medium">{bottleneck.service}</span>
+                              <Badge variant={bottleneck.severity === 'high' ? 'destructive' : 'secondary'}>
+                                {bottleneck.severity}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Recent: {bottleneck.recentLatency}ms (Avg: {bottleneck.avgLatency}ms)
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Video Playback */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Video className="h-5 w-5" />
+                    Video Playback
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Buffering Time (avg)</p>
+                      <p className="text-2xl font-bold">{monitoring.videoPlayback?.bufferingTime?.average?.toFixed(2) || 0}s</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">CDN Cache Hit Ratio</p>
+                      <p className={`text-2xl font-bold ${(monitoring.videoPlayback?.cdnCacheHitRatio || 0) > 80 ? 'text-green-500' : 'text-yellow-500'}`}>
+                        {(monitoring.videoPlayback?.cdnCacheHitRatio || 0).toFixed(1)}%
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">CDN Cache Hits</p>
+                      <p className="text-2xl font-bold">{monitoring.videoPlayback?.cdnCacheHits || 0}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">CDN Cache Misses</p>
+                      <p className="text-2xl font-bold">{monitoring.videoPlayback?.cdnCacheMisses || 0}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Logging */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5" />
+                      Error Logs
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {monitoringErrors.length > 0 ? (
+                        monitoringErrors.slice(0, 20).map((error: any, idx: number) => (
+                          <div key={idx} className="p-2 bg-red-50 border border-red-200 rounded text-xs">
+                            <div className="flex justify-between mb-1">
+                              <span className="font-medium">{error.type || 'Error'}</span>
+                              <span className="text-muted-foreground">
+                                {new Date(error.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-muted-foreground">{error.message}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No errors in the selected time range</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="h-5 w-5" />
+                      User Activity
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {monitoringActivity.length > 0 ? (
+                        monitoringActivity.slice(0, 20).map((activity: any, idx: number) => (
+                          <div key={idx} className="p-2 bg-muted rounded text-xs">
+                            <div className="flex justify-between mb-1">
+                              <span className="font-medium">{activity.action}</span>
+                              <span className="text-muted-foreground">
+                                {new Date(activity.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-muted-foreground">User: {activity.userId}</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No activity in the selected time range</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* System Info */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Server className="h-5 w-5" />
+                    System Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Uptime</p>
+                      <p className="font-medium">{Math.floor((monitoring.systemInfo?.uptime || 0) / 3600)}h {Math.floor(((monitoring.systemInfo?.uptime || 0) % 3600) / 60)}m</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Node Version</p>
+                      <p className="font-medium">{monitoring.systemInfo?.nodeVersion || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Platform</p>
+                      <p className="font-medium">{monitoring.systemInfo?.platform || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Total Memory</p>
+                      <p className="font-medium">{monitoring.systemInfo?.totalMemory || 0} MB</p>
                     </div>
                   </div>
                 </CardContent>
