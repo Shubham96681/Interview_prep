@@ -86,11 +86,30 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rate limiting
+// More lenient rate limiting for email check endpoint (real-time validation needs)
+const emailCheckLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 20, // Allow 20 email checks per minute per IP
+  message: {
+    success: false,
+    message: 'Too many email check requests. Please wait a moment.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Rate limiting for other API endpoints
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  // Skip rate limiting for email check endpoint (it has its own limiter)
+  skip: (req) => req.path === '/api/auth/check-email'
 });
+
+// Apply lenient rate limiting specifically to email check endpoint first
+app.use('/api/auth/check-email', emailCheckLimiter);
+
+// Apply general rate limiting to all other API routes
 app.use('/api/', limiter);
 
 // CORS configuration

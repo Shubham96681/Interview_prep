@@ -51,6 +51,7 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string>('');
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [emailAvailable, setEmailAvailable] = useState(false);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -60,6 +61,8 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
   
   // Debounce timer ref
   const emailCheckTimer = useRef<NodeJS.Timeout | null>(null);
+  // Track last checked email to avoid duplicate requests
+  const lastCheckedEmail = useRef<string>('');
   
   // Candidate specific fields
   const [resume, setResume] = useState<File | null>(null);
@@ -132,57 +135,109 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
     setProficiency(prev => prev.filter(s => s !== skill));
   };
 
-  // Email validation function
+  // Email validation function with rate limit handling
   const validateEmail = async (emailValue: string) => {
     // Basic email format check
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     
-    if (!emailValue) {
+    if (!emailValue || emailValue.trim() === '') {
       setEmailError('');
+      setEmailAvailable(false);
       setIsCheckingEmail(false);
+      lastCheckedEmail.current = '';
       return;
     }
 
+    // Normalize email for comparison
+    const normalizedEmail = emailValue.trim().toLowerCase();
+    
+    // Skip if we already checked this exact email
+    if (lastCheckedEmail.current === normalizedEmail) {
+      return;
+    }
+
+    // Validate email format first
     if (!emailRegex.test(emailValue)) {
-      setEmailError('');
+      setEmailError('Please enter a valid email address');
+      setEmailAvailable(false);
       setIsCheckingEmail(false);
+      lastCheckedEmail.current = '';
       return; // Don't check invalid emails
     }
 
     setIsCheckingEmail(true);
+    setEmailAvailable(false);
+    setEmailError(''); // Clear previous errors while checking
+    lastCheckedEmail.current = normalizedEmail; // Mark as checking
     
     try {
       const response = await apiService.checkEmail(emailValue);
       
+      console.log('Email check response:', response);
+      
+      // Handle rate limiting (429 error)
+      if (response.status === 429 || (response.error && response.error.includes('429'))) {
+        setEmailError('Too many requests. Please wait a moment before checking again.');
+        setEmailAvailable(false);
+        lastCheckedEmail.current = ''; // Reset so user can retry
+        setIsCheckingEmail(false);
+        return;
+      }
+      
       if (response.success && response.data) {
         if (response.data.exists) {
           setEmailError(response.data.message || 'This email already exists. Please use a different email.');
+          setEmailAvailable(false);
         } else {
           setEmailError('');
+          setEmailAvailable(true);
         }
       } else {
-        // On error, don't show error message (to avoid false positives)
+        // Handle error response (but not rate limiting)
+        if (response.error && !response.error.includes('429')) {
+          console.warn('Email check failed:', response.error);
+        }
         setEmailError('');
+        setEmailAvailable(false);
+        lastCheckedEmail.current = ''; // Reset on error
       }
-    } catch (error) {
-      // On error, don't show error message
-      setEmailError('');
+    } catch (error: any) {
+      // Handle rate limiting in catch block
+      if (error.message?.includes('429') || error.status === 429) {
+        setEmailError('Too many requests. Please wait a moment before checking again.');
+        setEmailAvailable(false);
+        lastCheckedEmail.current = ''; // Reset so user can retry
+      } else {
+        // On other errors, don't show error message to avoid false positives
+        console.error('Error checking email:', error);
+        setEmailError('');
+        setEmailAvailable(false);
+        lastCheckedEmail.current = ''; // Reset on error
+      }
     } finally {
       setIsCheckingEmail(false);
     }
   };
 
-  // Debounced email validation
+  // Debounced email validation with request cancellation
   useEffect(() => {
     // Clear previous timer
     if (emailCheckTimer.current) {
       clearTimeout(emailCheckTimer.current);
     }
 
-    // Set new timer
+    // Don't validate empty emails
+    if (!email || email.trim() === '') {
+      setEmailError('');
+      setEmailAvailable(false);
+      setIsCheckingEmail(false);
+      return;
+    }
+
+    // Set new timer with longer delay to avoid rate limiting
     emailCheckTimer.current = setTimeout(() => {
       validateEmail(email);
-    }, 500); // Wait 500ms after user stops typing
+    }, 800); // Wait 800ms after user stops typing to reduce API calls
 
     // Cleanup function
     return () => {
@@ -198,8 +253,10 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
       setEmailError('');
       setEmail('');
       setIsCheckingEmail(false);
+      setEmailAvailable(false);
       setPasswordError('');
       setConfirmPasswordError('');
+      lastCheckedEmail.current = '';
     }
   }, [isOpen]);
 
@@ -263,14 +320,29 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newEmail = e.target.value;
     setEmail(newEmail);
-    // Clear error immediately when user starts typing
+    // Clear error and availability status immediately when user starts typing
     if (emailError) {
       setEmailError('');
+    }
+    if (emailAvailable) {
+      setEmailAvailable(false);
+    }
+    // Reset last checked email if user changes it
+    if (lastCheckedEmail.current && lastCheckedEmail.current !== newEmail.trim().toLowerCase()) {
+      lastCheckedEmail.current = '';
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate email format first
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      setEmailError('Please enter a valid email address');
+      toast.error('Please enter a valid email address');
+      return;
+    }
     
     // Wait for email check to complete if in progress
     if (isCheckingEmail) {
@@ -469,13 +541,22 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         value={email}
                         onChange={handleEmailChange}
                         required
-                        className={emailError ? 'border-red-500' : ''}
+                        className={
+                          emailError 
+                            ? 'border-red-500' 
+                            : emailAvailable 
+                            ? 'border-green-500' 
+                            : ''
+                        }
                       />
                       {isCheckingEmail && (
                         <p className="text-sm text-gray-500 mt-1">Checking email availability...</p>
                       )}
-                      {emailError && (
+                      {!isCheckingEmail && emailError && (
                         <p className="text-sm text-red-500 mt-1">{emailError}</p>
+                      )}
+                      {!isCheckingEmail && emailAvailable && !emailError && (
+                        <p className="text-sm text-green-600 mt-1">✓ Email is available</p>
                       )}
                     </div>
                     <div>
@@ -747,13 +828,22 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
                         value={email}
                         onChange={handleEmailChange}
                         required
-                        className={emailError ? 'border-red-500' : ''}
+                        className={
+                          emailError 
+                            ? 'border-red-500' 
+                            : emailAvailable 
+                            ? 'border-green-500' 
+                            : ''
+                        }
                       />
                       {isCheckingEmail && (
                         <p className="text-sm text-gray-500 mt-1">Checking email availability...</p>
                       )}
-                      {emailError && (
+                      {!isCheckingEmail && emailError && (
                         <p className="text-sm text-red-500 mt-1">{emailError}</p>
+                      )}
+                      {!isCheckingEmail && emailAvailable && !emailError && (
+                        <p className="text-sm text-green-600 mt-1">✓ Email is available</p>
                       )}
                     </div>
                     <div>

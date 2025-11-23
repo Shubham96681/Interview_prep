@@ -157,6 +157,18 @@ class ApiService {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.log('Error response data:', errorData);
+        
+        // Handle rate limiting (429) specifically
+        if (response.status === 429) {
+          return {
+            success: false,
+            error: errorData.message || errorData.error || 'Too many requests. Please wait a moment before trying again.',
+            message: errorData.message || 'Too many requests. Please wait a moment before trying again.',
+            status: 429,
+            data: errorData
+          };
+        }
+        
         return {
           success: false,
           error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
