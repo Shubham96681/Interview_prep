@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video, Monitor, AlertTriangle, Wifi, HardDrive, Zap, BarChart3, Server } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video, Monitor, AlertTriangle, Wifi, Zap, BarChart3, Server } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
 import AddUserForm from './AddUserForm';
 
