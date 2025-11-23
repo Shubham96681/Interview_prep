@@ -52,10 +52,30 @@ const {
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Increase request size limits for file uploads (but with reasonable limits)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for API
+  crossOriginEmbedderPolicy: false
+}));
 app.use(compression());
-app.use(morgan('combined'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Request timeout middleware (30 seconds) - must be before routes
+app.use((req, res, next) => {
+  req.setTimeout(30000, () => {
+    if (!res.headersSent) {
+      res.status(408).json({
+        success: false,
+        error: 'Request timeout'
+      });
+    }
+  });
+  next();
+});
 
 // Request logging middleware for debugging (production-safe)
 app.use((req, res, next) => {
@@ -98,12 +118,20 @@ const emailCheckLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Rate limiting for other API endpoints
+// Rate limiting for other API endpoints (optimized for high traffic)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 200 : 1000, // Higher limit for production
+  message: {
+    success: false,
+    message: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
   // Skip rate limiting for email check endpoint (it has its own limiter)
-  skip: (req) => req.path === '/api/auth/check-email'
+  skip: (req) => req.path === '/api/auth/check-email',
+  // Use Redis or memory store for distributed rate limiting in production
+  // For now, using default memory store (works per process)
 });
 
 // Apply lenient rate limiting specifically to email check endpoint first
@@ -1832,7 +1860,7 @@ app.get('/api/realtime', (req, res) => {
 // Start realtime service
 realtimeService.start();
 
-// 404 handler - MUST be last
+// 404 handler
 app.use('*', (req, res) => {
   console.error('❌ 404 - Route not found:', {
     method: req.method,
@@ -1849,26 +1877,125 @@ app.use('*', (req, res) => {
   });
 });
 
-// Start server and initialize WebRTC
+// Global error handler - MUST be last (after all routes)
+app.use((err, req, res, next) => {
+  console.error('❌ Unhandled error:', err);
+  
+  // Don't leak error details in production
+  const message = process.env.NODE_ENV === 'production' 
+    ? 'Internal server error' 
+    : err.message;
+  
+  res.status(err.status || 500).json({
+    success: false,
+    error: message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+// Set server limits for high concurrency
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Database: SQLite with Prisma`);
+  console.log(`📊 Database: ${process.env.DATABASE_URL?.includes('postgresql') ? 'PostgreSQL' : 'SQLite'} with Prisma`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`👥 Process ID: ${process.pid}`);
+  console.log(`💻 CPU Cores: ${require('os').cpus().length}`);
   
   // Initialize WebRTC signaling service (Socket.IO)
   webrtcService.initialize(server);
   console.log(`✅ WebRTC/Socket.IO service initialized`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  await prisma.$disconnect();
-  process.exit(0);
+// Configure server for high concurrency
+server.maxConnections = 10000; // Allow up to 10,000 concurrent connections
+server.keepAliveTimeout = 65000; // 65 seconds (slightly longer than load balancer)
+server.headersTimeout = 66000; // 66 seconds
+
+// Handle server errors
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use`);
+    process.exit(1);
+  } else {
+    console.error('❌ Server error:', error);
+  }
 });
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully');
-  await prisma.$disconnect();
-  process.exit(0);
+// Handle connection errors
+server.on('clientError', (err, socket) => {
+  console.error('❌ Client error:', err.message);
+  if (!socket.destroyed) {
+    socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+  }
 });
+
+// Memory leak prevention - monitor memory usage
+if (process.env.NODE_ENV === 'production') {
+  setInterval(() => {
+    const usage = process.memoryUsage();
+    const mb = (bytes) => Math.round(bytes / 1024 / 1024 * 100) / 100;
+    
+    // Log if memory usage is high
+    if (usage.heapUsed > 500 * 1024 * 1024) { // 500MB
+      console.warn(`⚠️ High memory usage: ${mb(usage.heapUsed)}MB / ${mb(usage.heapTotal)}MB`);
+    }
+    
+    // Force garbage collection if available (requires --expose-gc flag)
+    if (global.gc && usage.heapUsed > 1000 * 1024 * 1024) { // 1GB
+      console.log('🧹 Running garbage collection...');
+      global.gc();
+    }
+  }, 60000); // Check every minute
+}
+
+// Handle uncaught exceptions (prevent crashes)
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  // Don't exit immediately - log and continue if possible
+  // In production, you might want to restart the process
+  if (process.env.NODE_ENV === 'production') {
+    // Log to error tracking service (e.g., Sentry)
+    // For now, just log and continue
+  }
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - log and continue
+});
+
+// Graceful shutdown
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  
+  // Stop accepting new connections
+  server.close(() => {
+    console.log('✅ HTTP server closed');
+  });
+  
+  // Close database connections
+  try {
+    await prisma.$disconnect();
+    console.log('✅ Database connections closed');
+  } catch (error) {
+    console.error('❌ Error closing database:', error);
+  }
+  
+  // Stop realtime service
+  try {
+    realtimeService.stop();
+    console.log('✅ Realtime service stopped');
+  } catch (error) {
+    console.error('❌ Error stopping realtime service:', error);
+  }
+  
+  // Give connections time to close
+  setTimeout(() => {
+    console.log('🛑 Process exiting...');
+    process.exit(0);
+  }, 5000); // 5 second grace period
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

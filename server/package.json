@@ -4,8 +4,10 @@
   "description": "Backend API for interview marketplace",
   "main": "index.js",
   "scripts": {
-    "start": "node robust-server.js",
-    "start:backend": "node robust-server.js",
+    "start": "node index.js",
+    "start:cluster": "node cluster.js",
+    "start:pm2": "pm2 start ecosystem.config.js --env production",
+    "start:backend": "node index.js",
     "dev": "nodemon index.js",
     "test": "jest",
     "seed": "node scripts/seed.js",

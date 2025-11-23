@@ -5,6 +5,8 @@ class RealtimeService extends EventEmitter {
     super();
     this.connections = new Map(); // userId -> Set of connections
     this.heartbeatInterval = null;
+    this.maxConnectionsPerUser = 5; // Limit connections per user to prevent abuse
+    this.maxTotalConnections = 10000; // Maximum total connections
   }
 
   start() {
@@ -28,12 +30,52 @@ class RealtimeService extends EventEmitter {
 
   // Add a connection for a user
   addConnection(userId, connection) {
+    // Check total connection limit
+    if (this.getTotalConnections() >= this.maxTotalConnections) {
+      console.warn(`⚠️ Maximum connection limit reached (${this.maxTotalConnections})`);
+      try {
+        connection.write('data: ' + JSON.stringify({
+          event: 'error',
+          data: { message: 'Server at capacity, please try again later' }
+        }) + '\n\n');
+        connection.end();
+      } catch (error) {
+        // Connection already closed
+      }
+      return false;
+    }
+
     if (!this.connections.has(userId)) {
       this.connections.set(userId, new Set());
     }
-    this.connections.get(userId).add(connection);
     
-    console.log(`📱 User ${userId} connected (${this.connections.get(userId).size} connections)`);
+    const userConnections = this.connections.get(userId);
+    
+    // Limit connections per user
+    if (userConnections.size >= this.maxConnectionsPerUser) {
+      console.warn(`⚠️ User ${userId} has too many connections (${userConnections.size})`);
+      // Remove oldest connection
+      const firstConnection = userConnections.values().next().value;
+      this.removeConnection(userId, firstConnection);
+    }
+    
+    userConnections.add(connection);
+    
+    // Clean up on connection close
+    connection.on('close', () => {
+      this.removeConnection(userId, connection);
+    });
+    
+    connection.on('error', (error) => {
+      console.error(`❌ Connection error for user ${userId}:`, error);
+      this.removeConnection(userId, connection);
+    });
+    
+    if (this.getTotalConnections() % 100 === 0) {
+      console.log(`📱 Total connections: ${this.getTotalConnections()}`);
+    }
+    
+    return true;
   }
 
   // Remove a connection for a user
@@ -112,6 +154,9 @@ class RealtimeService extends EventEmitter {
 }
 
 module.exports = new RealtimeService();
+
+
+
 
 
 
