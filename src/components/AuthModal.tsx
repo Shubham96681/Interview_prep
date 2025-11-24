@@ -105,8 +105,18 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
         return;
       } else {
         // Show backend error if available, otherwise generic error
-        const errorMessage = response.error || 'Invalid credentials';
-        toast.error(errorMessage);
+        const errorMessage = response.error || response.message || 'Invalid credentials';
+        console.error('Login failed:', {
+          error: response.error,
+          message: response.message,
+          status: response.status,
+          data: response.data
+        });
+        toast.error(errorMessage, {
+          description: response.status === 401 
+            ? 'Please check your email and password, or ensure the backend server is running.'
+            : 'Please try again or contact support if the issue persists.'
+        });
       }
     }
     

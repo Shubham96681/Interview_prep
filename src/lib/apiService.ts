@@ -3,6 +3,11 @@
 // Use relative URL for production (works with Nginx proxy)
 // Fallback to localhost for local development
 const getApiBaseUrl = (): string => {
+  // Check for explicit API URL in environment variables first
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
   // In production, use relative path (Nginx will proxy /api to backend)
   if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
     return ''; // Empty string means relative URLs like '/api'
@@ -16,6 +21,8 @@ const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1 second
 
 console.log(`🌐 API Service configured for: ${API_BASE_URL || 'relative URLs (production mode)'}`);
+console.log(`🌐 Current hostname: ${window.location.hostname}`);
+console.log(`🌐 VITE_API_URL env: ${import.meta.env.VITE_API_URL || 'not set'}`);
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -104,7 +111,9 @@ class ApiService {
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
     try {
-      const url = `${API_BASE_URL}${endpoint}`;
+      // Ensure endpoint starts with /
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const url = API_BASE_URL ? `${API_BASE_URL}${normalizedEndpoint}` : normalizedEndpoint;
       const requestOptions: RequestInit = {
         headers: {
           'Content-Type': 'application/json',
