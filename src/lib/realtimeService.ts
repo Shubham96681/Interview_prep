@@ -79,6 +79,17 @@ class RealtimeService {
       this.eventSource.onerror = (error) => {
         console.error('❌ Real-time connection error:', error);
         this.isConnected = false;
+        
+        // Check if EventSource is in a failed state (readyState 2 = CLOSED)
+        if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
+          const target = error.target as EventSource;
+          if (target) {
+            // Check HTTP status if available (502, 503, etc.)
+            console.warn('⚠️ Real-time connection closed. This may indicate the endpoint is not available on the server.');
+            console.warn('⚠️ If this is production, ensure /api/realtime is properly configured in your proxy/nginx.');
+          }
+        }
+        
         this.handleReconnect(userId);
       };
 
@@ -90,7 +101,9 @@ class RealtimeService {
 
   private handleReconnect(userId: string): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached');
+      console.error('❌ Max reconnection attempts reached. Real-time service will not reconnect automatically.');
+      console.error('💡 The real-time endpoint may not be available on this server. The app will continue to work without real-time updates.');
+      this.disconnect();
       return;
     }
 
@@ -100,6 +113,11 @@ class RealtimeService {
     console.log(`🔄 Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
     
     setTimeout(() => {
+      // Close existing connection before reconnecting
+      if (this.eventSource) {
+        this.eventSource.close();
+        this.eventSource = null;
+      }
       this.connect(userId);
     }, delay);
   }

@@ -178,6 +178,23 @@ class ApiService {
           };
         }
         
+        // Handle authentication errors (401) - token may be invalid or expired
+        if (response.status === 401) {
+          // Check if it's a test token
+          const token = localStorage.getItem('token');
+          if (token && token.startsWith('test-token-')) {
+            console.warn('⚠️ Test token detected in production. Test tokens are only valid in development.');
+            console.warn('💡 Please log in with a real account or use the development environment.');
+          }
+          return {
+            success: false,
+            error: errorData.error || errorData.message || 'Authentication failed. Please log in again.',
+            message: errorData.message || 'Authentication failed. Please log in again.',
+            status: 401,
+            data: errorData
+          };
+        }
+        
         return {
           success: false,
           error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
