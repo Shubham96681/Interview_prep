@@ -27,7 +27,6 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isRemoteScreenSharing, setIsRemoteScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -838,8 +837,6 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             remoteScreenShareStreamRef.current = new MediaStream();
           }
           remoteScreenShareStreamRef.current.addTrack(event.track);
-          setIsRemoteScreenSharing(true);
-          
           // If recording is active, update the screen share video element
           if (isRecordingRef.current && recordingScreenShareVideoRef.current) {
             recordingScreenShareVideoRef.current.srcObject = remoteScreenShareStreamRef.current;
@@ -849,7 +846,6 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           // Handle screen share track ending
           event.track.onended = () => {
             console.log('🖥️ Remote screen share ended');
-            setIsRemoteScreenSharing(false);
             remoteScreenShareStreamRef.current = null;
             if (recordingScreenShareVideoRef.current) {
               recordingScreenShareVideoRef.current.srcObject = null;
