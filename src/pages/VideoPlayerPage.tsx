@@ -20,16 +20,27 @@ export default function VideoPlayerPage() {
       apiService.getRecordingUrl(sessionId)
         .then((url: string | null) => {
           if (url) {
+            console.log('✅ Recording URL fetched successfully');
             setVideoUrl(url);
             setIsLoading(false);
           } else {
-            setError('Recording not found or unavailable');
+            console.warn('⚠️ No recording URL returned from backend');
+            setError('Recording not found or unavailable for this session.');
             setIsLoading(false);
           }
         })
         .catch((err: any) => {
-          console.error('Error fetching recording URL:', err);
-          setError('Failed to load recording. Please try again.');
+          console.error('❌ Error fetching recording URL:', err);
+          const errorMessage = err?.message || 'Unknown error';
+          if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+            setError('Authentication failed. Please log in again and try accessing the recording from your dashboard.');
+          } else if (errorMessage.includes('403') || errorMessage.includes('Access denied')) {
+            setError('You do not have permission to access this recording.');
+          } else if (errorMessage.includes('404')) {
+            setError('Recording not found. The session may not have a recording available.');
+          } else {
+            setError(`Failed to load recording: ${errorMessage}`);
+          }
           setIsLoading(false);
         });
     } else if (url) {
