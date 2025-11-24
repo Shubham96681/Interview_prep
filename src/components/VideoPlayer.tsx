@@ -44,12 +44,6 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     const handleCanPlay = () => {
       setIsLoading(false);
       console.log('✅ Video can play');
-      // Try to auto-play if not already playing
-      if (!isPlaying && video.paused) {
-        video.play().catch(err => {
-          console.warn('⚠️ Auto-play prevented:', err);
-        });
-      }
     };
 
     video.addEventListener('timeupdate', updateTime);
@@ -59,11 +53,9 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     video.addEventListener('pause', handlePause);
     video.addEventListener('canplay', handleCanPlay);
 
-    // Try to load and play the video
+    // Set the video source and load it
+    video.src = videoUrl;
     video.load();
-    video.play().catch(err => {
-      console.warn('⚠️ Initial play failed (may require user interaction):', err);
-    });
 
     return () => {
       video.removeEventListener('timeupdate', updateTime);
@@ -73,7 +65,7 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('canplay', handleCanPlay);
     };
-  }, [videoUrl, isPlaying]);
+  }, [videoUrl]); // Only depend on videoUrl, not isPlaying
 
   const togglePlayPause = useCallback(() => {
     const video = videoRef.current;
@@ -209,7 +201,6 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
         <div className="flex-1 flex items-center justify-center relative">
           <video
             ref={videoRef}
-            src={videoUrl}
             className="max-w-full max-h-full"
             preload="auto"
             playsInline
