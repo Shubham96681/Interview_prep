@@ -22,28 +22,58 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
 
     console.log('🎬 Video element initialized, URL:', videoUrl.substring(0, 100) + '...');
 
-    const updateTime = () => setCurrentTime(video.currentTime);
+    const updateTime = () => {
+      setCurrentTime(video.currentTime);
+      // Also check duration periodically in case it becomes available later
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        if (duration !== video.duration) {
+          setDuration(video.duration);
+          console.log('✅ Video duration updated during playback:', video.duration);
+        }
+      }
+    };
     const updateDuration = () => {
-      setDuration(video.duration);
-      setIsLoading(false);
-      console.log('✅ Video duration loaded:', video.duration);
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        setIsLoading(false);
+        console.log('✅ Video duration loaded:', video.duration);
+      }
     };
     const handlePlay = () => {
       setIsPlaying(true);
       console.log('▶️ Video playing');
+      // Check duration when video starts playing
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
     };
     const handlePause = () => {
       setIsPlaying(false);
       console.log('⏸️ Video paused');
     };
     const handleLoadedMetadata = () => {
-      setDuration(video.duration);
-      setIsLoading(false);
-      console.log('✅ Video metadata loaded, duration:', video.duration);
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        setIsLoading(false);
+        console.log('✅ Video metadata loaded, duration:', video.duration);
+      } else {
+        console.warn('⚠️ Video metadata loaded but duration not available yet');
+      }
     };
     const handleCanPlay = () => {
       setIsLoading(false);
       console.log('✅ Video can play');
+      // Try to get duration when video can play
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+      }
+    };
+    const handleLoadedData = () => {
+      // Duration might be available after data loads
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        console.log('✅ Video duration loaded from loadeddata event:', video.duration);
+      }
     };
 
     video.addEventListener('timeupdate', updateTime);
@@ -52,6 +82,7 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('loadeddata', handleLoadedData);
 
     // Set the video source and load it
     video.src = videoUrl;
@@ -64,6 +95,7 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('loadeddata', handleLoadedData);
     };
   }, [videoUrl]); // Only depend on videoUrl, not isPlaying
 
@@ -206,14 +238,29 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
             playsInline
             controls={false}
             onLoadedData={() => {
+              const video = videoRef.current;
+              if (video && video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+                setDuration(video.duration);
+                console.log('✅ Duration set from onLoadedData:', video.duration);
+              }
               setIsLoading(false);
               setError(null);
             }}
             onLoadedMetadata={() => {
+              const video = videoRef.current;
+              if (video && video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+                setDuration(video.duration);
+                console.log('✅ Duration set from onLoadedMetadata:', video.duration);
+              }
               setIsLoading(false);
               setError(null);
             }}
             onCanPlay={() => {
+              const video = videoRef.current;
+              if (video && video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+                setDuration(video.duration);
+                console.log('✅ Duration set from onCanPlay:', video.duration);
+              }
               setIsLoading(false);
               setError(null);
             }}
