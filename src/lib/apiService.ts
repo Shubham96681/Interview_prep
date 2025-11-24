@@ -420,9 +420,8 @@ class ApiService {
         console.log(`✅ Got fresh URL from backend (automatically regenerated, valid for 7 days)`);
         console.log(`🔗 Fresh URL: ${freshUrl.substring(0, 100)}...`);
         
-        // Open custom video player page with the video URL
-        const encodedUrl = encodeURIComponent(freshUrl);
-        const playerUrl = `${window.location.origin}/video-player?url=${encodedUrl}`;
+        // Open custom video player page with the sessionId (avoids URL length limits)
+        const playerUrl = `${window.location.origin}/video-player?sessionId=${sessionId}`;
         const newWindow = window.open(playerUrl, '_blank');
         
         // If opening failed, try again after a short delay
@@ -443,9 +442,8 @@ class ApiService {
       if (fallbackUrl) {
         console.log('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
         
-        // Open custom video player page with the fallback URL
-        const encodedUrl = encodeURIComponent(fallbackUrl);
-        const playerUrl = `${window.location.origin}/video-player?url=${encodedUrl}`;
+        // Open custom video player page with the sessionId (avoids URL length limits)
+        const playerUrl = `${window.location.origin}/video-player?sessionId=${sessionId}`;
         const newWindow = window.open(playerUrl, '_blank');
         
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
