@@ -1364,10 +1364,20 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 
     // Check if user has access to this session
     const userId = req.user?.userId || req.user?.id;
+    
+    // Log for debugging
+    console.log('🔍 Recording access check:', {
+      userId,
+      sessionCandidateId: session.candidateId,
+      sessionExpertId: session.expertId,
+      hasUser: !!req.user
+    });
+    
     if (session.candidateId !== userId && session.expertId !== userId) {
+      console.warn('⚠️ Access denied - userId:', userId, 'session candidateId:', session.candidateId, 'session expertId:', session.expertId);
       return res.status(403).json({
         success: false,
-        message: 'Access denied'
+        message: 'Access denied. Please ensure you are logged in with the correct account.'
       });
     }
 

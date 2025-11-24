@@ -351,6 +351,13 @@ class ApiService {
       
       console.log('📥 getRecordingUrl response:', response);
       
+      // Check for access denied or authentication errors
+      if (response.status === 403 || response.status === 401) {
+        console.warn('⚠️ Access denied or authentication error:', response.message || response.error);
+        // Return null to allow fallback URL usage
+        return null;
+      }
+      
       // The apiService.request wraps the response
       // Server returns: { success: true, data: { recordingUrl: "...", sessionId: "..." } }
       // apiService.request wraps it: { success: true, data: { success: true, data: { recordingUrl: "...", sessionId: "..." } } }
@@ -410,6 +417,9 @@ class ApiService {
       if (fallbackUrl) {
         console.log('⚠️ Using fallback URL:', fallbackUrl.substring(0, 100));
         
+        // Check if it's an S3 URL that might be expired
+        const isS3Url = fallbackUrl.includes('amazonaws.com');
+        
         // Try to open fallback URL - let the browser handle expired URLs
         // Don't throw error here - let the user try to access it
         const newWindow = window.open(fallbackUrl, '_blank');
@@ -421,8 +431,12 @@ class ApiService {
           }, 500);
         }
         
-        // Show a warning toast but don't throw error
-        // The browser will show its own error if the URL is truly expired
+        // If it's an S3 URL, show a helpful message that it might be expired
+        // But still try to open it - sometimes the URL might still work
+        if (isS3Url) {
+          console.warn('⚠️ Using S3 URL - it may be expired, but attempting to open anyway');
+        }
+        
         return;
       }
       
