@@ -27,6 +27,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isRemoteScreenSharing, setIsRemoteScreenSharing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -44,6 +45,8 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const recordedChunksRef = useRef<Blob[]>([]);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
+  const localScreenShareStreamRef = useRef<MediaStream | null>(null);
+  const remoteScreenShareStreamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const isRecordingRef = useRef(false);
   const recordingCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -51,6 +54,9 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
   const recordingAnimationFrameRef = useRef<number | null>(null);
   const recordingLocalVideoRef = useRef<HTMLVideoElement | null>(null);
   const recordingRemoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const recordingScreenShareVideoRef = useRef<HTMLVideoElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const socketInitializedRef = useRef(false);
   const isFirstParticipantRef = useRef(false); // Track if we're the first participant (only first one records)
   const meetingIdRef = useRef(meetingId);
@@ -166,6 +172,15 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       recordingRemoteVideoRef.current.srcObject = null;
       recordingRemoteVideoRef.current = null;
     }
+    if (recordingScreenShareVideoRef.current) {
+      recordingScreenShareVideoRef.current.srcObject = null;
+      recordingScreenShareVideoRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(err => console.warn('Error closing audio context:', err));
+      audioContextRef.current = null;
+    }
+    audioDestinationRef.current = null;
     if (recordingCanvasRef.current) {
       const ctx = recordingCanvasContextRef.current;
       if (ctx) {
@@ -805,44 +820,83 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
 
       // Handle remote stream - collect all tracks into a single stream
       pc.ontrack = (event) => {
-        console.log('📹 Received remote track:', event.track.kind, event.track.id);
+        console.log('📹 Received remote track:', event.track.kind, event.track.id, event.track.label);
         
-        // Get or create remote stream
-        if (!remoteStreamRef.current) {
-          remoteStreamRef.current = new MediaStream();
-          console.log('📹 Created new remote stream');
-        }
+        // Check if this is a screen share track
+        const trackSettings = event.track.getSettings ? event.track.getSettings() : {};
+        const isScreenShare = event.track.kind === 'video' && 
+          (trackSettings.displaySurface === 'monitor' || 
+           trackSettings.displaySurface === 'window' ||
+           trackSettings.displaySurface === 'browser' ||
+           event.track.label.toLowerCase().includes('screen') ||
+           event.track.label.toLowerCase().includes('display'));
         
-        // Add track to remote stream
-        remoteStreamRef.current.addTrack(event.track);
-        console.log('📹 Added track to remote stream. Total tracks:', remoteStreamRef.current.getTracks().length);
-        
-        // Update state with the stream
-        const updatedStream = new MediaStream(remoteStreamRef.current.getTracks());
-        setRemoteStream(updatedStream);
-        
-        // Log track details
-        event.track.onended = () => {
-          console.log('📹 Remote track ended:', event.track.kind);
-        };
-        
-        event.track.onmute = () => {
-          console.log('📹 Remote track muted:', event.track.kind);
-          // If video track is muted, try to unmute it
-          if (event.track.kind === 'video' && event.track.enabled) {
-            console.log('📹 Attempting to unmute video track...');
-            // The track might be muted by the sender, but we can still display it
+        if (isScreenShare) {
+          console.log('🖥️ Remote screen share detected!');
+          // Store remote screen share stream
+          if (!remoteScreenShareStreamRef.current) {
+            remoteScreenShareStreamRef.current = new MediaStream();
           }
-        };
-        
-        event.track.onunmute = () => {
-          console.log('📹 Remote track unmuted:', event.track.kind);
-        };
-        
-        // Ensure track is enabled
-        if (!event.track.enabled) {
-          console.log('📹 Enabling remote track:', event.track.kind);
-          event.track.enabled = true;
+          remoteScreenShareStreamRef.current.addTrack(event.track);
+          setIsRemoteScreenSharing(true);
+          
+          // If recording is active, update the screen share video element
+          if (isRecordingRef.current && recordingScreenShareVideoRef.current) {
+            recordingScreenShareVideoRef.current.srcObject = remoteScreenShareStreamRef.current;
+            console.log('📹 Updated recording screen share video with remote stream');
+          }
+          
+          // Handle screen share track ending
+          event.track.onended = () => {
+            console.log('🖥️ Remote screen share ended');
+            setIsRemoteScreenSharing(false);
+            remoteScreenShareStreamRef.current = null;
+            if (recordingScreenShareVideoRef.current) {
+              recordingScreenShareVideoRef.current.srcObject = null;
+            }
+          };
+        } else {
+          // Regular video/audio track
+          // Get or create remote stream
+          if (!remoteStreamRef.current) {
+            remoteStreamRef.current = new MediaStream();
+            console.log('📹 Created new remote stream');
+          }
+          
+          // Add track to remote stream
+          remoteStreamRef.current.addTrack(event.track);
+          console.log('📹 Added track to remote stream. Total tracks:', remoteStreamRef.current.getTracks().length);
+          
+          // Update state with the stream
+          const updatedStream = new MediaStream(remoteStreamRef.current.getTracks());
+          setRemoteStream(updatedStream);
+          
+          // Update remote video element
+          if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = updatedStream;
+            remoteVideoRef.current.play().catch(err => {
+              console.error('Error playing remote video:', err);
+            });
+          }
+          
+          // Log track details
+          event.track.onended = () => {
+            console.log('📹 Remote track ended:', event.track.kind);
+          };
+          
+          event.track.onmute = () => {
+            console.log('📹 Remote track muted:', event.track.kind);
+          };
+          
+          event.track.onunmute = () => {
+            console.log('📹 Remote track unmuted:', event.track.kind);
+          };
+          
+          // Ensure track is enabled
+          if (!event.track.enabled) {
+            console.log('📹 Enabling remote track:', event.track.kind);
+            event.track.enabled = true;
+          }
         }
       };
 
@@ -1128,9 +1182,17 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         }
         
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
+          video: {
+            displaySurface: 'monitor',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 }
+          } as MediaTrackConstraints,
           audio: true
         });
+
+        // Store screen share stream for recording
+        localScreenShareStreamRef.current = screenStream;
 
         const videoTrack = screenStream.getVideoTracks()[0];
         const sender = peerConnectionRef.current?.getSenders().find(
@@ -1142,6 +1204,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           setIsScreenSharing(true);
 
           videoTrack.onended = () => {
+            localScreenShareStreamRef.current = null;
             toggleScreenShare();
           };
         }
@@ -1154,6 +1217,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         if (sender && videoTrack) {
           await sender.replaceTrack(videoTrack);
           setIsScreenSharing(false);
+          localScreenShareStreamRef.current = null;
         }
       }
     } catch (error) {
@@ -1183,6 +1247,17 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
     try {
       console.log('🎬 Starting combined video recording (Zoom-style)...');
       
+      // Get screen share streams (if any)
+      const currentLocalScreenShare = localScreenShareStreamRef.current;
+      const currentRemoteScreenShare = remoteScreenShareStreamRef.current;
+      const hasScreenShare = !!(currentLocalScreenShare || currentRemoteScreenShare);
+      
+      console.log('📹 Screen share status:', {
+        local: !!currentLocalScreenShare,
+        remote: !!currentRemoteScreenShare,
+        hasScreenShare
+      });
+      
       // Create hidden video elements for recording
       const localVideo = document.createElement('video');
       localVideo.srcObject = currentLocalStream || null;
@@ -1197,9 +1272,22 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       remoteVideo.playsInline = true;
       remoteVideo.muted = true; // Mute to avoid feedback
       recordingRemoteVideoRef.current = remoteVideo;
+      
+      // Create screen share video element (if screen sharing)
+      let screenShareVideo: HTMLVideoElement | null = null;
+      if (hasScreenShare) {
+        screenShareVideo = document.createElement('video');
+        // Prefer local screen share, fallback to remote
+        screenShareVideo.srcObject = (currentLocalScreenShare || currentRemoteScreenShare) || null;
+        screenShareVideo.autoplay = true;
+        screenShareVideo.playsInline = true;
+        screenShareVideo.muted = true;
+        recordingScreenShareVideoRef.current = screenShareVideo;
+        console.log('📹 Screen share video element created for recording');
+      }
 
-      // Wait for videos to be ready and playing - CRITICAL for smooth recording
-      await Promise.all([
+      // Wait for all videos (including screen share) to be ready
+      const videoPromises = [
         new Promise<void>((resolve) => {
           if (currentLocalStream) {
             let resolved = false;
@@ -1304,7 +1392,64 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
             resolve();
           }
         })
-      ]);
+      ];
+      
+      // Add screen share video ready promise if screen sharing
+      if (screenShareVideo && hasScreenShare) {
+        videoPromises.push(
+          new Promise<void>((resolve) => {
+            let resolved = false;
+            const checkReady = async () => {
+              if (resolved) return;
+              try {
+                if (screenShareVideo && screenShareVideo.readyState >= 2) {
+                  await screenShareVideo.play();
+                  let attempts = 0;
+                  const waitForFrames = () => {
+                    if (screenShareVideo && screenShareVideo.readyState >= 2 && screenShareVideo.videoWidth > 0 && screenShareVideo.videoHeight > 0) {
+                      console.log('✅ Screen share video ready for recording:', screenShareVideo.videoWidth, 'x', screenShareVideo.videoHeight);
+                      resolved = true;
+                      resolve();
+                    } else if (attempts < 20) {
+                      attempts++;
+                      setTimeout(waitForFrames, 100);
+                    } else {
+                      console.warn('⚠️ Screen share video timeout, continuing anyway');
+                      resolved = true;
+                      resolve();
+                    }
+                  };
+                  waitForFrames();
+                } else if (screenShareVideo) {
+                  screenShareVideo.onloadedmetadata = checkReady;
+                  screenShareVideo.oncanplay = checkReady;
+                }
+              } catch (err) {
+                console.error('Error playing screen share video:', err);
+                if (!resolved) {
+                  resolved = true;
+                  resolve();
+                }
+              }
+            };
+            if (screenShareVideo) {
+              screenShareVideo.onloadedmetadata = checkReady;
+              screenShareVideo.oncanplay = checkReady;
+              setTimeout(() => {
+                if (!resolved) {
+                  resolved = true;
+                  console.warn('⚠️ Screen share video timeout, continuing anyway');
+                  resolve();
+                }
+              }, 3000);
+            } else {
+              resolve();
+            }
+          })
+        );
+      }
+      
+      await Promise.all(videoPromises);
       
       // Additional wait to ensure videos are actually rendering frames
       await new Promise(r => setTimeout(r, 500));
@@ -1313,8 +1458,12 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       let canvasWidth = 1920; // Full HD width
       let canvasHeight = 1080; // Full HD height
       
-      // Try to get actual video dimensions
-      if (localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
+      // If screen sharing, use screen share dimensions (full screen)
+      if (hasScreenShare && screenShareVideo && screenShareVideo.videoWidth > 0 && screenShareVideo.videoHeight > 0) {
+        canvasWidth = Math.max(1920, screenShareVideo.videoWidth);
+        canvasHeight = Math.max(1080, screenShareVideo.videoHeight);
+        console.log('📐 Using screen share-based canvas size:', canvasWidth, 'x', canvasHeight);
+      } else if (localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
         // Use the larger video dimension as base
         const maxWidth = Math.max(localVideo.videoWidth, remoteVideo.videoWidth || 0);
         const maxHeight = Math.max(localVideo.videoHeight, remoteVideo.videoHeight || 0);
@@ -1349,7 +1498,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       ctx.fillStyle = '#1a1a1a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Function to draw both videos on canvas (side-by-side layout)
+      // Function to draw videos on canvas (Zoom-style: screen share full screen, participants in small windows)
       // CRITICAL: This must run continuously at 30 FPS for smooth video
       const drawVideos = () => {
         if (!recordingCanvasContextRef.current || !recordingCanvasRef.current) {
@@ -1370,9 +1519,9 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         // Check if videos are ready and have valid dimensions
-        // readyState: 0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA
         const hasLocal = currentLocalStream && localVideo.readyState >= 2 && localVideo.videoWidth > 0 && localVideo.videoHeight > 0;
         const hasRemote = currentRemoteStream && remoteVideo.readyState >= 2 && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0;
+        const hasScreenShare = screenShareVideo && screenShareVideo.readyState >= 2 && screenShareVideo.videoWidth > 0 && screenShareVideo.videoHeight > 0;
         
         // Ensure videos are playing
         if (hasLocal && localVideo.paused) {
@@ -1381,67 +1530,134 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         if (hasRemote && remoteVideo.paused) {
           remoteVideo.play().catch(err => console.warn('Could not play remote video:', err));
         }
-        
-        if (hasLocal && hasRemote) {
-          // Side-by-side layout: each video takes half the width, maintaining aspect ratio
-          const videoWidth = canvas.width / 2;
-          
-          // Calculate aspect ratio for remote video
-          const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
-          let remoteDrawWidth = videoWidth;
-          let remoteDrawHeight = videoWidth / remoteAspect;
-          let remoteX = 0;
-          let remoteY = (canvas.height - remoteDrawHeight) / 2;
-          
-          // If height exceeds canvas, scale down
-          if (remoteDrawHeight > canvas.height) {
-            remoteDrawHeight = canvas.height;
-            remoteDrawWidth = remoteDrawHeight * remoteAspect;
-            remoteX = (videoWidth - remoteDrawWidth) / 2;
-            remoteY = 0;
-          }
-          
-          // Draw remote video (left side)
-          ctx.drawImage(remoteVideo, remoteX, remoteY, remoteDrawWidth, remoteDrawHeight);
-          
-          // Calculate aspect ratio for local video
-          const localAspect = localVideo.videoWidth / localVideo.videoHeight;
-          let localDrawWidth = videoWidth;
-          let localDrawHeight = videoWidth / localAspect;
-          let localX = videoWidth;
-          let localY = (canvas.height - localDrawHeight) / 2;
-          
-          // If height exceeds canvas, scale down
-          if (localDrawHeight > canvas.height) {
-            localDrawHeight = canvas.height;
-            localDrawWidth = localDrawHeight * localAspect;
-            localX = videoWidth + (videoWidth - localDrawWidth) / 2;
-            localY = 0;
-          }
-          
-          // Draw local video (right side)
-          ctx.drawImage(localVideo, localX, localY, localDrawWidth, localDrawHeight);
-        } else if (hasLocal) {
-          // Only local video - center it and maintain aspect ratio
-          const scale = Math.min(canvas.width / localVideo.videoWidth, canvas.height / localVideo.videoHeight);
-          const width = localVideo.videoWidth * scale;
-          const height = localVideo.videoHeight * scale;
-          const x = (canvas.width - width) / 2;
-          const y = (canvas.height - height) / 2;
-          ctx.drawImage(localVideo, x, y, width, height);
-        } else if (hasRemote) {
-          // Only remote video - center it and maintain aspect ratio
-          const scale = Math.min(canvas.width / remoteVideo.videoWidth, canvas.height / remoteVideo.videoHeight);
-          const width = remoteVideo.videoWidth * scale;
-          const height = remoteVideo.videoHeight * scale;
-          const x = (canvas.width - width) / 2;
-          const y = (canvas.height - height) / 2;
-          ctx.drawImage(remoteVideo, x, y, width, height);
+        if (hasScreenShare && screenShareVideo && screenShareVideo.paused) {
+          screenShareVideo.play().catch(err => console.warn('Could not play screen share video:', err));
         }
         
-        // CRITICAL: Continue drawing loop - this must run continuously
-        // Note: The loop continuation is now handled by startDrawLoop wrapper
-        // This function just needs to draw the frame
+        // Zoom-style layout: Screen share takes full screen, participants in small windows at bottom
+        if (hasScreenShare && screenShareVideo) {
+          // Draw screen share full screen (main content)
+          const screenAspect = screenShareVideo.videoWidth / screenShareVideo.videoHeight;
+          let screenWidth = canvas.width;
+          let screenHeight = canvas.width / screenAspect;
+          let screenX = 0;
+          let screenY = (canvas.height - screenHeight) / 2;
+          
+          // If height exceeds canvas, scale down
+          if (screenHeight > canvas.height) {
+            screenHeight = canvas.height;
+            screenWidth = screenHeight * screenAspect;
+            screenX = (canvas.width - screenWidth) / 2;
+            screenY = 0;
+          }
+          
+          ctx.drawImage(screenShareVideo, screenX, screenY, screenWidth, screenHeight);
+          
+          // Draw participant videos as small windows at bottom (Zoom-style)
+          const participantSize = 200; // Size of participant windows
+          const padding = 10;
+          const bottomY = canvas.height - participantSize - padding;
+          
+          if (hasRemote) {
+            // Remote participant (left side at bottom)
+            const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
+            let remoteWidth = participantSize;
+            let remoteHeight = participantSize / remoteAspect;
+            if (remoteHeight > participantSize) {
+              remoteHeight = participantSize;
+              remoteWidth = remoteHeight * remoteAspect;
+            }
+            const remoteX = padding;
+            const remoteY = bottomY + (participantSize - remoteHeight) / 2;
+            
+            // Draw with rounded corners (optional visual enhancement)
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(remoteX, remoteY, remoteWidth, remoteHeight, 8);
+            ctx.clip();
+            ctx.drawImage(remoteVideo, remoteX, remoteY, remoteWidth, remoteHeight);
+            ctx.restore();
+          }
+          
+          if (hasLocal) {
+            // Local participant (right side at bottom)
+            const localAspect = localVideo.videoWidth / localVideo.videoHeight;
+            let localWidth = participantSize;
+            let localHeight = participantSize / localAspect;
+            if (localHeight > participantSize) {
+              localHeight = participantSize;
+              localWidth = localHeight * localAspect;
+            }
+            const localX = canvas.width - localWidth - padding;
+            const localY = bottomY + (participantSize - localHeight) / 2;
+            
+            // Draw with rounded corners
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(localX, localY, localWidth, localHeight, 8);
+            ctx.clip();
+            ctx.drawImage(localVideo, localX, localY, localWidth, localHeight);
+            ctx.restore();
+          }
+        } else {
+          // No screen share - use side-by-side layout for participants
+          if (hasLocal && hasRemote) {
+            // Side-by-side layout: each video takes half the width, maintaining aspect ratio
+            const videoWidth = canvas.width / 2;
+            
+            // Calculate aspect ratio for remote video
+            const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
+            let remoteDrawWidth = videoWidth;
+            let remoteDrawHeight = videoWidth / remoteAspect;
+            let remoteX = 0;
+            let remoteY = (canvas.height - remoteDrawHeight) / 2;
+            
+            // If height exceeds canvas, scale down
+            if (remoteDrawHeight > canvas.height) {
+              remoteDrawHeight = canvas.height;
+              remoteDrawWidth = remoteDrawHeight * remoteAspect;
+              remoteX = (videoWidth - remoteDrawWidth) / 2;
+              remoteY = 0;
+            }
+            
+            // Draw remote video (left side)
+            ctx.drawImage(remoteVideo, remoteX, remoteY, remoteDrawWidth, remoteDrawHeight);
+            
+            // Calculate aspect ratio for local video
+            const localAspect = localVideo.videoWidth / localVideo.videoHeight;
+            let localDrawWidth = videoWidth;
+            let localDrawHeight = videoWidth / localAspect;
+            let localX = videoWidth;
+            let localY = (canvas.height - localDrawHeight) / 2;
+            
+            // If height exceeds canvas, scale down
+            if (localDrawHeight > canvas.height) {
+              localDrawHeight = canvas.height;
+              localDrawWidth = localDrawHeight * localAspect;
+              localX = videoWidth + (videoWidth - localDrawWidth) / 2;
+              localY = 0;
+            }
+            
+            // Draw local video (right side)
+            ctx.drawImage(localVideo, localX, localY, localDrawWidth, localDrawHeight);
+          } else if (hasLocal) {
+            // Only local video - center it and maintain aspect ratio
+            const scale = Math.min(canvas.width / localVideo.videoWidth, canvas.height / localVideo.videoHeight);
+            const width = localVideo.videoWidth * scale;
+            const height = localVideo.videoHeight * scale;
+            const x = (canvas.width - width) / 2;
+            const y = (canvas.height - height) / 2;
+            ctx.drawImage(localVideo, x, y, width, height);
+          } else if (hasRemote) {
+            // Only remote video - center it and maintain aspect ratio
+            const scale = Math.min(canvas.width / remoteVideo.videoWidth, canvas.height / remoteVideo.videoHeight);
+            const width = remoteVideo.videoWidth * scale;
+            const height = remoteVideo.videoHeight * scale;
+            const x = (canvas.width - width) / 2;
+            const y = (canvas.height - height) / 2;
+            ctx.drawImage(remoteVideo, x, y, width, height);
+          }
+        }
       };
 
       // IMPORTANT: Set recording flag BEFORE starting draw loop
@@ -1495,23 +1711,57 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         }
       }, 2000); // Check every 2 seconds
 
-      // Get audio tracks for recording - we'll add both to the stream
-      // MediaRecorder will record both, creating a combined audio track
-      const audioTracks: MediaStreamTrack[] = [];
-      if (currentLocalStream) {
-        const localAudio = currentLocalStream.getAudioTracks()[0];
-        if (localAudio && localAudio.enabled) {
-          audioTracks.push(localAudio);
-          console.log('📹 Found local audio track for recording');
-        }
+      // Create AudioContext to properly mix both participants' audio (Zoom-style)
+      // This ensures both voices are audible and balanced
+      console.log('🎵 Creating AudioContext for proper audio mixing...');
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: 48000, // High quality audio (Zoom uses 48kHz)
+      });
+      audioContextRef.current = audioContext;
+      
+      // Create destination node for mixed audio
+      const audioDestination = audioContext.createMediaStreamDestination();
+      audioDestinationRef.current = audioDestination;
+      
+      // Get audio tracks from both participants
+      const localAudioTrack = currentLocalStream?.getAudioTracks()[0];
+      const remoteAudioTrack = currentRemoteStream?.getAudioTracks()[0];
+      
+      // Also get screen share audio if available
+      const screenShareAudioTrack = (currentLocalScreenShare || currentRemoteScreenShare)?.getAudioTracks()[0];
+      
+      // Create audio source nodes and mix them properly
+      if (localAudioTrack && localAudioTrack.enabled) {
+        const localSource = audioContext.createMediaStreamSource(new MediaStream([localAudioTrack]));
+        const localGain = audioContext.createGain();
+        localGain.gain.value = 1.0; // Full volume for local audio
+        localSource.connect(localGain);
+        localGain.connect(audioDestination);
+        console.log('✅ Connected local audio to mixer');
       }
-      if (currentRemoteStream) {
-        const remoteAudio = currentRemoteStream.getAudioTracks()[0];
-        if (remoteAudio && remoteAudio.enabled) {
-          audioTracks.push(remoteAudio);
-          console.log('📹 Found remote audio track for recording');
-        }
+      
+      if (remoteAudioTrack && remoteAudioTrack.enabled) {
+        const remoteSource = audioContext.createMediaStreamSource(new MediaStream([remoteAudioTrack]));
+        const remoteGain = audioContext.createGain();
+        remoteGain.gain.value = 1.0; // Full volume for remote audio
+        remoteSource.connect(remoteGain);
+        remoteGain.connect(audioDestination);
+        console.log('✅ Connected remote audio to mixer');
       }
+      
+      // Add screen share audio if available
+      if (screenShareAudioTrack && screenShareAudioTrack.enabled) {
+        const screenSource = audioContext.createMediaStreamSource(new MediaStream([screenShareAudioTrack]));
+        const screenGain = audioContext.createGain();
+        screenGain.gain.value = 0.8; // Slightly lower volume for screen share audio
+        screenSource.connect(screenGain);
+        screenGain.connect(audioDestination);
+        console.log('✅ Connected screen share audio to mixer');
+      }
+      
+      // Get the mixed audio track from the destination
+      const mixedAudioTrack = audioDestination.stream.getAudioTracks()[0];
+      console.log('✅ Audio mixing complete - both participants voices will be audible');
 
       // Create combined stream from canvas video + audio tracks
       // Use 30 FPS for smooth video (matches Zoom/Google Meet standard)
@@ -1546,21 +1796,19 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       }
       const combinedStream = new MediaStream();
       
-      // Add canvas video track (combined video showing both participants)
+      // Add canvas video track (combined video showing both participants + screen share if active)
       const videoTrack = canvasStream.getVideoTracks()[0];
       if (videoTrack) {
         combinedStream.addTrack(videoTrack);
         console.log('📹 Added combined canvas video track to recording');
       }
       
-      // Add all audio tracks (both local and remote will be recorded)
-      audioTracks.forEach((track, index) => {
-        combinedStream.addTrack(track);
-        console.log(`📹 Added audio track ${index + 1} to recording: ${track.label || 'unnamed'}`);
-      });
-      
-      if (audioTracks.length === 0) {
-        console.warn('⚠️ No audio tracks available for recording');
+      // Add mixed audio track (properly mixed using AudioContext - both voices audible)
+      if (mixedAudioTrack) {
+        combinedStream.addTrack(mixedAudioTrack);
+        console.log('🎵 Added mixed audio track to recording (both participants voices mixed)');
+      } else {
+        console.warn('⚠️ No mixed audio track available for recording');
       }
 
       if (combinedStream.getTracks().length === 0) {
@@ -1668,6 +1916,17 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           recordingRemoteVideoRef.current.srcObject = null;
           recordingRemoteVideoRef.current = null;
         }
+        if (recordingScreenShareVideoRef.current) {
+          recordingScreenShareVideoRef.current.srcObject = null;
+          recordingScreenShareVideoRef.current = null;
+        }
+        
+        // Clean up audio context
+        if (audioContextRef.current) {
+          audioContextRef.current.close().catch(err => console.warn('Error closing audio context:', err));
+          audioContextRef.current = null;
+        }
+        audioDestinationRef.current = null;
         
         // Clean up canvas
         recordingCanvasRef.current = null;
