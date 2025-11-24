@@ -401,28 +401,50 @@ class ApiService {
             window.open(freshUrl, '_blank');
           }, 500);
         }
-      } else {
-        // Backend failed to generate fresh URL
-        console.error('❌ Failed to get fresh URL from backend');
-        
-        if (fallbackUrl) {
-          console.warn('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
-          
-          // Check if fallback URL looks like an expired S3 URL
-          if (fallbackUrl.includes('amazonaws.com') && fallbackUrl.includes('?')) {
-            // This is likely an expired pre-signed URL
-            throw new Error('Recording URL has expired. Please refresh the page and try again, or contact support if the issue persists.');
-          }
-          
-          // Try to open fallback URL
-          window.open(fallbackUrl, '_blank');
-        } else {
-          throw new Error('No recording URL available');
-        }
+        return;
       }
+      
+      // Backend failed to generate fresh URL - try fallback
+      console.warn('⚠️ Failed to get fresh URL from backend, trying fallback URL');
+      
+      if (fallbackUrl) {
+        console.log('⚠️ Using fallback URL:', fallbackUrl.substring(0, 100));
+        
+        // Try to open fallback URL - let the browser handle expired URLs
+        // Don't throw error here - let the user try to access it
+        const newWindow = window.open(fallbackUrl, '_blank');
+        
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+          console.warn('⚠️ Popup blocked, retrying...');
+          setTimeout(() => {
+            window.open(fallbackUrl, '_blank');
+          }, 500);
+        }
+        
+        // Show a warning toast but don't throw error
+        // The browser will show its own error if the URL is truly expired
+        return;
+      }
+      
+      // No URL available at all
+      throw new Error('No recording URL available. Please contact support if this issue persists.');
     } catch (error: any) {
       console.error('Error opening recording URL:', error);
-      throw error;
+      
+      // If it's our custom error, throw it
+      if (error.message && error.message.includes('No recording URL available')) {
+        throw error;
+      }
+      
+      // For other errors, try the fallback URL if available
+      if (fallbackUrl) {
+        console.warn('⚠️ Error occurred, trying fallback URL as last resort');
+        window.open(fallbackUrl, '_blank');
+        return;
+      }
+      
+      // Re-throw if no fallback available
+      throw new Error('Failed to open recording. Please try again or contact support.');
     }
   }
 
