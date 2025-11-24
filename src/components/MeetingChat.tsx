@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { MessageSquare, Send, X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Socket } from 'socket.io-client';
+import { getAvatarUrl } from '@/lib/avatarUtils';
 
 interface ChatMessage {
   id: string;
@@ -162,10 +164,16 @@ export default function MeetingChat({ socket, meetingId, isOpen, onToggle }: Mee
             messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex flex-col ${msg.isOwn ? 'items-end' : 'items-start'}`}
+                className={`flex items-start gap-2 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}
               >
+                <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarImage src={getAvatarUrl(undefined, msg.userName)} />
+                  <AvatarFallback className="text-xs bg-blue-600 text-white">
+                    {msg.userName ? msg.userName.split(' ').map(n => n[0]).join('').slice(0, 2) : 'U'}
+                  </AvatarFallback>
+                </Avatar>
                 <div
-                  className={`max-w-[80%] rounded-lg px-3 py-2 ${
+                  className={`max-w-[75%] rounded-lg px-3 py-2 ${
                     msg.isOwn
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-900 border border-gray-200'

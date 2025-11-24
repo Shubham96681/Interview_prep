@@ -11,6 +11,7 @@ import realtimeService from '@/lib/realtimeService';
 import AvailabilityManager from './AvailabilityManager';
 import ExpertAnalytics from './ExpertAnalytics';
 import { toast } from 'sonner';
+import { getAvatarUrl } from '@/lib/avatarUtils';
 
 interface ExpertDashboardProps {
   user: {
@@ -313,7 +314,6 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
             {upcomingSessions.length > 0 ? (
               upcomingSessions.map(session => {
                 const displayName = session.candidateName || 'John Doe';
-                const avatarUrl = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face';
                 
                 return (
                   <Card key={session.id} className="border-0 shadow-md">
@@ -321,7 +321,7 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                           <Avatar className="h-12 w-12">
-                            <AvatarImage src={avatarUrl} />
+                            <AvatarImage src={getAvatarUrl(undefined, displayName)} />
                             <AvatarFallback>{displayName ? displayName.split(' ').map(n => n[0]).join('') : 'C'}</AvatarFallback>
                           </Avatar>
                           <div>
@@ -433,8 +433,8 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <Avatar className="h-12 w-12">
-                          <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face" />
-                          <AvatarFallback>JD</AvatarFallback>
+                          <AvatarImage src={getAvatarUrl(undefined, session.candidateName || 'John Doe')} />
+                          <AvatarFallback>{session.candidateName ? session.candidateName.split(' ').map(n => n[0]).join('') : 'JD'}</AvatarFallback>
                         </Avatar>
                         <div>
                           <h3 className="font-semibold text-gray-900">{session.candidateName || 'John Doe'}</h3>

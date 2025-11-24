@@ -14,6 +14,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  assetsInclude: ['**/*.svg'],
   build: {
     sourcemap: false, // Disable source maps in production to speed up build and reduce memory
     minify: 'esbuild', // Use esbuild (default, faster and already included)

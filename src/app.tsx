@@ -6,6 +6,9 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import Index from './pages/Index';
+import About from './pages/About';
+import Services from './pages/Services';
+import Contact from './pages/Contact';
 import ExpertDirectory from './pages/ExpertDirectory';
 import ExpertProfile from './pages/ExpertProfile';
 import Dashboard from './pages/Dashboard';
@@ -31,6 +34,9 @@ const App = () => (
         <ConnectionStatus />
         <Routes>
               <Route path="/" element={<ProtectedRoute requireAuth={false}><Index /></ProtectedRoute>} />
+          <Route path="/about" element={<ProtectedRoute requireAuth={false}><About /></ProtectedRoute>} />
+          <Route path="/services" element={<ProtectedRoute requireAuth={false}><Services /></ProtectedRoute>} />
+          <Route path="/contact" element={<ProtectedRoute requireAuth={false}><Contact /></ProtectedRoute>} />
           <Route path="/experts" element={<ExpertDirectory />} />
           <Route path="/expert/:id" element={<ExpertProfile />} />
           <Route path="/register" element={<ProtectedRoute requireAuth={false}><Registration /></ProtectedRoute>} />

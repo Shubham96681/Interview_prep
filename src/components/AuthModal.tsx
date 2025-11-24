@@ -119,28 +119,30 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 border border-white/20 backdrop-blur-xl">
+      <DialogContent className="max-w-md bg-white border border-gray-200">
         <DialogHeader>
-          <DialogTitle className="text-center text-3xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent flex items-center justify-center gap-2">
-            <Sparkles className="h-8 w-8 text-purple-400 animate-pulse" />
-            Welcome to InterviewAce
+          <DialogTitle className="text-center text-3xl font-bold text-gray-900 flex items-center justify-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">I</span>
+            </div>
+            Welcome to InPrepare
           </DialogTitle>
-          <DialogDescription className="text-center text-white/70 text-sm">
+          <DialogDescription className="text-center text-gray-600 text-sm">
             Sign in to your account or create a new one to get started with interview preparation
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="login" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-white/10 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-2 bg-gray-100">
             <TabsTrigger 
               value="login" 
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white transition-all duration-300"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all duration-300"
             >
               Sign In
             </TabsTrigger>
             <TabsTrigger 
               value="signup"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-purple-600 data-[state=active]:text-white transition-all duration-300"
+              className="data-[state=active]:bg-blue-600 data-[state=active]:text-white transition-all duration-300"
             >
               Sign Up
             </TabsTrigger>
@@ -149,38 +151,38 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
           <TabsContent value="login">
             <Card className="border-0 shadow-none bg-transparent">
               <CardHeader className="text-center pb-4">
-                <CardDescription className="text-white/70 text-base">
+                <CardDescription className="text-gray-600 text-base">
                   Sign in to your account to continue your interview journey
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleLogin} className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="login-email" className="text-white font-medium">Email</Label>
+                    <Label htmlFor="login-email" className="text-gray-900 font-medium">Email</Label>
                     <div className="relative group">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-400 transition-colors duration-300" />
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
                       <Input
                         id="login-email"
                         type="email"
                         placeholder="Enter your email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
+                        className="pl-10 border-gray-300 focus:border-blue-600 focus:ring-blue-600"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="login-password" className="text-white font-medium">Password</Label>
+                    <Label htmlFor="login-password" className="text-gray-900 font-medium">Password</Label>
                     <div className="relative group">
-                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-400 transition-colors duration-300" />
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
                       <Input
                         id="login-password"
                         type="password"
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10 bg-white/10 backdrop-blur-sm border-white/20 text-white placeholder:text-white/50 focus:border-blue-400 focus:ring-blue-400/20 transition-all duration-300"
+                        className="pl-10 border-gray-300 focus:border-blue-600 focus:ring-blue-600"
                       />
                     </div>
                   </div>
@@ -188,7 +190,7 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
                   <Button 
                     type="submit" 
                     disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white transition-all duration-300 hover:scale-105 hover:shadow-xl py-6 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 py-6 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Star className="mr-2 h-5 w-5" />
                     {isLoading ? 'Signing In...' : 'Sign In'}
@@ -196,10 +198,10 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
 
                   
                   <div className="text-center">
-                    <p className="text-white/80 text-sm mb-2 font-medium">Don't have an account?</p>
+                    <p className="text-gray-700 text-sm mb-2 font-medium">Don't have an account?</p>
                     <Button 
                       type="button" 
-                      className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                      className="w-full bg-orange-500 hover:bg-orange-600 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
                       onClick={() => {
                         onClose();
                         navigate('/register');
@@ -217,14 +219,14 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
           <TabsContent value="signup">
             <Card className="border-0 shadow-none bg-transparent">
               <CardHeader className="text-center pb-4">
-                <CardDescription className="text-white/70 text-base">
+                <CardDescription className="text-gray-600 text-base">
                   Create your account to get started with expert interviews
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   <div className="text-center">
-                    <p className="text-white/70 mb-4">
+                    <p className="text-gray-700 mb-4">
                       Click the button below to open the registration form
                     </p>
                     <Button
@@ -233,7 +235,7 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
                         onClose();
                         navigate('/register');
                       }}
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300"
                     >
                       Open Registration Form
                     </Button>

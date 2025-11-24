@@ -14,6 +14,7 @@ import AuthModal from '@/components/AuthModal';
 import ExpertProfileEdit from '@/components/ExpertProfileEdit';
 import BookingCalendar from '@/components/BookingCalendar';
 import { toast } from 'sonner';
+import { getAvatarUrl } from '@/lib/avatarUtils';
 
 interface Expert {
   id: string;
@@ -399,19 +400,22 @@ export default function ExpertProfile() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-white">
       {/* Navigation */}
-      <nav className="flex justify-between items-center p-6 max-w-7xl mx-auto">
+      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-gray-200">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate('/experts')}>
+          <Button variant="ghost" onClick={() => navigate('/experts')} className="text-gray-700 hover:text-gray-900">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Experts
           </Button>
-          <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            InterviewAce
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white text-sm font-bold">I</span>
+            </div>
+            <div className="text-xl font-bold text-gray-900">InPrepare</div>
           </div>
         </div>
-        <Button variant="outline" onClick={() => navigate('/dashboard')}>
+        <Button variant="outline" onClick={() => navigate('/dashboard')} className="border-gray-300 text-gray-700 hover:bg-gray-50">
           Dashboard
         </Button>
       </nav>
@@ -425,7 +429,7 @@ export default function ExpertProfile() {
               <CardContent className="p-8">
                 <div className="flex items-start gap-6">
                   <Avatar className="h-24 w-24">
-                    <AvatarImage src={expert.avatar} alt={expert.name} />
+                    <AvatarImage src={getAvatarUrl(expert.avatar, expert.name)} alt={expert.name} />
                     <AvatarFallback className="text-2xl">
                       {expert.name.split(' ').map(n => n[0]).join('')}
                     </AvatarFallback>
@@ -442,7 +446,7 @@ export default function ExpertProfile() {
                       {isOwnProfile && (
                         <Button 
                           onClick={() => setShowProfileEdit(true)}
-                          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Edit Profile
@@ -575,7 +579,7 @@ export default function ExpertProfile() {
                     )}
                     
                     <Button 
-                      className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 h-12 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-blue-600 hover:bg-blue-700 h-12 disabled:opacity-50 disabled:cursor-not-allowed text-white"
                       onClick={() => setShowBooking(true)}
                       disabled={expert.isActive === false}
                     >
@@ -626,7 +630,7 @@ export default function ExpertProfile() {
                     <p className="text-gray-600">Your current hourly rate</p>
                     
                     <Button 
-                      className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 h-12"
+                      className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-white"
                       onClick={() => setShowProfileEdit(true)}
                     >
                       <Edit className="h-4 w-4 mr-2" />
