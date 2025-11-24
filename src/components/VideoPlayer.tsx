@@ -14,21 +14,42 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
+    console.log('🎬 Video element initialized, URL:', videoUrl.substring(0, 100) + '...');
+
     const updateTime = () => setCurrentTime(video.currentTime);
     const updateDuration = () => {
       setDuration(video.duration);
       setIsLoading(false);
+      console.log('✅ Video duration loaded:', video.duration);
     };
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const handlePlay = () => {
+      setIsPlaying(true);
+      console.log('▶️ Video playing');
+    };
+    const handlePause = () => {
+      setIsPlaying(false);
+      console.log('⏸️ Video paused');
+    };
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       setIsLoading(false);
+      console.log('✅ Video metadata loaded, duration:', video.duration);
+    };
+    const handleCanPlay = () => {
+      setIsLoading(false);
+      console.log('✅ Video can play');
+      // Try to auto-play if not already playing
+      if (!isPlaying && video.paused) {
+        video.play().catch(err => {
+          console.warn('⚠️ Auto-play prevented:', err);
+        });
+      }
     };
 
     video.addEventListener('timeupdate', updateTime);
@@ -36,7 +57,13 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     video.addEventListener('durationchange', updateDuration);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
-    video.addEventListener('canplay', () => setIsLoading(false));
+    video.addEventListener('canplay', handleCanPlay);
+
+    // Try to load and play the video
+    video.load();
+    video.play().catch(err => {
+      console.warn('⚠️ Initial play failed (may require user interaction):', err);
+    });
 
     return () => {
       video.removeEventListener('timeupdate', updateTime);
@@ -44,9 +71,9 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
       video.removeEventListener('durationchange', updateDuration);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
-      video.removeEventListener('canplay', () => setIsLoading(false));
+      video.removeEventListener('canplay', handleCanPlay);
     };
-  }, []);
+  }, [videoUrl, isPlaying]);
 
   const togglePlayPause = useCallback(() => {
     const video = videoRef.current;
@@ -184,11 +211,102 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
             ref={videoRef}
             src={videoUrl}
             className="max-w-full max-h-full"
-            onLoadedData={() => setIsLoading(false)}
+            crossOrigin="anonymous"
+            preload="auto"
+            playsInline
+            controls={false}
+            onLoadedData={() => {
+              setIsLoading(false);
+              setError(null);
+            }}
+            onLoadedMetadata={() => {
+              setIsLoading(false);
+              setError(null);
+            }}
+            onCanPlay={() => {
+              setIsLoading(false);
+              setError(null);
+            }}
+            onError={(e) => {
+              setIsLoading(false);
+              const video = e.currentTarget;
+              let errorMessage = 'Failed to load video';
+              
+              if (video.error) {
+                switch (video.error.code) {
+                  case video.error.MEDIA_ERR_ABORTED:
+                    errorMessage = 'Video loading was aborted';
+                    break;
+                  case video.error.MEDIA_ERR_NETWORK:
+                    errorMessage = 'Network error while loading video. This might be a CORS issue.';
+                    break;
+                  case video.error.MEDIA_ERR_DECODE:
+                    errorMessage = 'Video decoding error';
+                    break;
+                  case video.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                    errorMessage = 'Video format not supported or source not found';
+                    break;
+                  default:
+                    errorMessage = `Video error: ${video.error.message || 'Unknown error'}`;
+                }
+              }
+              
+              console.error('❌ Video error:', {
+                code: video.error?.code,
+                message: video.error?.message,
+                errorMessage,
+                videoUrl: videoUrl.substring(0, 100)
+              });
+              setError(errorMessage);
+            }}
+            onLoadStart={() => {
+              setIsLoading(true);
+              setError(null);
+              console.log('🔄 Video load started');
+            }}
+            onProgress={() => {
+              const video = videoRef.current;
+              if (video && video.buffered.length > 0) {
+                const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                const bufferedPercent = (bufferedEnd / video.duration) * 100;
+                console.log(`📊 Video buffered: ${bufferedPercent.toFixed(1)}%`);
+              }
+            }}
           />
-          {isLoading && (
+          {isLoading && !error && (
             <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
               <div className="text-white text-lg">Loading video...</div>
+            </div>
+          )}
+          {error && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-90 p-8">
+              <div className="text-red-400 text-xl font-semibold mb-4">⚠️ Video Error</div>
+              <div className="text-white text-lg mb-4 text-center">{error}</div>
+              <div className="text-gray-400 text-sm mb-6 text-center max-w-md">
+                This could be due to CORS restrictions, network issues, or an unsupported video format.
+              </div>
+              <Button
+                onClick={() => {
+                  setError(null);
+                  setIsLoading(true);
+                  const video = videoRef.current;
+                  if (video) {
+                    video.load();
+                  }
+                }}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Retry
+              </Button>
+              <Button
+                onClick={() => {
+                  window.open(videoUrl, '_blank');
+                }}
+                variant="outline"
+                className="mt-2 text-white border-white hover:bg-white/20"
+              >
+                Open in New Tab
+              </Button>
             </div>
           )}
         </div>
