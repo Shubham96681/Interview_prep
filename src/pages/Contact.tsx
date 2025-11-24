@@ -15,9 +15,9 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Contact() {
   const navigate = useNavigate();
-  const { user, loading, login } = useAuth();
+  const { loading, login } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<'candidate' | 'expert'>('candidate');
+  const selectedRole: 'candidate' | 'expert' = 'candidate';
   const [formData, setFormData] = useState({
     name: '',
     email: '',

@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Star, Users, Calendar, Video, Award, ArrowRight, Sparkles, TrendingUp, Shield, Zap } from 'lucide-react';
+import { Star, Users, Calendar, Video, Award, ArrowRight, TrendingUp, Shield, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -36,7 +35,7 @@ interface Expert {
 
 export default function Index() {
   const navigate = useNavigate();
-  const { user, loading, login, logout } = useAuth();
+  const { user, loading, login } = useAuth();
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'candidate' | 'expert'>('candidate');
   const [showContactModal, setShowContactModal] = useState(false);
@@ -60,10 +59,6 @@ export default function Index() {
     setShowAuthModal(false);
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/', { replace: true });
-  };
 
   const handleFindExpert = () => {
     setSelectedRole('candidate');
