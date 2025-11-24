@@ -344,13 +344,14 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                             Feedback
                           </Button>
                         )}
-                        {session.recordingUrl && (
+                        {(session.recordingUrl || session.isRecordingEnabled) && (
                           <Button 
                             variant="outline" 
                             size="sm"
                             onClick={async () => {
                               try {
                                 // Always get fresh signed URL (handles expired tokens automatically)
+                                // If recordingUrl is not in session data, the backend will try to find it
                                 await apiService.openRecordingUrl(session.id, session.recordingUrl);
                                 // Show info message if using fallback URL
                                 // The function will try to open the URL, and if it's expired, the browser will show an error
@@ -361,6 +362,10 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                                   toast.error('Recording URL has expired. Please refresh the page or contact support.', {
                                     description: 'The recording link may need to be regenerated.'
                                   });
+                                } else if (errorMessage.includes('No recording available')) {
+                                  toast.error('Recording not available yet. Please try again later.', {
+                                    description: 'The recording may still be processing.'
+                                  });
                                 } else {
                                   toast.error(errorMessage);
                                 }
@@ -368,12 +373,12 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                             }}
                           >
                             <Video className="h-4 w-4 mr-2" />
-                            View Recording
+                            {session.recordingUrl ? 'View Recording' : 'Check Recording'}
                           </Button>
                         )}
-                        {!session.recordingUrl && session.isRecordingEnabled && (
+                        {!session.recordingUrl && !session.isRecordingEnabled && session.status === 'completed' && (
                           <span className="text-xs text-gray-500 flex items-center">
-                            Recording processing...
+                            No recording available
                           </span>
                         )}
                       </div>

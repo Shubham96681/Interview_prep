@@ -386,18 +386,24 @@ class ApiService {
 
   /**
    * Open a recording URL with automatic regeneration if expired
-   * This function will always fetch a fresh URL from the backend before opening
+   * This function ALWAYS fetches a fresh URL from the backend, which automatically
+   * generates a new signed URL even if the original URL in the database is expired.
    */
   async openRecordingUrl(sessionId: string, fallbackUrl?: string): Promise<void> {
     try {
       console.log(`🔄 Getting fresh recording URL for session: ${sessionId}`);
+      console.log(`📋 Fallback URL (if any): ${fallbackUrl ? fallbackUrl.substring(0, 100) + '...' : 'none'}`);
       
-      // Always get a fresh signed URL from the backend
+      // ALWAYS try to get a fresh signed URL from the backend first
+      // The backend will extract the S3 key from the stored URL (even if expired)
+      // and generate a brand new signed URL that's valid for 7 days
       const freshUrl = await this.getRecordingUrl(sessionId);
       
       if (freshUrl) {
-        console.log(`✅ Got fresh URL, opening in new tab`);
-        // Open the fresh URL
+        console.log(`✅ Got fresh URL from backend (automatically regenerated, valid for 7 days)`);
+        console.log(`🔗 Fresh URL: ${freshUrl.substring(0, 100)}...`);
+        
+        // Open the fresh URL - this will always work even if the original was expired
         const newWindow = window.open(freshUrl, '_blank');
         
         // If opening failed, try again after a short delay
@@ -411,17 +417,14 @@ class ApiService {
         return;
       }
       
-      // Backend failed to generate fresh URL - try fallback
-      console.warn('⚠️ Failed to get fresh URL from backend, trying fallback URL');
+      // Backend failed to generate fresh URL - this should rarely happen
+      // Only use fallback if backend completely fails
+      console.warn('⚠️ Backend failed to generate fresh URL, trying fallback URL as last resort');
       
       if (fallbackUrl) {
-        console.log('⚠️ Using fallback URL:', fallbackUrl.substring(0, 100));
+        console.log('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
         
-        // Check if it's an S3 URL that might be expired
-        const isS3Url = fallbackUrl.includes('amazonaws.com');
-        
-        // Try to open fallback URL - let the browser handle expired URLs
-        // Don't throw error here - let the user try to access it
+        // Try to open fallback URL - but warn that it might be expired
         const newWindow = window.open(fallbackUrl, '_blank');
         
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
@@ -432,11 +435,8 @@ class ApiService {
         }
         
         // If it's an S3 URL, it might be expired
-        // The browser will show the error, but we can't prevent that
-        if (isS3Url) {
-          console.warn('⚠️ Using S3 URL - it may be expired, but attempting to open anyway');
-          // Note: We can't show a toast here because this function doesn't have access to toast
-          // The browser will show the S3 error page if the URL is expired
+        if (fallbackUrl.includes('amazonaws.com')) {
+          console.warn('⚠️ Using fallback S3 URL - it may be expired. The browser will show an error if so.');
         }
         
         return;
@@ -445,16 +445,16 @@ class ApiService {
       // No URL available at all
       throw new Error('No recording URL available. Please contact support if this issue persists.');
     } catch (error: any) {
-      console.error('Error opening recording URL:', error);
+      console.error('❌ Error opening recording URL:', error);
       
       // If it's our custom error, throw it
       if (error.message && error.message.includes('No recording URL available')) {
         throw error;
       }
       
-      // For other errors, try the fallback URL if available
+      // For other errors, try the fallback URL if available (last resort)
       if (fallbackUrl) {
-        console.warn('⚠️ Error occurred, trying fallback URL as last resort');
+        console.warn('⚠️ Error occurred, trying fallback URL as absolute last resort');
         window.open(fallbackUrl, '_blank');
         return;
       }
@@ -494,33 +494,60 @@ class ApiService {
         }
       }
 
-      console.log('📤 Uploading recording for session:', sessionId, 'Size:', recordingBlob.size, 'bytes');
+      const fileSizeMB = (recordingBlob.size / (1024 * 1024)).toFixed(2);
+      console.log('📤 Uploading recording for session:', sessionId, 'Size:', recordingBlob.size, 'bytes', `(${fileSizeMB} MB)`);
 
-      // Don't set Content-Type - browser will set it automatically with boundary for FormData
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
+      // Create AbortController for timeout (60 minutes for 60+ minute recordings)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60 * 60 * 1000); // 60 minutes
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+      try {
+        // Don't set Content-Type - browser will set it automatically with boundary for FormData
+        const response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: formData,
+          signal: controller.signal, // Add abort signal for timeout
+        });
+        
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          return {
+            success: false,
+            error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+            message: errorData.message,
+            status: response.status,
+          };
+        }
+
+        const data = await response.json();
+        console.log('✅ Recording uploaded successfully:', data);
+        return {
+          success: true,
+          data: data.data || data,
+        };
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        // Check if it's a timeout/abort error
+        if (fetchError.name === 'AbortError' || controller.signal.aborted) {
+          console.error('❌ Upload timeout - file may be too large or connection is slow');
+          return {
+            success: false,
+            error: 'Upload timeout. The recording file may be too large or your connection is slow. Please try again or contact support.',
+          };
+        }
+        
+        console.error('❌ Failed to upload recording:', fetchError);
         return {
           success: false,
-          error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
-          message: errorData.message,
-          status: response.status,
+          error: fetchError.message || 'Failed to upload recording',
         };
       }
-
-      const data = await response.json();
-      console.log('Recording uploaded successfully:', data);
-      return {
-        success: true,
-        data: data.data || data,
-      };
     } catch (error: any) {
-      console.error('Failed to upload recording:', error);
+      console.error('❌ Error in uploadRecording:', error);
       return {
         success: false,
         error: error.message || 'Failed to upload recording',

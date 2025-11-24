@@ -165,8 +165,8 @@ app.use(cors({
 }));
 
 // Body parsing middleware
-app.use(express.json({ limit: '500mb' }));
-app.use(express.urlencoded({ extended: true, limit: '500mb' }));
+app.use(express.json({ limit: '3gb' }));
+app.use(express.urlencoded({ extended: true, limit: '3gb' }));
 
 // Static file serving for uploads
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -1202,7 +1202,7 @@ const recordingStorage = multer.diskStorage({
 const uploadRecording = multer({
   storage: recordingStorage,
   limits: {
-    fileSize: 500 * 1024 * 1024 // 500MB limit for video files
+    fileSize: 3 * 1024 * 1024 * 1024 // 3GB limit for video files (supports up to 60+ minute recordings)
   },
   fileFilter: (req, file, cb) => {
     // Allow video files
@@ -1219,7 +1219,20 @@ const uploadRecording = multer({
 });
 
 // Upload recording file for a session
-app.post('/api/sessions/:id/upload-recording', uploadRecording.single('recording'), async (req, res) => {
+// Increased timeout for large file uploads (60 minutes for 60+ minute recordings up to 3GB)
+app.post('/api/sessions/:id/upload-recording', (req, res, next) => {
+  // Set longer timeout for recording uploads (60 minutes = 3600000ms)
+  // This allows enough time for 60-minute recordings even on slower connections
+  req.setTimeout(3600000, () => {
+    if (!res.headersSent) {
+      res.status(408).json({
+        success: false,
+        error: 'Upload timeout - file may be too large or connection is slow. Please try again or contact support.'
+      });
+    }
+  });
+  next();
+}, uploadRecording.single('recording'), async (req, res) => {
   try {
     const { id } = req.params;
     const authHeader = req.headers.authorization;
@@ -1268,7 +1281,9 @@ app.post('/api/sessions/:id/upload-recording', uploadRecording.single('recording
     if (isS3Configured) {
       // Upload to S3
       try {
-        console.log(`📤 Attempting S3 upload for session ${id}, file size: ${req.file.size} bytes`);
+        const fileSizeMB = (req.file.size / (1024 * 1024)).toFixed(2);
+        const fileSizeGB = (req.file.size / (1024 * 1024 * 1024)).toFixed(2);
+        console.log(`📤 Attempting S3 upload for session ${id}, file size: ${req.file.size} bytes (${fileSizeMB} MB / ${fileSizeGB} GB)`);
         const fileBuffer = fs.readFileSync(req.file.path);
         const fileName = `recording-${id}-${Date.now()}-${Math.round(Math.random() * 1E9)}.webm`;
         
@@ -1399,29 +1414,26 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
 
     let accessibleUrl = session.recordingUrl;
 
-    // If it's an S3 URL, generate a fresh signed URL
+    // If it's an S3 URL, ALWAYS generate a fresh signed URL (even if expired)
+    // This ensures expired URLs are automatically refreshed
     if (session.recordingUrl.includes('s3.amazonaws.com') || session.recordingUrl.includes('amazonaws.com')) {
       try {
-        // Extract S3 key from URL
-        // URL format: https://bucket.s3.region.amazonaws.com/key?params
-        // Or: https://bucket.s3.region.amazonaws.com/key
-        const urlParts = session.recordingUrl.split('?')[0]; // Remove query params
-        const keyMatch = urlParts.match(/recordings\/[^\/]+$/);
+        console.log(`🔄 Detected S3 URL, generating fresh signed URL (works even if original is expired)...`);
+        console.log(`📋 Original URL: ${session.recordingUrl.substring(0, 100)}...`);
         
-        if (keyMatch) {
-          const key = keyMatch[0];
-          console.log(`🔄 Generating fresh signed URL for S3 key: ${key}`);
-          
-          // Generate fresh signed URL (valid for 7 days)
-          accessibleUrl = await s3Service.getSignedUrl(key, 604800); // 7 days
-          console.log(`✅ Fresh signed URL generated`);
-        } else {
-          console.warn('⚠️ Could not extract S3 key from URL:', session.recordingUrl);
-          // Return original URL as fallback
-        }
+        // Use S3 service to extract key and generate fresh URL
+        // The getSignedUrl method can handle both keys and URLs, and will extract the key automatically
+        // This works even if the original URL is expired
+        accessibleUrl = await s3Service.getSignedUrl(session.recordingUrl, 604800); // 7 days
+        console.log(`✅ Fresh signed URL generated successfully`);
+        console.log(`🔗 New URL: ${accessibleUrl.substring(0, 100)}...`);
       } catch (s3Error) {
         console.error('❌ Error generating fresh signed URL:', s3Error);
-        // Return original URL as fallback
+        console.error('   Error details:', s3Error.message);
+        console.error('   Stack:', s3Error.stack);
+        console.warn('⚠️ Falling back to original URL (may be expired)');
+        // Return original URL as fallback, but log the error
+        // The frontend will handle this gracefully
       }
     }
     // If it's a local URL, it should already be accessible via /uploads

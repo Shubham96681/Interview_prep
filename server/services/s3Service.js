@@ -64,9 +64,14 @@ class S3Service {
         Key: key,
         Body: fileBuffer,
         ContentType: contentType,
+        // Enable multipart upload for large files (handled automatically by AWS SDK)
         // Make file publicly readable (optional - you can use signed URLs instead)
         // ACL: 'public-read'
       });
+      
+      // Log file size for monitoring
+      const fileSizeMB = (fileBuffer.length / (1024 * 1024)).toFixed(2);
+      console.log(`📊 File size: ${fileSizeMB} MB`);
 
       console.log(`⏳ Sending file to S3...`);
       await this.s3Client.send(command);
@@ -103,13 +108,68 @@ class S3Service {
   }
 
   /**
+   * Extract S3 key from a URL (handles expired URLs and various formats)
+   * @param {string} url - S3 URL (can be expired)
+   * @returns {string|null} - Extracted S3 key or null if extraction fails
+   */
+  extractKeyFromUrl(url) {
+    if (!url || typeof url !== 'string') {
+      return null;
+    }
+
+    try {
+      // Remove query parameters (expired URLs may have query params)
+      const urlWithoutParams = url.split('?')[0];
+      
+      // Pattern 1: Look for /recordings/ in the path (most common)
+      // https://bucket.s3.region.amazonaws.com/recordings/filename.webm
+      const recordingsMatch = urlWithoutParams.match(/\/recordings\/[^\/\?]+/);
+      if (recordingsMatch) {
+        return recordingsMatch[0].substring(1); // Remove leading slash
+      }
+      
+      // Pattern 2: Extract everything after bucket name
+      // https://bucket.s3.region.amazonaws.com/path/to/file
+      const bucketMatch = urlWithoutParams.match(/\.s3\.[^\/]+\/(.+)$/);
+      if (bucketMatch) {
+        return bucketMatch[1];
+      }
+      
+      // Pattern 3: Extract from s3.region.amazonaws.com/bucket/path format
+      // https://s3.region.amazonaws.com/bucket/path/to/file
+      const s3Match = urlWithoutParams.match(/s3\.[^\/]+\/[^\/]+\/(.+)$/);
+      if (s3Match) {
+        return s3Match[1];
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error extracting S3 key from URL:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get a signed URL for a file (for viewing/downloading)
-   * @param {string} key - S3 object key
+   * Automatically generates a fresh URL even if the original is expired
+   * @param {string} key - S3 object key (or URL to extract key from)
    * @param {number} expiresIn - URL expiration time in seconds (default: 1 hour)
    * @returns {Promise<string>}
    */
   async getSignedUrl(key, expiresIn = 3600) {
     try {
+      // If key looks like a URL, extract the actual key
+      let s3Key = key;
+      if (key.includes('amazonaws.com') || key.includes('http://') || key.includes('https://')) {
+        const extractedKey = this.extractKeyFromUrl(key);
+        if (extractedKey) {
+          s3Key = extractedKey;
+          console.log(`🔑 Extracted S3 key from URL: ${s3Key}`);
+        } else {
+          throw new Error(`Could not extract S3 key from URL: ${key}`);
+        }
+      }
+      
       // Ensure expiration doesn't exceed AWS S3 maximum of 7 days
       const maxExpiration = 604800; // 7 days in seconds
       const actualExpiration = Math.min(expiresIn, maxExpiration);
@@ -120,13 +180,15 @@ class S3Service {
       
       const command = new GetObjectCommand({
         Bucket: this.bucketName,
-        Key: key,
+        Key: s3Key,
       });
 
+      console.log(`🔄 Generating fresh signed URL for key: ${s3Key} (expires in ${actualExpiration}s)`);
       const url = await getSignedUrl(this.s3Client, command, { expiresIn: actualExpiration });
+      console.log(`✅ Fresh signed URL generated successfully`);
       return url;
     } catch (error) {
-      console.error('Error generating signed URL:', error);
+      console.error('❌ Error generating signed URL:', error);
       throw error;
     }
   }
