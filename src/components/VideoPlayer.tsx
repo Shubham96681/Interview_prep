@@ -23,14 +23,17 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     console.log('🎬 Video element initialized, URL:', videoUrl.substring(0, 100) + '...');
 
     const updateTime = () => {
-      setCurrentTime(video.currentTime);
+      const newTime = video.currentTime;
+      setCurrentTime(newTime);
       // Also check duration periodically in case it becomes available later
       if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
         if (duration !== video.duration) {
           setDuration(video.duration);
-          console.log('✅ Video duration updated during playback:', video.duration);
+          console.log('✅ Video duration updated during playback:', video.duration, 'currentTime:', newTime);
         }
       }
+      // Force a re-render to update progress bar
+      // This ensures the progress bar moves even if duration is 0
     };
     const updateDuration = () => {
       if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
@@ -224,7 +227,18 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  // Get duration from video element if state duration is 0 (fallback for streaming videos)
+  const getActualDuration = () => {
+    const video = videoRef.current;
+    if (duration > 0) return duration;
+    if (video && video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+      return video.duration;
+    }
+    return 0;
+  };
+
+  const actualDuration = getActualDuration();
+  const progressPercentage = actualDuration > 0 ? (currentTime / actualDuration) * 100 : 0;
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
@@ -303,10 +317,23 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
             }}
             onProgress={() => {
               const video = videoRef.current;
-              if (video && video.buffered.length > 0) {
-                const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-                const bufferedPercent = (bufferedEnd / video.duration) * 100;
-                console.log(`📊 Video buffered: ${bufferedPercent.toFixed(1)}%`);
+              if (video) {
+                // Update current time during progress
+                setCurrentTime(video.currentTime);
+                
+                // Try to get duration if not set
+                if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0 && duration !== video.duration) {
+                  setDuration(video.duration);
+                  console.log('✅ Duration found during progress event:', video.duration);
+                }
+                
+                // Log buffering progress
+                if (video.buffered.length > 0) {
+                  const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                  const videoDuration = video.duration || duration || 1; // Avoid division by zero
+                  const bufferedPercent = (bufferedEnd / videoDuration) * 100;
+                  console.log(`📊 Video buffered: ${bufferedPercent.toFixed(1)}%, duration: ${video.duration || 'unknown'}, currentTime: ${video.currentTime}`);
+                }
               }
             }}
           />
@@ -352,17 +379,17 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
         <div className="bg-gradient-to-t from-black/90 to-transparent p-4">
           {/* Progress Bar */}
           <div className="mb-4">
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              value={currentTime}
-              onChange={handleSeek}
-              className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
-              style={{
-                background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${progressPercentage}%, #4b5563 ${progressPercentage}%, #4b5563 100%)`
-              }}
-            />
+                    <input
+                      type="range"
+                      min="0"
+                      max={actualDuration || 0}
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
+                      style={{
+                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${progressPercentage}%, #4b5563 ${progressPercentage}%, #4b5563 100%)`
+                      }}
+                    />
           </div>
 
           {/* Control Buttons and Time */}
@@ -430,12 +457,12 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
               </div>
             </div>
 
-            {/* Center: Time Display */}
-            <div className="flex items-center gap-2 text-white text-sm font-mono">
-              <span>{formatTime(currentTime)}</span>
-              <span>/</span>
-              <span>{formatTime(duration)}</span>
-            </div>
+                    {/* Center: Time Display */}
+                    <div className="flex items-center gap-2 text-white text-sm font-mono">
+                      <span>{formatTime(currentTime)}</span>
+                      <span>/</span>
+                      <span>{formatTime(actualDuration)}</span>
+                    </div>
 
             {/* Right Side: Fullscreen */}
             <div className="flex items-center gap-2">
