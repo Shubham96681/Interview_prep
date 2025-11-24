@@ -16,6 +16,28 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+
+  // Aggressive polling for duration (runs continuously until duration is found)
+  useEffect(() => {
+    if (duration > 0) return; // Stop polling once we have duration
+    
+    const video = videoRef.current;
+    if (!video) return;
+
+    const pollForDuration = setInterval(() => {
+      if (video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+        setDuration(video.duration);
+        console.log('✅ Duration found via continuous polling:', video.duration);
+        clearInterval(pollForDuration);
+      } else {
+        // Log that we're still looking
+        console.log('🔍 Polling for duration... video.readyState:', video.readyState, 'video.duration:', video.duration);
+      }
+    }, 200); // Check every 200ms
+
+    return () => clearInterval(pollForDuration);
+  }, [videoUrl, duration]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -232,13 +254,22 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     const video = videoRef.current;
     if (duration > 0) return duration;
     if (video && video.duration && video.duration !== Infinity && !isNaN(video.duration) && video.duration > 0) {
+      // Update state if we found duration in video element
+      if (duration !== video.duration) {
+        setDuration(video.duration);
+      }
       return video.duration;
     }
     return 0;
   };
 
   const actualDuration = getActualDuration();
-  const progressPercentage = actualDuration > 0 ? (currentTime / actualDuration) * 100 : 0;
+  // For progress bar, if duration is 0, show progress based on current time (will update when duration is found)
+  // Use a large number as max to allow progress bar to work even without duration
+  const progressMax = actualDuration > 0 ? actualDuration : Math.max(currentTime * 2, 100);
+  const progressPercentage = actualDuration > 0 
+    ? (currentTime / actualDuration) * 100 
+    : (currentTime / progressMax) * 100;
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
@@ -382,12 +413,12 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
                     <input
                       type="range"
                       min="0"
-                      max={actualDuration || 0}
+                      max={progressMax}
                       value={currentTime}
                       onChange={handleSeek}
                       className="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer slider"
                       style={{
-                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${progressPercentage}%, #4b5563 ${progressPercentage}%, #4b5563 100%)`
+                        background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${Math.min(progressPercentage, 100)}%, #4b5563 ${Math.min(progressPercentage, 100)}%, #4b5563 100%)`
                       }}
                     />
           </div>
@@ -461,7 +492,7 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
                     <div className="flex items-center gap-2 text-white text-sm font-mono">
                       <span>{formatTime(currentTime)}</span>
                       <span>/</span>
-                      <span>{formatTime(actualDuration)}</span>
+                      <span>{actualDuration > 0 ? formatTime(actualDuration) : '--:--'}</span>
                     </div>
 
             {/* Right Side: Fullscreen */}
