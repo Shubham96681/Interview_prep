@@ -431,10 +431,12 @@ class ApiService {
           }, 500);
         }
         
-        // If it's an S3 URL, show a helpful message that it might be expired
-        // But still try to open it - sometimes the URL might still work
+        // If it's an S3 URL, it might be expired
+        // The browser will show the error, but we can't prevent that
         if (isS3Url) {
           console.warn('⚠️ Using S3 URL - it may be expired, but attempting to open anyway');
+          // Note: We can't show a toast here because this function doesn't have access to toast
+          // The browser will show the S3 error page if the URL is expired
         }
         
         return;

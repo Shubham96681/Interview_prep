@@ -352,9 +352,18 @@ export default function CandidateDashboard({ user }: CandidateDashboardProps) {
                               try {
                                 // Always get fresh signed URL (handles expired tokens automatically)
                                 await apiService.openRecordingUrl(session.id, session.recordingUrl);
-                              } catch (error) {
+                                // Show info message if using fallback URL
+                                // The function will try to open the URL, and if it's expired, the browser will show an error
+                              } catch (error: any) {
                                 console.error('Error opening recording:', error);
-                                toast.error('Failed to open recording. Please try again.');
+                                const errorMessage = error.message || 'Failed to open recording.';
+                                if (errorMessage.includes('expired') || errorMessage.includes('ExpiredToken')) {
+                                  toast.error('Recording URL has expired. Please refresh the page or contact support.', {
+                                    description: 'The recording link may need to be regenerated.'
+                                  });
+                                } else {
+                                  toast.error(errorMessage);
+                                }
                               }
                             }}
                           >
