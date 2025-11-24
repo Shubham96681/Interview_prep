@@ -211,7 +211,6 @@ export default function VideoPlayer({ videoUrl }: VideoPlayerProps) {
             ref={videoRef}
             src={videoUrl}
             className="max-w-full max-h-full"
-            crossOrigin="anonymous"
             preload="auto"
             playsInline
             controls={false}
