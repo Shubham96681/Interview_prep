@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard';
 import Meeting from './pages/Meeting';
 import Registration from './pages/Registration';
 import NotFound from './pages/NotFound';
+import VideoPlayerPage from './pages/VideoPlayerPage';
 import ConnectionStatus from './components/ConnectionStatus';
 
 const queryClient = new QueryClient();
@@ -50,6 +51,10 @@ const App = () => (
                     </ProtectedRoute>
                   </ErrorBoundary>
                 } 
+              />
+              <Route 
+                path="/video-player" 
+                element={<VideoPlayerPage />} 
               />
           <Route path="*" element={<NotFound />} />
         </Routes>

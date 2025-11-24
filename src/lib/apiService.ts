@@ -420,15 +420,17 @@ class ApiService {
         console.log(`✅ Got fresh URL from backend (automatically regenerated, valid for 7 days)`);
         console.log(`🔗 Fresh URL: ${freshUrl.substring(0, 100)}...`);
         
-        // Open the fresh URL - this will always work even if the original was expired
-        const newWindow = window.open(freshUrl, '_blank');
+        // Open custom video player page with the video URL
+        const encodedUrl = encodeURIComponent(freshUrl);
+        const playerUrl = `${window.location.origin}/video-player?url=${encodedUrl}`;
+        const newWindow = window.open(playerUrl, '_blank');
         
         // If opening failed, try again after a short delay
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
           console.warn('⚠️ Popup blocked or failed, retrying...');
           // Retry once after a short delay
           setTimeout(() => {
-            window.open(freshUrl, '_blank');
+            window.open(playerUrl, '_blank');
           }, 500);
         }
         return;
@@ -441,13 +443,15 @@ class ApiService {
       if (fallbackUrl) {
         console.log('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
         
-        // Try to open fallback URL - but warn that it might be expired
-        const newWindow = window.open(fallbackUrl, '_blank');
+        // Open custom video player page with the fallback URL
+        const encodedUrl = encodeURIComponent(fallbackUrl);
+        const playerUrl = `${window.location.origin}/video-player?url=${encodedUrl}`;
+        const newWindow = window.open(playerUrl, '_blank');
         
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
           console.warn('⚠️ Popup blocked, retrying...');
           setTimeout(() => {
-            window.open(fallbackUrl, '_blank');
+            window.open(playerUrl, '_blank');
           }, 500);
         }
         
