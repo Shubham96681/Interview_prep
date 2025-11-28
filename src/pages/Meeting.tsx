@@ -129,13 +129,26 @@ export default function Meeting() {
 
   const handleFeedbackSubmitted = async () => {
     if (session?.id) {
-      await fetchReviews(session.id);
       setShowFeedbackForm(false);
       
+      // Wait a bit for the review to be saved
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Fetch reviews again
+      await fetchReviews(session.id);
+      
       // Refresh session data to get updated reviews
-      const response = await apiService.getSessionById(session.id);
-      if (response.success && response.data) {
-        setSession(response.data);
+      try {
+        const response = await apiService.getSessionById(session.id);
+        if (response.success && response.data) {
+          setSession(response.data);
+          // Also fetch reviews from session data if available
+          if (response.data.reviews && Array.isArray(response.data.reviews)) {
+            setReviews(response.data.reviews);
+          }
+        }
+      } catch (error) {
+        console.error('Error refreshing session:', error);
       }
     }
   };
