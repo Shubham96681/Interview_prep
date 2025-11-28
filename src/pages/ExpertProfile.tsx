@@ -193,11 +193,25 @@ export default function ExpertProfile() {
           });
         } else {
           console.error(`❌ Expert not found in API response:`, response);
+          // Check if it's a 502 error (backend down)
+          if (response.status === 502 || (response.error && response.error.includes('502'))) {
+            toast.error('Backend server is not responding. Please check if the server is running.');
+          } else if (response.status === 404) {
+            toast.error('Expert not found. The expert profile may not exist or may be inactive.');
+          } else {
+            toast.error(response.error || response.message || 'Failed to load expert profile');
+          }
           setExpert(null);
         }
       })
       .catch((error) => {
         console.error(`❌ Error fetching expert:`, error);
+        // Check if it's a network/connection error
+        if (error.message && (error.message.includes('502') || error.message.includes('Bad Gateway'))) {
+          toast.error('Backend server is not responding. Please check if the server is running.');
+        } else {
+          toast.error('Failed to load expert profile. Please try again later.');
+        }
         setExpert(null);
       })
       .finally(() => {

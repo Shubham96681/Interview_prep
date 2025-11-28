@@ -841,6 +841,11 @@ app.get('/api/experts', validatePagination, async (req, res) => {
 // Get expert by ID
 app.get('/api/experts/:id', async (req, res) => {
   try {
+    console.log('📋 GET /api/experts/:id - Request received:', {
+      expertId: req.params.id,
+      headers: req.headers.authorization ? 'Token present' : 'No token'
+    });
+    
     const expertId = req.params.id;
     
     // Basic validation - ensure ID is provided
@@ -964,10 +969,16 @@ app.get('/api/experts/:id', async (req, res) => {
       daysAvailable: expert.daysAvailable ? (typeof expert.daysAvailable === 'string' ? JSON.parse(expert.daysAvailable) : expert.daysAvailable) : []
     };
     
+    console.log('✅ Expert found, returning response');
     res.json(expertResponse);
   } catch (error) {
-    console.error('Get expert error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('❌ Get expert error:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
