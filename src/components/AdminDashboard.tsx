@@ -35,6 +35,8 @@ interface Session {
   reviews?: any[];
   recordingUrl?: string;
   isRecordingEnabled?: boolean;
+  meetingId?: string;
+  meetingLink?: string;
 }
 
 interface User {
@@ -103,6 +105,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({}: AdminDashboardProps) {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
