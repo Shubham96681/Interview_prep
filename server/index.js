@@ -2153,72 +2153,113 @@ app.use((error, req, res, next) => {
 
 // Real-time endpoint (Server-Sent Events) - MUST be before 404 handler
 app.get('/api/realtime', (req, res) => {
-  const userId = req.query.userId || 'anonymous';
-  
-  // Handle mock IDs
-  let actualUserId = userId;
-  if (userId === 'candidate-001') {
-    actualUserId = 'john@example.com';
-  } else if (userId === 'expert-001') {
-    actualUserId = 'jane@example.com';
-  }
-  
-  // Determine CORS origin - allow same origin or configured frontend URL
-  const origin = req.headers.origin;
-  const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://54.91.53.228',
-    'http://54.91.53.228'
-  ].filter(Boolean);
-  
-  const corsOrigin = origin && allowedOrigins.some(allowed => origin.includes(allowed.split('://')[1]?.split(':')[0] || '')) 
-    ? origin 
-    : (process.env.FRONTEND_URL || '*');
-  
-  // Set SSE headers
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': corsOrigin,
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Headers': 'Cache-Control',
-    'X-Accel-Buffering': 'no' // Disable buffering in nginx
-  });
-
-  // Add connection to real-time service
   try {
-    realtimeService.addConnection(actualUserId, res);
-
-    // Send initial connection message
-    res.write(`data: ${JSON.stringify({
+    const userId = req.query.userId || 'anonymous';
+    
+    console.log(`🔄 SSE connection request from user: ${userId}, origin: ${req.headers.origin}`);
+    
+    // Handle mock IDs
+    let actualUserId = userId;
+    if (userId === 'candidate-001') {
+      actualUserId = 'john@example.com';
+    } else if (userId === 'expert-001') {
+      actualUserId = 'jane@example.com';
+    }
+    
+    // Determine CORS origin - be more permissive for production
+    const origin = req.headers.origin;
+    let corsOrigin = '*';
+    
+    if (origin) {
+      // Allow requests from same origin or configured frontend
+      const allowedOrigins = [
+        process.env.FRONTEND_URL,
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'https://54.91.53.228',
+        'http://54.91.53.228'
+      ].filter(Boolean);
+      
+      // Check if origin matches any allowed origin
+      const originHost = origin.replace(/^https?:\/\//, '').split(':')[0];
+      const isAllowed = allowedOrigins.some(allowed => {
+        if (!allowed) return false;
+        const allowedHost = allowed.replace(/^https?:\/\//, '').split(':')[0];
+        return originHost === allowedHost || origin === allowed;
+      });
+      
+      corsOrigin = isAllowed ? origin : '*';
+    } else if (process.env.FRONTEND_URL) {
+      corsOrigin = process.env.FRONTEND_URL;
+    }
+    
+    console.log(`🌐 CORS origin set to: ${corsOrigin}`);
+    
+    // Set SSE headers BEFORE any writes
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx
+    
+    // Send initial connection message immediately
+    const initialMessage = `data: ${JSON.stringify({
       event: 'connected',
       data: { userId: actualUserId, timestamp: new Date().toISOString() }
-    })}\n\n`);
+    })}\n\n`;
+    
+    res.write(initialMessage);
+    console.log(`✅ Initial SSE message sent for user: ${actualUserId}`);
+
+    // Add connection to real-time service AFTER headers are set
+    const connectionAdded = realtimeService.addConnection(actualUserId, res);
+    
+    if (!connectionAdded) {
+      console.warn(`⚠️ Failed to add connection for user: ${actualUserId}`);
+      res.write(`data: ${JSON.stringify({
+        event: 'error',
+        data: { message: 'Server at capacity' }
+      })}\n\n`);
+      res.end();
+      return;
+    }
     
     console.log(`✅ SSE connection established for user: ${actualUserId}`);
-  } catch (error) {
-    console.error(`❌ Error establishing SSE connection for ${actualUserId}:`, error);
-    res.write(`data: ${JSON.stringify({
-      event: 'error',
-      data: { message: 'Failed to establish connection' }
-    })}\n\n`);
-    res.end();
-    return;
-  }
 
-  // Handle client disconnect
-  req.on('close', () => {
-    console.log(`🔌 SSE connection closed for user: ${actualUserId}`);
-    realtimeService.removeConnection(actualUserId, res);
-  });
-  
-  req.on('error', (error) => {
-    console.error(`❌ SSE connection error for ${actualUserId}:`, error);
-    realtimeService.removeConnection(actualUserId, res);
-  });
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log(`🔌 SSE connection closed for user: ${actualUserId}`);
+      realtimeService.removeConnection(actualUserId, res);
+    });
+    
+    req.on('error', (error) => {
+      console.error(`❌ SSE connection error for ${actualUserId}:`, error);
+      realtimeService.removeConnection(actualUserId, res);
+    });
+    
+    // Handle response errors
+    res.on('error', (error) => {
+      console.error(`❌ SSE response error for ${actualUserId}:`, error);
+      realtimeService.removeConnection(actualUserId, res);
+    });
+    
+  } catch (error) {
+    console.error('❌ Error in /api/realtime endpoint:', error);
+    console.error('❌ Error stack:', error.stack);
+    
+    // Try to send error message if response hasn't been sent
+    if (!res.headersSent) {
+      res.status(500);
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.write(`data: ${JSON.stringify({
+        event: 'error',
+        data: { message: 'Internal server error' }
+      })}\n\n`);
+    }
+    res.end();
+  }
 });
 
 // Start realtime service
