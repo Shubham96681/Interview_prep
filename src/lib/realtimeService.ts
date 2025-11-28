@@ -77,17 +77,25 @@ class RealtimeService {
       };
 
       this.eventSource.onerror = (error) => {
+        const target = error.target as EventSource;
+        const readyState = target?.readyState;
+        
         console.error('❌ Real-time connection error:', error);
+        console.error(`❌ EventSource readyState: ${readyState} (0=CONNECTING, 1=OPEN, 2=CLOSED)`);
+        console.error(`❌ EventSource URL: ${target?.url}`);
+        
         this.isConnected = false;
         
         // Check if EventSource is in a failed state (readyState 2 = CLOSED)
-        if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
-          const target = error.target as EventSource;
-          if (target) {
-            // Check HTTP status if available (502, 503, etc.)
-            console.warn('⚠️ Real-time connection closed. This may indicate the endpoint is not available on the server.');
-            console.warn('⚠️ If this is production, ensure /api/realtime is properly configured in your proxy/nginx.');
-          }
+        if (readyState === EventSource.CLOSED) {
+          console.warn('⚠️ Real-time connection closed. This may indicate:');
+          console.warn('   - The endpoint returned an error (check server logs)');
+          console.warn('   - CORS issues');
+          console.warn('   - Network/proxy problems');
+          console.warn('   - Server-side error in /api/realtime endpoint');
+          console.warn('⚠️ If this is production, ensure /api/realtime is properly configured in your proxy/nginx.');
+        } else if (readyState === EventSource.CONNECTING) {
+          console.warn('⚠️ Connection still connecting, waiting...');
         }
         
         this.handleReconnect(userId);
