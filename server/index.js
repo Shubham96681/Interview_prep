@@ -1087,6 +1087,13 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       finalScheduledDate = new Date(scheduledDate);
     }
 
+    // Generate meeting ID and link for WebRTC
+    const meetingId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const meetingLink = baseUrl.includes('localhost') 
+      ? `${baseUrl}/meeting/${meetingId}`
+      : `/meeting/${meetingId}`;
+
     // Create session
     const session = await prisma.session.create({
       data: {
@@ -1099,7 +1106,9 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
         expertId: actualExpertId,
         paymentAmount: expert.hourlyRate ? (expert.hourlyRate * parseInt(duration || 60)) / 60 : 75,
         paymentStatus: 'pending',
-        status: 'scheduled'
+        status: 'scheduled',
+        meetingId: meetingId,
+        meetingLink: meetingLink
       },
       include: {
         candidate: {
@@ -1320,6 +1329,51 @@ app.get('/api/sessions/meeting/:meetingId', async (req, res) => {
       if (allSessions.length > 0) {
         session = allSessions[0];
         console.log('Found session by meetingLink:', session.id);
+      }
+    }
+
+    // If still not found and user is authenticated, try to find by user participation
+    // This helps when meetingId in URL doesn't match database (e.g., old sessions)
+    if (!session && req.user) {
+      console.log('Session not found by meetingId or meetingLink, trying to find by user participation...');
+      const userId = req.user.id || req.user.userId;
+      const userSessions = await prisma.session.findMany({
+        where: {
+          OR: [
+            { candidateId: userId },
+            { expertId: userId }
+          ],
+          // Try to match by date if meetingId contains a timestamp
+          ...(meetingId.startsWith('meet-') && meetingId.includes('-') ? {
+            scheduledDate: {
+              gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+              lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)  // Next 30 days
+            }
+          } : {})
+        },
+        include: {
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          expert: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          }
+        },
+        orderBy: { scheduledDate: 'desc' },
+        take: 1 // Get most recent matching session
+      });
+      
+      if (userSessions.length > 0) {
+        session = userSessions[0];
+        console.log('Found session by user participation:', session.id);
       }
     }
 
