@@ -418,6 +418,154 @@ app.post('/api/auth/register', upload.fields([
   }
 });
 
+// Verify OTP and complete registration
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and OTP are required' 
+      });
+    }
+
+    console.log(`🔐 OTP verification attempt for: ${email}`);
+
+    // Verify OTP
+    const verification = otpService.verifyOTP(email, otp);
+
+    if (!verification.valid) {
+      console.log(`❌ OTP verification failed for ${email}: ${verification.error}`);
+      return res.status(400).json({
+        success: false,
+        message: verification.error || 'Invalid or expired OTP'
+      });
+    }
+
+    console.log(`✅ OTP verified for ${email}, creating user...`);
+
+    // OTP is valid, create the user
+    const userData = verification.userData;
+
+    const user = await prisma.user.create({
+      data: {
+        email: userData.email,
+        password: userData.password,
+        name: userData.name,
+        userType: userData.userType,
+        phone: userData.phone,
+        company: userData.company,
+        title: userData.title,
+        bio: userData.bio,
+        experience: userData.experience,
+        skills: userData.skills,
+        proficiency: userData.proficiency,
+        hourlyRate: userData.hourlyRate,
+        resumePath: userData.resumePath,
+        profilePhotoPath: userData.profilePhotoPath,
+        certificationPaths: userData.certificationPaths,
+        isActive: userData.isActive
+      }
+    });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, userType: user.userType },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Remove password from response
+    const { password: _, ...userWithoutPassword } = user;
+
+    // Send registration success email
+    try {
+      await emailService.sendRegistrationSuccessEmail(user.email, user.name, user.userType);
+      console.log(`✅ Registration success email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error('❌ Error sending registration success email:', emailError);
+      // Don't fail if email fails
+    }
+
+    console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
+    console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Registration successful! Welcome to Interview Prep Platform.',
+      user: userWithoutPassword,
+      token
+    });
+  } catch (error) {
+    console.error('❌ OTP verification error:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Resend OTP
+app.post('/api/auth/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    console.log(`🔄 Resend OTP request for: ${email}`);
+
+    const userData = otpService.getUserData(email);
+    if (!userData) {
+      console.log(`❌ No pending registration found for: ${email}`);
+      return res.status(400).json({
+        success: false,
+        message: 'No pending registration found for this email. Please register again.'
+      });
+    }
+
+    // Resend OTP
+    const newOtp = otpService.resendOTP(email);
+    if (!newOtp) {
+      console.log(`❌ Failed to resend OTP for: ${email}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Failed to resend OTP. Please try registering again.'
+      });
+    }
+
+    // Send new OTP email
+    try {
+      await emailService.sendOTPEmail(email, userData.name, newOtp);
+      console.log(`✅ OTP resent to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Error sending OTP email:', emailError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP email. Please try again.'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'OTP resent to your email. Please check your inbox.'
+    });
+  } catch (error) {
+    console.error('❌ Resend OTP error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+});
+
 app.post('/api/auth/login', validateLogin, async (req, res) => {
   try {
     console.log('🔐 Login attempt:', req.body.email);
