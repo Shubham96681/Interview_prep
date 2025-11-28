@@ -350,6 +350,14 @@ class ApiService {
     return this.request('/api/experts');
   }
 
+  async getExpertBookedSlots(expertId: string, startDate?: string, endDate?: string) {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    const queryString = params.toString();
+    return this.request(`/api/experts/${expertId}/booked-slots${queryString ? `?${queryString}` : ''}`);
+  }
+
   async updateProfile(userData: FormData) {
     // Get token for authentication
     const token = localStorage.getItem('token');

@@ -1129,6 +1129,65 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       finalScheduledDate = new Date(scheduledDate);
     }
 
+    // Check for existing bookings at the same date and time for this expert
+    if (date && time) {
+      const existingSession = await prisma.session.findFirst({
+        where: {
+          expertId: actualExpertId,
+          date: date,
+          time: time,
+          status: {
+            notIn: ['cancelled', 'completed']
+          }
+        }
+      });
+
+      if (existingSession) {
+        console.error('❌ Time slot already booked:', { date, time, expertId: actualExpertId });
+        return res.status(409).json({
+          success: false,
+          message: `This time slot (${date} at ${time}) is already booked. Please select another time.`
+        });
+      }
+    }
+
+    // Also check using scheduledDate if provided
+    if (finalScheduledDate) {
+      const sessionDateStr = finalScheduledDate.toISOString().split('T')[0];
+      const sessionTimeStr = time || finalScheduledDate.toTimeString().split(' ')[0].substring(0, 5);
+      
+      const existingSessionByDate = await prisma.session.findFirst({
+        where: {
+          expertId: actualExpertId,
+          OR: [
+            { date: sessionDateStr, time: sessionTimeStr },
+            { 
+              scheduledDate: {
+                gte: new Date(finalScheduledDate.getTime() - 30 * 60 * 1000), // 30 minutes before
+                lte: new Date(finalScheduledDate.getTime() + (parseInt(duration) || 60) * 60 * 1000) // duration after
+              }
+            }
+          ],
+          status: {
+            notIn: ['cancelled', 'completed']
+          }
+        }
+      });
+
+      if (existingSessionByDate) {
+        console.error('❌ Time slot conflict detected:', { 
+          date: sessionDateStr, 
+          time: sessionTimeStr, 
+          scheduledDate: finalScheduledDate,
+          expertId: actualExpertId 
+        });
+        return res.status(409).json({
+          success: false,
+          message: `This time slot is already booked. Please select another time.`
+        });
+      }
+    }
+
     // Generate meeting ID and link for WebRTC
     const meetingId = `meet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -1136,12 +1195,14 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       ? `${baseUrl}/meeting/${meetingId}`
       : `/meeting/${meetingId}`;
 
-    // Create session
+    // Create session - store date and time exactly as provided (preserve format)
     const session = await prisma.session.create({
       data: {
         title: title || `${sessionType || 'Technical'} Interview Session`,
         description: description || `Interview session scheduled for ${date || scheduledDate} at ${time || ''}`,
         scheduledDate: finalScheduledDate,
+        date: date || (finalScheduledDate ? finalScheduledDate.toISOString().split('T')[0] : null), // Store date as-is (YYYY-MM-DD)
+        time: time || (finalScheduledDate ? finalScheduledDate.toTimeString().split(' ')[0].substring(0, 5) : null), // Store time as-is (HH:MM format, e.g., "21:00" for 9pm)
         duration: parseInt(duration) || 60,
         sessionType: sessionType || 'technical',
         candidateId: actualCandidateId,
@@ -1200,6 +1261,79 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Book session error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Get expert booked sessions for availability checking
+app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
+  try {
+    const { expertId } = req.params;
+    const { startDate, endDate } = req.query;
+    
+    // Map test expert IDs
+    let actualExpertId = expertId;
+    if (expertId === 'expert-001') {
+      const expert = await prisma.user.findUnique({
+        where: { email: 'jane@example.com' },
+        select: { id: true }
+      });
+      if (expert) actualExpertId = expert.id;
+    }
+    
+    // Build date range query
+    const whereClause: any = {
+      expertId: actualExpertId,
+      status: {
+        notIn: ['cancelled']
+      }
+    };
+    
+    if (startDate || endDate) {
+      whereClause.OR = [];
+      if (startDate) {
+        whereClause.OR.push({ date: { gte: startDate } });
+        whereClause.OR.push({ scheduledDate: { gte: new Date(startDate) } });
+      }
+      if (endDate) {
+        whereClause.OR.push({ date: { lte: endDate } });
+        whereClause.OR.push({ scheduledDate: { lte: new Date(endDate) } });
+      }
+    }
+    
+    const sessions = await prisma.session.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        date: true,
+        time: true,
+        scheduledDate: true,
+        duration: true,
+        status: true
+      },
+      orderBy: {
+        scheduledDate: 'asc'
+      }
+    });
+    
+    // Format response with date and time
+    const bookedSlots = sessions.map(session => ({
+      date: session.date || (session.scheduledDate ? session.scheduledDate.toISOString().split('T')[0] : null),
+      time: session.time || (session.scheduledDate ? session.scheduledDate.toTimeString().split(' ')[0].substring(0, 5) : null),
+      scheduledDate: session.scheduledDate,
+      duration: session.duration,
+      status: session.status
+    }));
+    
+    res.json({
+      success: true,
+      data: { bookedSlots }
+    });
+  } catch (error) {
+    console.error('Get booked slots error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
   }
 });
 

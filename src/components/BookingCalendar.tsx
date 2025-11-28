@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CreditCard, X, CheckCircle } from 'lucide-react';
 import PaymentModal from './PaymentModal';
+import { apiService } from '@/lib/apiService';
 
 interface BookingCalendarProps {
   expertId: string;
@@ -38,50 +39,83 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
   const [error] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Mock availability data for demonstration
+  // Fetch real availability data from backend
   useEffect(() => {
-    const generateMockAvailability = () => {
-      const today = new Date();
-      const slots = [];
-      
-      for (let i = 0; i < 7; i++) {
-        const currentDate = new Date(today);
-        currentDate.setDate(today.getDate() + i);
-        const dateStr = currentDate.toISOString().split('T')[0];
+    const fetchAvailability = async () => {
+      setLoading(true);
+      try {
+        // Calculate date range (next 7 days)
+        const today = new Date();
+        const endDate = new Date(today);
+        endDate.setDate(today.getDate() + 7);
+        const startDateStr = today.toISOString().split('T')[0];
+        const endDateStr = endDate.toISOString().split('T')[0];
         
-        // Generate mock time slots
-        const allTimes = ['09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00'];
+        // Fetch booked slots from backend
+        const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
+        const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
+          ? bookedResponse.data.bookedSlots 
+          : [];
         
-        // Mock some booked slots for demonstration
-        const bookedTimes: string[] = [];
-        if (i === 1) bookedTimes.push('10:00', '14:00'); // Tomorrow has some booked slots
-        if (i === 2) bookedTimes.push('09:00', '11:00', '15:00'); // Day after has more booked slots
+        console.log('📅 Fetched booked slots:', bookedSlots);
         
-        const availableTimes = allTimes.filter(time => !bookedTimes.includes(time));
+        // Generate time slots (9am to 9pm, hourly)
+        const allTimes = [];
+        for (let hour = 9; hour <= 21; hour++) {
+          allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+        }
         
-        slots.push({
-          date: dateStr,
-          dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
-          availableTimes,
-          bookedTimes,
-          isAvailable: availableTimes.length > 0
+        // Group booked slots by date
+        const bookedByDate: Record<string, string[]> = {};
+        bookedSlots.forEach((slot: any) => {
+          if (slot.date && slot.time) {
+            if (!bookedByDate[slot.date]) {
+              bookedByDate[slot.date] = [];
+            }
+            bookedByDate[slot.date].push(slot.time);
+          }
         });
+        
+        // Generate availability slots for next 7 days
+        const slots = [];
+        for (let i = 0; i < 7; i++) {
+          const currentDate = new Date(today);
+          currentDate.setDate(today.getDate() + i);
+          const dateStr = currentDate.toISOString().split('T')[0];
+          
+          const bookedTimes = bookedByDate[dateStr] || [];
+          const availableTimes = allTimes.filter(time => !bookedTimes.includes(time));
+          
+          slots.push({
+            date: dateStr,
+            dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+            availableTimes,
+            bookedTimes,
+            isAvailable: availableTimes.length > 0
+          });
+        }
+        
+        setAvailabilityData({
+          expertId,
+          workingHours: { start: '09:00', end: '21:00' },
+          daysAvailable: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+          slots
+        });
+      } catch (error) {
+        console.error('Error fetching availability:', error);
+        // Fallback to empty availability on error
+        setAvailabilityData({
+          expertId,
+          workingHours: { start: '09:00', end: '21:00' },
+          daysAvailable: [],
+          slots: []
+        });
+      } finally {
+        setLoading(false);
       }
-      
-      return {
-        expertId,
-        workingHours: { start: '09:00', end: '17:00' },
-        daysAvailable: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
-        slots
-      };
     };
 
-    setLoading(true);
-    // Simulate API delay
-    setTimeout(() => {
-      setAvailabilityData(generateMockAvailability());
-      setLoading(false);
-    }, 1000);
+    fetchAvailability();
   }, [expertId]);
 
   const formatDate = (dateStr: string) => {
