@@ -420,6 +420,17 @@ export default function RegistrationForm({ isOpen, onClose, onRegister }: Regist
     const response = await apiService.register(formData);
     
     if (response.success && response.data) {
+      // Check if OTP verification is needed
+      if (response.data.email && !response.data.user) {
+        // OTP sent, notify parent to show OTP modal
+        toast.success('OTP sent to your email. Please verify to complete registration.');
+        // The parent component (AuthModal) should handle showing OTP modal
+        // For now, we'll close and let the user verify via the main registration page
+        onClose();
+        toast.info('Please check your email for the OTP and verify your account.');
+        return;
+      }
+      
       const data = response.data;
       
       // CRITICAL: Use the actual database ID from the response

@@ -243,6 +243,26 @@ class ApiService {
     });
   }
 
+  async verifyOTP(email: string, otp: string) {
+    return this.request('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, otp }),
+    });
+  }
+
+  async resendOTP(email: string) {
+    return this.request('/api/auth/resend-otp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email }),
+    });
+  }
+
   async checkEmail(email: string): Promise<ApiResponse<{ exists: boolean; message: string }>> {
     return this.request(`/api/auth/check-email?email=${encodeURIComponent(email)}`, {
       method: 'GET',

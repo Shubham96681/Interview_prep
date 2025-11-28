@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/lib/auth';
+import OTPVerificationModal from '@/components/OTPVerificationModal';
 
 interface UserData {
   id: string;
@@ -275,26 +276,36 @@ export default function Registration() {
       const response = await apiService.register(formData);
       
       if (response.success && response.data) {
-        const userData = response.data.user as UserData;
-        const token = response.data.token;
-        
-        if (token) {
-          localStorage.setItem('token', token);
-        }
-        
-        if (userData && userData.id) {
-          authService.login(userData);
-          login(userData);
-          
-          toast.success(`Registration successful! Welcome ${userData.name}!`);
-          
-          if (userData.userType === 'expert') {
-            navigate(`/expert/${userData.id}`);
-          } else {
-            navigate('/dashboard');
-          }
+        // Check if OTP verification is needed
+        if (response.data.email && !response.data.user) {
+          // OTP sent, show verification modal
+          setPendingEmail(response.data.email);
+          setPendingUserName(name);
+          setShowOTPModal(true);
+          toast.success('OTP sent to your email. Please verify to complete registration.');
         } else {
-          toast.error('Registration successful but user data not received. Please log in.');
+          // Direct registration (fallback for backward compatibility)
+          const userData = response.data.user as UserData;
+          const token = response.data.token;
+          
+          if (token) {
+            localStorage.setItem('token', token);
+          }
+          
+          if (userData && userData.id) {
+            authService.login(userData);
+            login(userData);
+            
+            toast.success(`Registration successful! Welcome ${userData.name}!`);
+            
+            if (userData.userType === 'expert') {
+              navigate(`/expert/${userData.id}`);
+            } else {
+              navigate('/dashboard');
+            }
+          } else {
+            toast.error('Registration successful but user data not received. Please log in.');
+          }
         }
       } else {
         toast.error(response.error || 'Registration failed');
@@ -305,7 +316,32 @@ export default function Registration() {
     }
   };
 
+  const handleOTPVerificationSuccess = (userData: UserData, token: string) => {
+    authService.login(userData);
+    login(userData);
+    
+    toast.success(`Registration successful! Welcome ${userData.name}!`);
+    
+    if (userData.userType === 'expert') {
+      navigate(`/expert/${userData.id}`);
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
   return (
+    <>
+      <OTPVerificationModal
+        isOpen={showOTPModal}
+        email={pendingEmail}
+        userName={pendingUserName}
+        onVerificationSuccess={handleOTPVerificationSuccess}
+        onClose={() => {
+          setShowOTPModal(false);
+          setPendingEmail('');
+          setPendingUserName('');
+        }}
+      />
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         <Button
@@ -894,6 +930,7 @@ export default function Registration() {
         </Card>
       </div>
     </div>
+    </>
   );
 }
 
