@@ -161,8 +161,14 @@ const limiter = rateLimit({
 // Apply lenient rate limiting specifically to email check endpoint first
 app.use('/api/auth/check-email', emailCheckLimiter);
 
-// Apply general rate limiting to all other API routes
-app.use('/api/', limiter);
+// Apply general rate limiting to all other API routes (exclude realtime for SSE)
+app.use('/api/', (req, res, next) => {
+  // Skip rate limiting for realtime endpoint (SSE connections need to stay open)
+  if (req.path === '/realtime' || req.path === '/api/realtime') {
+    return next();
+  }
+  limiter(req, res, next);
+});
 
 // CORS configuration
 app.use(cors({
