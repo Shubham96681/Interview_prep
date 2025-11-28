@@ -2460,50 +2460,20 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
   }
 });
 
-// Get reviews for user (reviews received by this user)
-app.get('/api/reviews/:userId', validatePagination, async (req, res) => {
+// Get reviews for user
+app.get('/api/reviews/:userId', validateObjectId('userId'), validatePagination, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    let userId = req.params.userId;
-
-    // Map test user IDs to database IDs
-    if (userId === 'expert-001') {
-      try {
-        const expert = await prisma.user.findUnique({
-          where: { email: 'jane@example.com' },
-          select: { id: true }
-        });
-        if (expert) {
-          userId = expert.id;
-          console.log('✅ Mapped expert-001 to database ID for reviews:', userId);
-        }
-      } catch (e) {
-        console.warn('⚠️ Could not map expert-001, using original userId');
-      }
-    } else if (userId === 'candidate-001') {
-      try {
-        const candidate = await prisma.user.findUnique({
-          where: { email: 'john@example.com' },
-          select: { id: true }
-        });
-        if (candidate) {
-          userId = candidate.id;
-          console.log('✅ Mapped candidate-001 to database ID for reviews:', userId);
-        }
-      } catch (e) {
-        console.warn('⚠️ Could not map candidate-001, using original userId');
-      }
-    }
 
     const [reviews, total] = await Promise.all([
       prisma.review.findMany({
-        where: { revieweeId: userId },
+        where: { revieweeId: req.params.userId },
         skip,
         take: parseInt(limit),
         include: {
           reviewer: {
-            select: { id: true, name: true, email: true }
+            select: { id: true, name: true }
           },
           session: {
             select: { id: true, title: true, sessionType: true }
@@ -2511,13 +2481,10 @@ app.get('/api/reviews/:userId', validatePagination, async (req, res) => {
         },
         orderBy: { createdAt: 'desc' }
       }),
-      prisma.review.count({ where: { revieweeId: userId } })
+      prisma.review.count({ where: { revieweeId: req.params.userId } })
     ]);
 
-    console.log(`✅ Fetched ${reviews.length} reviews for user ${userId}`);
-
     res.json({
-      success: true,
       reviews,
       pagination: {
         page: parseInt(page),
@@ -2527,12 +2494,8 @@ app.get('/api/reviews/:userId', validatePagination, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Get reviews error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Internal server error',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
+    console.error('Get reviews error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

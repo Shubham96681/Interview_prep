@@ -107,23 +107,36 @@ export default function Meeting() {
 
   const fetchReviews = async (sessionId: string) => {
     try {
+      console.log('📋 Fetching reviews for session:', sessionId);
       const response = await apiService.getSessionReviews(sessionId);
+      console.log('📋 Reviews response:', response);
       if (response.success && response.data?.reviews) {
-        setReviews(response.data.reviews);
+        const fetchedReviews = response.data.reviews;
+        console.log('📋 Fetched reviews:', fetchedReviews);
+        setReviews(fetchedReviews);
         // Auto-show feedback form if coming from feedback button and user hasn't submitted
         if (shouldShowFeedback && user) {
           setTimeout(() => {
-            const userReview = response.data.reviews.find(
-              (r: any) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+            const userReview = fetchedReviews.find(
+              (r: any) => {
+                const reviewerId = r.reviewerId || r.reviewer?.id;
+                const userId = user?.id;
+                console.log('🔍 Checking review match:', { reviewerId, userId, review: r });
+                return reviewerId === userId;
+              }
             );
             if (!userReview) {
               setShowFeedbackForm(true);
             }
           }, 300);
         }
+      } else {
+        console.warn('⚠️ No reviews in response or response not successful:', response);
+        setReviews([]);
       }
     } catch (error) {
-      console.error('Error fetching reviews:', error);
+      console.error('❌ Error fetching reviews:', error);
+      setReviews([]);
     }
   };
 
@@ -528,7 +541,10 @@ export default function Meeting() {
                         }
                       }}
                     >
-                      {reviews.find((r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id) 
+                      {reviews.find((r: any) => {
+                        const reviewerId = r.reviewerId || r.reviewer?.id;
+                        return reviewerId === user?.id;
+                      }) 
                         ? 'Update Feedback' 
                         : 'Provide Feedback'}
                     </Button>
@@ -544,7 +560,11 @@ export default function Meeting() {
                     : session.candidateName || session.candidate?.name || 'Candidate';
                   
                   const userReview = reviews.find(
-                    (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+                    (r: any) => {
+                      const reviewerId = r.reviewerId || r.reviewer?.id;
+                      const userId = user?.id;
+                      return reviewerId === userId;
+                    }
                   );
                   
                   // Show form if explicitly requested or if user hasn't submitted feedback yet

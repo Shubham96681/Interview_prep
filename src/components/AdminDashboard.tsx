@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -10,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiService } from '@/lib/apiService';
 import { toast } from 'sonner';
-import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video, Monitor, AlertTriangle, Wifi, Zap, BarChart3, Server } from 'lucide-react';
+import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video, Monitor, AlertTriangle, Wifi, Zap, BarChart3, Server, MessageSquare } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
 import AddUserForm from './AddUserForm';
 
@@ -1334,6 +1335,16 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
+                          {session.meetingId && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => navigate(`/meeting/${session.meetingId}?tab=feedback`)}
+                              title="View Feedback"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
