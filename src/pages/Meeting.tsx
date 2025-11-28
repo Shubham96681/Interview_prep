@@ -116,19 +116,20 @@ export default function Meeting() {
       
       if (response.success) {
         // Try different possible response structures
-        if (response.data?.reviews && Array.isArray(response.data.reviews)) {
-          fetchedReviews = response.data.reviews;
+        const responseData = response.data as any;
+        if (responseData?.reviews && Array.isArray(responseData.reviews)) {
+          fetchedReviews = responseData.reviews;
           console.log('✅ Found reviews in response.data.reviews:', fetchedReviews.length);
-        } else if (response.data && Array.isArray(response.data)) {
-          fetchedReviews = response.data;
+        } else if (responseData && Array.isArray(responseData)) {
+          fetchedReviews = responseData;
           console.log('✅ Found reviews in response.data (array):', fetchedReviews.length);
-        } else if (response.reviews && Array.isArray(response.reviews)) {
-          fetchedReviews = response.reviews;
+        } else if ((response as any).reviews && Array.isArray((response as any).reviews)) {
+          fetchedReviews = (response as any).reviews;
           console.log('✅ Found reviews in response.reviews:', fetchedReviews.length);
         } else {
           console.warn('⚠️ Reviews not found in expected structure:', {
-            hasData: !!response.data,
-            dataKeys: response.data ? Object.keys(response.data) : [],
+            hasData: !!responseData,
+            dataKeys: responseData ? Object.keys(responseData) : [],
             responseKeys: Object.keys(response)
           });
         }
@@ -617,47 +618,48 @@ export default function Meeting() {
                     {reviews.map((review: any) => {
                       console.log('🎨 Rendering review:', review);
                       return (
-                      <Card key={review.id}>
-                        <CardContent className="pt-6">
-                          <div className="flex items-start justify-between mb-2">
-                            <div>
-                              <p className="font-medium">
-                                {review.reviewer?.name || 'Anonymous'}
-                              </p>
-                              <p className="text-sm text-gray-500">
-                                Feedback for {review.reviewee?.name || 'Participant'}
-                              </p>
+                        <Card key={review.id}>
+                          <CardContent className="pt-6">
+                            <div className="flex items-start justify-between mb-2">
+                              <div>
+                                <p className="font-medium">
+                                  {review.reviewer?.name || 'Anonymous'}
+                                </p>
+                                <p className="text-sm text-gray-500">
+                                  Feedback for {review.reviewee?.name || 'Participant'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {Array.from({ length: review.rating }).map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className="h-4 w-4 fill-yellow-400 text-yellow-400"
+                                  />
+                                ))}
+                                {Array.from({ length: 5 - review.rating }).map((_, i) => (
+                                  <Star
+                                    key={i + review.rating}
+                                    className="h-4 w-4 text-gray-300"
+                                  />
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              {Array.from({ length: review.rating }).map((_, i) => (
-                                <Star
-                                  key={i}
-                                  className="h-4 w-4 fill-yellow-400 text-yellow-400"
-                                />
-                              ))}
-                              {Array.from({ length: 5 - review.rating }).map((_, i) => (
-                                <Star
-                                  key={i + review.rating}
-                                  className="h-4 w-4 text-gray-300"
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          {review.comment && (
-                            <p className="text-sm text-gray-700 mt-2">{review.comment}</p>
-                          )}
-                          <p className="text-xs text-gray-400 mt-2">
-                            {new Date(review.createdAt).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ))}
+                            {review.comment && (
+                              <p className="text-sm text-gray-700 mt-2">{review.comment}</p>
+                            )}
+                            <p className="text-xs text-gray-400 mt-2">
+                              {new Date(review.createdAt).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
 
