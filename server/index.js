@@ -1363,11 +1363,20 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     });
     
     // Format response with date and time extracted from scheduledDate
+    // Use UTC to ensure consistent format matching with frontend
     const bookedSlots = sessions.map(session => {
-      const dateStr = session.scheduledDate ? session.scheduledDate.toISOString().split('T')[0] : null;
-      const timeStr = session.scheduledDate 
-        ? session.scheduledDate.toTimeString().split(' ')[0].substring(0, 5) 
-        : null;
+      if (!session.scheduledDate) {
+        return null;
+      }
+      
+      // Convert to UTC for consistent date/time extraction
+      const utcDate = new Date(session.scheduledDate);
+      const dateStr = utcDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      
+      // Extract time in HH:MM format (24-hour, zero-padded)
+      const hours = String(utcDate.getUTCHours()).padStart(2, '0');
+      const minutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
+      const timeStr = `${hours}:${minutes}`;
       
       return {
         date: dateStr,
@@ -1376,9 +1385,10 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
         duration: session.duration,
         status: session.status
       };
-    });
+    }).filter(Boolean); // Remove any null entries
     
     console.log('✅ Booked slots fetched:', bookedSlots.length);
+    console.log('📋 Booked slots details:', JSON.stringify(bookedSlots, null, 2));
     res.json({
       success: true,
       data: { bookedSlots }

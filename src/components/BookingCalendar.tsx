@@ -63,7 +63,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         
         console.log('📅 Fetched booked slots:', bookedSlots);
         
-        // Generate time slots (9am to 9pm, hourly)
+        // Generate time slots (9am to 9pm, hourly) - format: "09:00", "10:00", etc.
         const allTimes = [];
         for (let hour = 9; hour <= 21; hour++) {
           allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
@@ -73,12 +73,19 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         const bookedByDate: Record<string, string[]> = {};
         bookedSlots.forEach((slot: any) => {
           if (slot.date && slot.time && slot.status !== 'cancelled') {
+            // Normalize time format to HH:MM (ensure it matches our format)
+            const normalizedTime = slot.time.length === 5 ? slot.time : 
+              slot.time.substring(0, 5); // Take first 5 chars (HH:MM)
+            
             if (!bookedByDate[slot.date]) {
               bookedByDate[slot.date] = [];
             }
-            bookedByDate[slot.date].push(slot.time);
+            bookedByDate[slot.date].push(normalizedTime);
+            console.log(`📅 Marking slot as booked: ${slot.date} at ${normalizedTime}`);
           }
         });
+        
+        console.log('📅 Booked slots by date:', bookedByDate);
         
         // Generate availability slots for next 7 days (starting from today, excluding past dates)
         const slots = [];
@@ -222,7 +229,20 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
   const isSlotBooked = (date: string, time: string) => {
     if (!availabilityData) return false;
     const slot = availabilityData.slots.find(s => s.date === date);
-    return slot ? slot.bookedTimes.includes(time) : false;
+    if (!slot) return false;
+    
+    // Normalize time format for comparison (ensure HH:MM format)
+    const normalizedTime = time.length === 5 ? time : time.substring(0, 5);
+    const isBooked = slot.bookedTimes.includes(normalizedTime);
+    
+    if (isBooked) {
+      console.log(`🔴 Slot is booked: ${date} at ${normalizedTime}`, {
+        bookedTimes: slot.bookedTimes,
+        checkingTime: normalizedTime
+      });
+    }
+    
+    return isBooked;
   };
 
   const getSelectedSlotTimes = () => {
