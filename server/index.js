@@ -40,6 +40,12 @@ const webrtcService = require('./services/webrtcService');
 // Import S3 service
 const s3Service = require('./services/s3Service');
 
+// Import email service
+const emailService = require('./services/emailService');
+
+// Import OTP service
+const otpService = require('./services/otpService');
+
 // Import middleware
 const { authenticateToken, requireRole, requireVerification } = require('./middleware/auth-prisma');
 const {
@@ -364,47 +370,43 @@ app.post('/api/auth/register', upload.fields([
     const skillsJson = skills ? JSON.stringify(skills.split(',').map(s => s.trim())) : null;
     const proficiencyJson = proficiency ? JSON.stringify(JSON.parse(proficiency)) : null;
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        userType: finalUserType,
-        phone: phone || null,
-        company: company || null,
-        title: title || null,
-        bio: bio || expertBio || null,
-        experience: experience || yearsOfExperience || null,
-        skills: skillsJson,
-        proficiency: proficiencyJson,
-        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
-        resumePath: resumePath || null,
-        profilePhotoPath: profilePhotoPath || null,
-        certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
-        // Experts require admin approval before appearing in directory
-        // Candidates are active by default
-        isActive: userType === 'expert' ? false : true
-      }
-    });
+    // Prepare user data for OTP storage (don't create user yet)
+    const userData = {
+      email,
+      password: hashedPassword,
+      name,
+      userType: finalUserType,
+      phone: phone || null,
+      company: company || null,
+      title: title || null,
+      bio: bio || expertBio || null,
+      experience: experience || yearsOfExperience || null,
+      skills: skillsJson,
+      proficiency: proficiencyJson,
+      hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
+      resumePath: resumePath || null,
+      profilePhotoPath: profilePhotoPath || null,
+      certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
+      isActive: finalUserType === 'expert' ? false : true
+    };
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, userType: user.userType },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    // Generate and store OTP
+    const otp = otpService.storeOTP(email, userData);
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user;
+    // Send OTP email
+    try {
+      await emailService.sendOTPEmail(email, name, otp);
+      console.log(`✅ OTP email sent to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Error sending OTP email:', emailError);
+      // Don't fail registration if email fails, but log it
+      // In production, you might want to handle this differently
+    }
 
-    console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
-    console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
-
-    res.status(201).json({
-      message: 'User registered successfully',
-      user: userWithoutPassword,
-      token
+    res.status(200).json({
+      success: true,
+      message: 'OTP sent to your email. Please verify to complete registration.',
+      email: email // Return email for frontend to use in verification
     });
   } catch (error) {
     console.error('❌ Registration error:', error);
@@ -954,6 +956,28 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
         }
       }
     });
+
+    // Send emails to candidate and expert
+    try {
+      await Promise.all([
+        emailService.sendMeetingBookingEmailToCandidate(
+          session.candidate.email,
+          session.candidate.name,
+          session.expert.name,
+          session
+        ),
+        emailService.sendMeetingBookingEmailToExpert(
+          session.expert.email,
+          session.expert.name,
+          session.candidate.name,
+          session
+        )
+      ]);
+      console.log('✅ Meeting booking emails sent to candidate and expert');
+    } catch (emailError) {
+      console.error('❌ Error sending meeting booking emails:', emailError);
+      // Don't fail the booking if email fails
+    }
 
     res.status(201).json({ message: 'Session booked successfully', session });
   } catch (error) {
@@ -1634,6 +1658,94 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
     res.json({ message: 'Session status updated', session: updatedSession });
   } catch (error) {
     console.error('Update session status error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Reschedule a session (expert only)
+app.put('/api/sessions/:id/reschedule', authenticateToken, validateObjectId('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { scheduledDate, date, time } = req.body;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    // Find session
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    // Only expert can reschedule
+    if (session.expertId !== userId) {
+      return res.status(403).json({ message: 'Only the expert can reschedule this session' });
+    }
+
+    // Parse new date and time
+    let newScheduledDate = scheduledDate;
+    if (date && time && !scheduledDate) {
+      const [year, month, day] = date.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      newScheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    } else if (scheduledDate) {
+      newScheduledDate = new Date(scheduledDate);
+    } else {
+      return res.status(400).json({ message: 'New scheduled date is required' });
+    }
+
+    // Update session
+    const updatedSession = await prisma.session.update({
+      where: { id },
+      data: {
+        scheduledDate: newScheduledDate,
+        status: 'rescheduled',
+        updatedAt: new Date()
+      },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    // Send reschedule email to candidate
+    try {
+      await emailService.sendMeetingRescheduleEmailToCandidate(
+        session.candidate.email,
+        session.candidate.name,
+        session.expert.name,
+        session,
+        newScheduledDate
+      );
+      console.log('✅ Meeting reschedule email sent to candidate');
+    } catch (emailError) {
+      console.error('❌ Error sending reschedule email:', emailError);
+      // Don't fail if email fails
+    }
+
+    res.json({ 
+      message: 'Session rescheduled successfully', 
+      session: updatedSession 
+    });
+  } catch (error) {
+    console.error('Reschedule session error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
