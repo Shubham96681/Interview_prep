@@ -2032,7 +2032,7 @@ app.put('/api/sessions/:id/reschedule', authenticateToken, validateObjectId('id'
 app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => {
   try {
     const { sessionId, rating, comment, categories } = req.body;
-    const reviewerId = req.user?.id;
+    const reviewerId = req.user?.id || req.user?.userId;
 
     console.log('✅ Route matched: POST /api/reviews');
     console.log('📝 Review submission:', { 
@@ -2041,8 +2041,24 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
       rating, 
       commentLength: comment?.length,
       path: req.path,
-      bodyKeys: Object.keys(req.body)
+      bodyKeys: Object.keys(req.body),
+      user: req.user ? { id: req.user.id, email: req.user.email, userType: req.user.userType } : 'NO USER'
     });
+
+    if (!reviewerId) {
+      console.error('❌ No reviewer ID found. req.user:', req.user);
+      return res.status(401).json({ 
+        success: false,
+        message: 'User not authenticated. Please log in again.' 
+      });
+    }
+
+    if (!sessionId) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Session ID is required' 
+      });
+    }
 
     // Verify session exists and user participated
     // Allow feedback even if session is not marked completed (in case status update failed)
@@ -2053,16 +2069,53 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
           { candidateId: reviewerId },
           { expertId: reviewerId }
         ]
+      },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
       }
     });
 
     if (!session) {
-      console.error('❌ Session not found or access denied:', { sessionId, reviewerId });
+      console.error('❌ Session not found or access denied:', { 
+        sessionId, 
+        reviewerId,
+        userEmail: req.user?.email,
+        userType: req.user?.userType
+      });
+      
+      // Try to find the session without access check to see if it exists
+      const sessionExists = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { id: true, candidateId: true, expertId: true }
+      });
+      
+      if (sessionExists) {
+        console.error('❌ Session exists but user does not have access:', {
+          sessionCandidateId: sessionExists.candidateId,
+          sessionExpertId: sessionExists.expertId,
+          reviewerId: reviewerId
+        });
+      } else {
+        console.error('❌ Session does not exist:', sessionId);
+      }
+      
       return res.status(404).json({ 
         success: false,
         message: 'Session not found or you do not have access to this session' 
       });
     }
+    
+    console.log('✅ Session found, creating review:', {
+      sessionId,
+      reviewerId,
+      reviewerIsCandidate: session.candidateId === reviewerId,
+      reviewerIsExpert: session.expertId === reviewerId
+    });
 
     // Determine reviewee (the other participant)
     const revieweeId = session.candidateId === reviewerId ? session.expertId : session.candidateId;
