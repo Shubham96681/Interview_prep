@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, CreditCard, X, CheckCircle } from 'lucide-react';
 import PaymentModal from './PaymentModal';
 import { apiService } from '@/lib/apiService';
+import realtimeService from '@/lib/realtimeService';
 
 interface BookingCalendarProps {
   expertId: string;
@@ -145,12 +146,28 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
     fetchAvailability();
     
-    // Refresh availability every 30 seconds to get real-time updates
-    const refreshInterval = setInterval(() => {
-      fetchAvailability();
-    }, 30000); // 30 seconds
+    // Listen for real-time availability updates from backend
+    const handleAvailabilityUpdate = (data: any) => {
+      console.log('📅 Availability update received from backend:', data);
+      if (data.expertId === expertId) {
+        fetchAvailability();
+      }
+    };
     
-    return () => clearInterval(refreshInterval);
+    const handleSessionCreated = (session: any) => {
+      console.log('📅 Session created, refreshing availability:', session);
+      if (session.expertId === expertId || session.expert?.id === expertId) {
+        fetchAvailability();
+      }
+    };
+    
+    realtimeService.on('availability_updated', handleAvailabilityUpdate);
+    realtimeService.on('session_created', handleSessionCreated);
+    
+    return () => {
+      realtimeService.off('availability_updated', handleAvailabilityUpdate);
+      realtimeService.off('session_created', handleSessionCreated);
+    };
   }, [expertId]);
 
   const formatDate = (dateStr: string) => {
@@ -174,66 +191,8 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     await onBookSession(selectedDate, selectedTime);
     setShowPaymentModal(false);
     
-    // Refresh availability after booking to show the slot as booked
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + 6);
-    const startDateStr = today.toISOString().split('T')[0];
-    const endDateStr = endDate.toISOString().split('T')[0];
-    
-    try {
-      const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
-      const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
-        ? bookedResponse.data.bookedSlots 
-        : [];
-      
-      // Update availability data with new booking
-      if (availabilityData) {
-        const bookedByDate: Record<string, string[]> = {};
-        bookedSlots.forEach((slot: any) => {
-          if (slot.date && slot.time && slot.status !== 'cancelled') {
-            if (!bookedByDate[slot.date]) {
-              bookedByDate[slot.date] = [];
-            }
-            bookedByDate[slot.date].push(slot.time);
-          }
-        });
-        
-        const allTimes: string[] = [];
-        for (let hour = 9; hour <= 21; hour++) {
-          allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
-        }
-        
-        const updatedSlots = availabilityData.slots.map(slot => {
-          const bookedTimes = bookedByDate[slot.date] || [];
-          const availableTimes = allTimes.filter((time: string) => {
-            if (bookedTimes.includes(time)) return false;
-            if (slot.date === startDateStr) {
-              const [hours, minutes] = time.split(':').map(Number);
-              const slotDateTime = new Date(today);
-              slotDateTime.setHours(hours, minutes, 0, 0);
-              if (slotDateTime < new Date()) return false;
-            }
-            return true;
-          });
-          
-          return {
-            ...slot,
-            availableTimes,
-            bookedTimes,
-            isAvailable: availableTimes.length > 0
-          };
-        });
-        
-        setAvailabilityData({
-          ...availabilityData,
-          slots: updatedSlots
-        });
-      }
-    } catch (error) {
-      console.error('Error refreshing availability after booking:', error);
-    }
+    // Backend will broadcast availability update via real-time service
+    // The useEffect listener will automatically refresh availability
   };
 
   const isSlotAvailable = (date: string, time: string) => {

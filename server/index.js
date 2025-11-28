@@ -1246,6 +1246,22 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       }
     });
 
+    // Broadcast availability update via real-time service
+    try {
+      const realtimeService = require('./services/realtime');
+      // Broadcast to all connected users that availability has changed for this expert
+      realtimeService.broadcast('availability_updated', {
+        expertId: actualExpertId,
+        date: date || (finalScheduledDate ? finalScheduledDate.toISOString().split('T')[0] : null),
+        time: time || (finalScheduledDate ? finalScheduledDate.toTimeString().split(' ')[0].substring(0, 5) : null),
+        sessionId: session.id
+      });
+      console.log('📡 Broadcasted availability update for expert:', actualExpertId);
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting availability update:', realtimeError);
+      // Don't fail the booking if real-time broadcast fails
+    }
+
     // Send emails to candidate and expert
     try {
       console.log('📧 Attempting to send booking emails...');
