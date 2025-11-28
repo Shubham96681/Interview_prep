@@ -1290,14 +1290,14 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
 // Get expert booked sessions for availability checking
 app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
   try {
-    console.log('📋 GET /api/experts/:expertId/booked-slots - Request received:', {
-      expertId: req.params.expertId,
-      startDate: req.query.startDate,
-      endDate: req.query.endDate
-    });
-    
     const { expertId } = req.params;
     const { startDate, endDate } = req.query;
+    
+    console.log('📋 GET /api/experts/:expertId/booked-slots - Request received:', {
+      expertId,
+      startDate,
+      endDate
+    });
     
     // Map test expert IDs
     let actualExpertId = expertId;
