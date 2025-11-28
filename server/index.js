@@ -2151,6 +2151,38 @@ app.use((error, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
+// Handle OPTIONS preflight for realtime endpoint
+app.options('/api/realtime', (req, res) => {
+  const origin = req.headers.origin;
+  let corsOrigin = '*';
+  
+  if (origin) {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://54.91.53.228',
+      'http://54.91.53.228'
+    ].filter(Boolean);
+    
+    const originHost = origin.replace(/^https?:\/\//, '').split(':')[0];
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (!allowed) return false;
+      const allowedHost = allowed.replace(/^https?:\/\//, '').split(':')[0];
+      return originHost === allowedHost || origin === allowed;
+    });
+    
+    corsOrigin = isAllowed ? origin : '*';
+  }
+  
+  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.status(204).end();
+});
+
 // Real-time endpoint (Server-Sent Events) - MUST be before 404 handler
 app.get('/api/realtime', (req, res) => {
   try {
@@ -2195,14 +2227,17 @@ app.get('/api/realtime', (req, res) => {
     
     console.log(`🌐 CORS origin set to: ${corsOrigin}`);
     
-    // Set SSE headers BEFORE any writes
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('Access-Control-Allow-Origin', corsOrigin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering in nginx
+    // Use writeHead to set all headers at once (required for SSE)
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': corsOrigin,
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Allow-Headers': 'Cache-Control',
+      'X-Accel-Buffering': 'no', // Disable buffering in nginx
+      'X-Content-Type-Options': 'nosniff'
+    });
     
     // Send initial connection message immediately
     const initialMessage = `data: ${JSON.stringify({
@@ -2210,18 +2245,28 @@ app.get('/api/realtime', (req, res) => {
       data: { userId: actualUserId, timestamp: new Date().toISOString() }
     })}\n\n`;
     
-    res.write(initialMessage);
-    console.log(`✅ Initial SSE message sent for user: ${actualUserId}`);
+    try {
+      res.write(initialMessage);
+      console.log(`✅ Initial SSE message sent for user: ${actualUserId}`);
+    } catch (writeError) {
+      console.error(`❌ Error writing initial message for ${actualUserId}:`, writeError);
+      res.end();
+      return;
+    }
 
     // Add connection to real-time service AFTER headers are set
     const connectionAdded = realtimeService.addConnection(actualUserId, res);
     
     if (!connectionAdded) {
       console.warn(`⚠️ Failed to add connection for user: ${actualUserId}`);
-      res.write(`data: ${JSON.stringify({
-        event: 'error',
-        data: { message: 'Server at capacity' }
-      })}\n\n`);
+      try {
+        res.write(`data: ${JSON.stringify({
+          event: 'error',
+          data: { message: 'Server at capacity' }
+        })}\n\n`);
+      } catch (e) {
+        // Connection already closed
+      }
       res.end();
       return;
     }
@@ -2235,7 +2280,7 @@ app.get('/api/realtime', (req, res) => {
     });
     
     req.on('error', (error) => {
-      console.error(`❌ SSE connection error for ${actualUserId}:`, error);
+      console.error(`❌ SSE request error for ${actualUserId}:`, error);
       realtimeService.removeConnection(actualUserId, res);
     });
     
@@ -2245,18 +2290,44 @@ app.get('/api/realtime', (req, res) => {
       realtimeService.removeConnection(actualUserId, res);
     });
     
+    // Keep connection alive with periodic heartbeat
+    const keepAliveInterval = setInterval(() => {
+      try {
+        if (!res.destroyed && !res.closed) {
+          res.write(`: keepalive\n\n`);
+        } else {
+          clearInterval(keepAliveInterval);
+        }
+      } catch (error) {
+        console.error(`❌ Error sending keepalive for ${actualUserId}:`, error);
+        clearInterval(keepAliveInterval);
+        realtimeService.removeConnection(actualUserId, res);
+      }
+    }, 30000); // Every 30 seconds
+    
+    // Clean up interval on disconnect
+    req.on('close', () => {
+      clearInterval(keepAliveInterval);
+    });
+    
   } catch (error) {
     console.error('❌ Error in /api/realtime endpoint:', error);
     console.error('❌ Error stack:', error.stack);
     
     // Try to send error message if response hasn't been sent
     if (!res.headersSent) {
-      res.status(500);
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.write(`data: ${JSON.stringify({
-        event: 'error',
-        data: { message: 'Internal server error' }
-      })}\n\n`);
+      try {
+        res.writeHead(500, {
+          'Content-Type': 'text/event-stream',
+          'Access-Control-Allow-Origin': '*'
+        });
+        res.write(`data: ${JSON.stringify({
+          event: 'error',
+          data: { message: 'Internal server error' }
+        })}\n\n`);
+      } catch (e) {
+        // Can't send response
+      }
     }
     res.end();
   }
