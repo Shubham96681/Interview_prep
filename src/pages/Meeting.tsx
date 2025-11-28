@@ -117,19 +117,32 @@ export default function Meeting() {
       if (response.success) {
         // Try different possible response structures
         const responseData = response.data as any;
-        if (responseData?.reviews && Array.isArray(responseData.reviews)) {
+        
+        // Check for nested structure: response.data.data.reviews (API service wraps backend response)
+        if (responseData?.data?.reviews && Array.isArray(responseData.data.reviews)) {
+          fetchedReviews = responseData.data.reviews;
+          console.log('✅ Found reviews in response.data.data.reviews:', fetchedReviews.length);
+        } 
+        // Check for direct structure: response.data.reviews
+        else if (responseData?.reviews && Array.isArray(responseData.reviews)) {
           fetchedReviews = responseData.reviews;
           console.log('✅ Found reviews in response.data.reviews:', fetchedReviews.length);
-        } else if (responseData && Array.isArray(responseData)) {
+        } 
+        // Check if response.data is directly an array
+        else if (responseData && Array.isArray(responseData)) {
           fetchedReviews = responseData;
           console.log('✅ Found reviews in response.data (array):', fetchedReviews.length);
-        } else if ((response as any).reviews && Array.isArray((response as any).reviews)) {
+        } 
+        // Check for top-level reviews
+        else if ((response as any).reviews && Array.isArray((response as any).reviews)) {
           fetchedReviews = (response as any).reviews;
           console.log('✅ Found reviews in response.reviews:', fetchedReviews.length);
         } else {
           console.warn('⚠️ Reviews not found in expected structure:', {
             hasData: !!responseData,
+            hasNestedData: !!responseData?.data,
             dataKeys: responseData ? Object.keys(responseData) : [],
+            nestedDataKeys: responseData?.data ? Object.keys(responseData.data) : [],
             responseKeys: Object.keys(response)
           });
         }
