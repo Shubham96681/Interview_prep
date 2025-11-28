@@ -361,9 +361,10 @@ export default function ExpertProfile() {
         toast.success(`Session booked with ${expert.name} on ${date} at ${time}!`, {
           description: 'You can view your upcoming sessions in the dashboard'
         });
-        
-        // Navigate to dashboard with a refresh parameter
-        navigate('/dashboard?refresh=' + Date.now());
+        // Navigate to dashboard after a short delay
+        setTimeout(() => {
+          navigate('/dashboard?refresh=' + Date.now());
+        }, 1500);
       } else {
         // Check if it's a scheduling conflict (409)
         if (response.status === 409 || response.error === 'Scheduling conflict') {

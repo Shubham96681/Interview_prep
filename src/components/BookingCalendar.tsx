@@ -44,14 +44,17 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     const fetchAvailability = async () => {
       setLoading(true);
       try {
-        // Calculate date range (next 7 days)
+        // Calculate date range (today and next 6 days - 7 days total, excluding past dates)
         const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset to start of day for accurate comparison
         const endDate = new Date(today);
-        endDate.setDate(today.getDate() + 7);
+        endDate.setDate(today.getDate() + 6); // Next 6 days + today = 7 days
         const startDateStr = today.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
         
-        // Fetch booked slots from backend
+        console.log('📅 Fetching booked slots from:', startDateStr, 'to', endDateStr);
+        
+        // Fetch booked slots from backend (real-time)
         const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
         const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
           ? bookedResponse.data.bookedSlots 
@@ -68,7 +71,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         // Group booked slots by date
         const bookedByDate: Record<string, string[]> = {};
         bookedSlots.forEach((slot: any) => {
-          if (slot.date && slot.time) {
+          if (slot.date && slot.time && slot.status !== 'cancelled') {
             if (!bookedByDate[slot.date]) {
               bookedByDate[slot.date] = [];
             }
@@ -76,15 +79,40 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           }
         });
         
-        // Generate availability slots for next 7 days
+        // Generate availability slots for next 7 days (starting from today, excluding past dates)
         const slots = [];
         for (let i = 0; i < 7; i++) {
           const currentDate = new Date(today);
           currentDate.setDate(today.getDate() + i);
           const dateStr = currentDate.toISOString().split('T')[0];
           
+          // Skip if this date is in the past (shouldn't happen with our loop, but safety check)
+          const dateObj = new Date(dateStr);
+          dateObj.setHours(0, 0, 0, 0);
+          if (dateObj < today) {
+            continue; // Skip past dates
+          }
+          
           const bookedTimes = bookedByDate[dateStr] || [];
-          const availableTimes = allTimes.filter(time => !bookedTimes.includes(time));
+          const availableTimes = allTimes.filter(time => {
+            // Check if time is booked
+            if (bookedTimes.includes(time)) {
+              return false;
+            }
+            
+            // For today's date, also check if the time slot is in the past
+            if (i === 0) { // Today
+              const [hours, minutes] = time.split(':').map(Number);
+              const slotDateTime = new Date(today);
+              slotDateTime.setHours(hours, minutes, 0, 0);
+              const now = new Date();
+              if (slotDateTime < now) {
+                return false; // Past time slot
+              }
+            }
+            
+            return true;
+          });
           
           slots.push({
             date: dateStr,
@@ -116,6 +144,13 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     };
 
     fetchAvailability();
+    
+    // Refresh availability every 30 seconds to get real-time updates
+    const refreshInterval = setInterval(() => {
+      fetchAvailability();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(refreshInterval);
   }, [expertId]);
 
   const formatDate = (dateStr: string) => {
@@ -133,11 +168,72 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     }
   };
 
-  const handlePaymentSuccess = (paymentData: any) => {
+  const handlePaymentSuccess = async (paymentData: any) => {
     console.log('Payment successful:', paymentData);
     // Call the original booking function after successful payment
-    onBookSession(selectedDate, selectedTime);
+    await onBookSession(selectedDate, selectedTime);
     setShowPaymentModal(false);
+    
+    // Refresh availability after booking to show the slot as booked
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 6);
+    const startDateStr = today.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
+    
+    try {
+      const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
+      const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
+        ? bookedResponse.data.bookedSlots 
+        : [];
+      
+      // Update availability data with new booking
+      if (availabilityData) {
+        const bookedByDate: Record<string, string[]> = {};
+        bookedSlots.forEach((slot: any) => {
+          if (slot.date && slot.time && slot.status !== 'cancelled') {
+            if (!bookedByDate[slot.date]) {
+              bookedByDate[slot.date] = [];
+            }
+            bookedByDate[slot.date].push(slot.time);
+          }
+        });
+        
+        const allTimes: string[] = [];
+        for (let hour = 9; hour <= 21; hour++) {
+          allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+        }
+        
+        const updatedSlots = availabilityData.slots.map(slot => {
+          const bookedTimes = bookedByDate[slot.date] || [];
+          const availableTimes = allTimes.filter((time: string) => {
+            if (bookedTimes.includes(time)) return false;
+            if (slot.date === startDateStr) {
+              const [hours, minutes] = time.split(':').map(Number);
+              const slotDateTime = new Date(today);
+              slotDateTime.setHours(hours, minutes, 0, 0);
+              if (slotDateTime < new Date()) return false;
+            }
+            return true;
+          });
+          
+          return {
+            ...slot,
+            availableTimes,
+            bookedTimes,
+            isAvailable: availableTimes.length > 0
+          };
+        });
+        
+        setAvailabilityData({
+          ...availabilityData,
+          slots: updatedSlots
+        });
+      }
+    } catch (error) {
+      console.error('Error refreshing availability after booking:', error);
+    }
   };
 
   const isSlotAvailable = (date: string, time: string) => {
