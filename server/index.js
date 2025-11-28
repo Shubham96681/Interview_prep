@@ -961,16 +961,28 @@ app.get('/api/experts/:id', async (req, res) => {
     console.log(`✅ Expert found: ${expert.name} (ID: ${expert.id})`);
     
     // Return expert data with proper structure
-    const expertResponse = {
-      ...expert,
-      // Ensure arrays are properly formatted
-      skills: expert.skills ? (typeof expert.skills === 'string' ? JSON.parse(expert.skills) : expert.skills) : [],
-      proficiency: expert.proficiency ? (typeof expert.proficiency === 'string' ? JSON.parse(expert.proficiency) : expert.proficiency) : [],
-      daysAvailable: expert.daysAvailable ? (typeof expert.daysAvailable === 'string' ? JSON.parse(expert.daysAvailable) : expert.daysAvailable) : []
-    };
-    
-    console.log('✅ Expert found, returning response');
-    res.json(expertResponse);
+    try {
+      const expertResponse = {
+        ...expert,
+        // Ensure arrays are properly formatted - safely parse JSON strings
+        skills: expert.skills ? (typeof expert.skills === 'string' ? (() => {
+          try { return JSON.parse(expert.skills); } catch { return []; }
+        })() : expert.skills) : [],
+        proficiency: expert.proficiency ? (typeof expert.proficiency === 'string' ? (() => {
+          try { return JSON.parse(expert.proficiency); } catch { return []; }
+        })() : expert.proficiency) : [],
+        daysAvailable: expert.daysAvailable ? (typeof expert.daysAvailable === 'string' ? (() => {
+          try { return JSON.parse(expert.daysAvailable); } catch { return []; }
+        })() : expert.daysAvailable) : []
+      };
+      
+      console.log('✅ Expert found, returning response');
+      res.json(expertResponse);
+    } catch (parseError) {
+      console.error('❌ Error parsing expert data:', parseError);
+      // Return expert data without parsing (safer fallback)
+      res.json(expert);
+    }
   } catch (error) {
     console.error('❌ Get expert error:', error);
     console.error('❌ Error stack:', error.stack);
@@ -1278,6 +1290,12 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
 // Get expert booked sessions for availability checking
 app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
   try {
+    console.log('📋 GET /api/experts/:expertId/booked-slots - Request received:', {
+      expertId: req.params.expertId,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    });
+    
     const { expertId } = req.params;
     const { startDate, endDate } = req.query;
     
@@ -1335,15 +1353,18 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       status: session.status
     }));
     
+    console.log('✅ Booked slots fetched:', bookedSlots.length);
     res.json({
       success: true,
       data: { bookedSlots }
     });
   } catch (error) {
-    console.error('Get booked slots error:', error);
+    console.error('❌ Get booked slots error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
