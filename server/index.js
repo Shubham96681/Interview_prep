@@ -2737,24 +2737,24 @@ app.get('/api/realtime', (req, res) => {
     }
   })();
 
-    // Add connection to real-time service AFTER headers are set
-    const connectionAdded = realtimeService.addConnection(actualUserId, res);
-    
-    if (!connectionAdded) {
-      console.warn(`⚠️ Failed to add connection for user: ${actualUserId}`);
-      try {
-        res.write(`data: ${JSON.stringify({
-          event: 'error',
-          data: { message: 'Server at capacity' }
-        })}\n\n`);
-      } catch (e) {
-        // Connection already closed
-      }
-      res.end();
-      return;
+  // Add connection to real-time service (use original userId for now, will update if mapped)
+  const connectionAdded = realtimeService.addConnection(userId, res);
+  
+  if (!connectionAdded) {
+    console.warn(`⚠️ Failed to add connection for user: ${userId}`);
+    try {
+      res.write(`data: ${JSON.stringify({
+        event: 'error',
+        data: { message: 'Server at capacity' }
+      })}\n\n`);
+    } catch (e) {
+      // Connection already closed
     }
-    
-    console.log(`✅ SSE connection established for user: ${actualUserId}`);
+    res.end();
+    return;
+  }
+  
+  console.log(`✅ SSE connection established for user: ${userId}`);
 
     // Keep connection alive with periodic heartbeat
     const keepAliveInterval = setInterval(() => {
