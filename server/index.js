@@ -222,17 +222,53 @@ const upload = multer({
   }
 });
 
-// Health check endpoint
-// Health check endpoint - must work even if database is down
+// Health check endpoint - must work even if database is down (for load balancer checks)
 app.get('/api/health', async (req, res) => {
-  res.json({ 
-    success: true,
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    database: 'SQLite with Prisma',
-    port: PORT,
-    message: 'Server is running!'
-  });
+  try {
+    const healthStatus = {
+      success: true,
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      port: PORT,
+      environment: process.env.NODE_ENV || 'development',
+      uptime: Math.round(process.uptime()),
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+      }
+    };
+
+    // Try to test database connection (non-blocking with timeout)
+    try {
+      await Promise.race([
+        prisma.$queryRaw`SELECT 1`,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Database timeout')), 2000))
+      ]);
+      healthStatus.database = process.env.DATABASE_URL?.includes('postgresql') 
+        ? 'PostgreSQL with Prisma (Connected)' 
+        : 'SQLite with Prisma (Connected)';
+      healthStatus.databaseStatus = 'connected';
+    } catch (dbError) {
+      // Database check failed, but still return OK for health check
+      healthStatus.database = 'Connection check failed';
+      healthStatus.databaseStatus = 'disconnected';
+      healthStatus.warning = 'Database connection check failed, but server is running';
+      console.warn('⚠️ Health check: Database connection test failed:', dbError.message);
+    }
+    
+    res.json(healthStatus);
+  } catch (error) {
+    console.error('Health check error:', error);
+    // Even on error, return 200 so load balancer doesn't mark server as down
+    res.status(200).json({
+      success: false,
+      status: 'DEGRADED',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed but server is running',
+      port: PORT,
+      uptime: Math.round(process.uptime())
+    });
+  }
 });
 
 // Test endpoint to verify routes are registered
