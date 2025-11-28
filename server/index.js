@@ -2066,6 +2066,14 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
 
     // Determine reviewee (the other participant)
     const revieweeId = session.candidateId === reviewerId ? session.expertId : session.candidateId;
+    
+    console.log('✅ Session found, creating review:', {
+      sessionId,
+      reviewerId,
+      revieweeId,
+      reviewerIsCandidate: session.candidateId === reviewerId,
+      reviewerIsExpert: session.expertId === reviewerId
+    });
 
     // Check if review already exists - if it does, update it instead of creating new
     const existingReview = await prisma.review.findFirst({
