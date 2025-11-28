@@ -1821,7 +1821,26 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
   try {
     const { status } = req.body;
     const sessionId = req.params.id;
-    const userId = req.user.id;
+    
+    // Get userId - handle both req.user.id and req.user.userId
+    const userId = req.user?.id || req.user?.userId;
+    
+    if (!userId) {
+      console.error('❌ Update session status: No user ID found in request');
+      return res.status(401).json({ 
+        success: false,
+        message: 'User not authenticated' 
+      });
+    }
+
+    if (!status) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Status is required' 
+      });
+    }
+
+    console.log(`🔄 Updating session ${sessionId} status to ${status} by user ${userId}`);
 
     // Verify user has access to this session
     const session = await prisma.session.findFirst({
@@ -1835,7 +1854,11 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
     });
 
     if (!session) {
-      return res.status(404).json({ message: 'Session not found' });
+      console.error(`❌ Session not found or user ${userId} doesn't have access to session ${sessionId}`);
+      return res.status(404).json({ 
+        success: false,
+        message: 'Session not found or you do not have access to this session' 
+      });
     }
 
     // Prepare update data
@@ -1857,9 +1880,13 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
       }
       
       // Calculate actual duration
-      const startTime = updateData.actualStartTime ? new Date(updateData.actualStartTime) : new Date(session.actualStartTime || session.scheduledDate);
+      const startTime = updateData.actualStartTime 
+        ? new Date(updateData.actualStartTime) 
+        : new Date(session.actualStartTime || session.scheduledDate);
       const durationMinutes = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
       updateData.actualDuration = Math.max(durationMinutes, 1); // At least 1 minute
+      
+      console.log(`✅ Marking session ${sessionId} as completed. Duration: ${updateData.actualDuration} minutes`);
     }
 
     const updatedSession = await prisma.session.update({
@@ -1875,10 +1902,26 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
       }
     });
 
-    res.json({ message: 'Session status updated', session: updatedSession });
+    console.log(`✅ Session ${sessionId} status updated to ${status}`);
+    res.json({ 
+      success: true,
+      message: 'Session status updated', 
+      session: updatedSession 
+    });
   } catch (error) {
-    console.error('Update session status error:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    console.error('❌ Update session status error:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Request details:', {
+      sessionId: req.params.id,
+      status: req.body?.status,
+      userId: req.user?.id || req.user?.userId,
+      user: req.user
+    });
+    res.status(500).json({ 
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
