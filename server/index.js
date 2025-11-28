@@ -2608,18 +2608,46 @@ app.options('/api/realtime', (req, res) => {
 });
 
 // Real-time endpoint (Server-Sent Events) - MUST be before 404 handler
-app.get('/api/realtime', (req, res) => {
+app.get('/api/realtime', async (req, res) => {
   try {
     const userId = req.query.userId || 'anonymous';
     
     console.log(`🔄 SSE connection request from user: ${userId}, origin: ${req.headers.origin}`);
     
-    // Handle mock IDs
+    // Handle mock IDs - map to database IDs
     let actualUserId = userId;
     if (userId === 'candidate-001') {
-      actualUserId = 'john@example.com';
+      try {
+        const candidate = await prisma.user.findUnique({
+          where: { email: 'john@example.com' },
+          select: { id: true }
+        });
+        if (candidate) {
+          actualUserId = candidate.id;
+          console.log('✅ Mapped candidate-001 to database ID for realtime:', actualUserId);
+        } else {
+          console.warn('⚠️ Could not find candidate with email john@example.com, using original userId');
+        }
+      } catch (dbError) {
+        console.error('❌ Error mapping candidate-001:', dbError);
+        // Continue with original userId
+      }
     } else if (userId === 'expert-001') {
-      actualUserId = 'jane@example.com';
+      try {
+        const expert = await prisma.user.findUnique({
+          where: { email: 'jane@example.com' },
+          select: { id: true }
+        });
+        if (expert) {
+          actualUserId = expert.id;
+          console.log('✅ Mapped expert-001 to database ID for realtime:', actualUserId);
+        } else {
+          console.warn('⚠️ Could not find expert with email jane@example.com, using original userId');
+        }
+      } catch (dbError) {
+        console.error('❌ Error mapping expert-001:', dbError);
+        // Continue with original userId
+      }
     }
     
     // Determine CORS origin - be more permissive for production
