@@ -480,10 +480,10 @@ class ApiService {
       // Backend failed to generate fresh URL - this should rarely happen
       // Only use fallback if backend completely fails
       console.warn('⚠️ Backend failed to generate fresh URL, trying fallback URL as last resort');
-      
-      if (fallbackUrl) {
-        console.log('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
         
+        if (fallbackUrl) {
+        console.log('⚠️ Using fallback URL (may be expired):', fallbackUrl.substring(0, 100));
+          
         // Open custom video player page with the sessionId (avoids URL length limits)
         const playerUrl = `${window.location.origin}/video-player?sessionId=${sessionId}`;
         const newWindow = window.open(playerUrl, '_blank');
@@ -493,8 +493,8 @@ class ApiService {
           setTimeout(() => {
             window.open(playerUrl, '_blank');
           }, 500);
-        }
-        
+          }
+          
         // If it's an S3 URL, it might be expired
         if (fallbackUrl.includes('amazonaws.com')) {
           console.warn('⚠️ Using fallback S3 URL - it may be expired. The browser will show an error if so.');
@@ -510,7 +510,7 @@ class ApiService {
       
       // If it's our custom error, throw it
       if (error.message && error.message.includes('No recording URL available')) {
-        throw error;
+      throw error;
       }
       
       // For other errors, try the fallback URL if available (last resort)
@@ -563,32 +563,32 @@ class ApiService {
       const timeoutId = setTimeout(() => controller.abort(), 60 * 60 * 1000); // 60 minutes
 
       try {
-        // Don't set Content-Type - browser will set it automatically with boundary for FormData
-        const response = await fetch(url, {
-          method: 'POST',
-          headers,
-          body: formData,
+      // Don't set Content-Type - browser will set it automatically with boundary for FormData
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
           signal: controller.signal, // Add abort signal for timeout
-        });
+      });
         
         clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          return {
-            success: false,
-            error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
-            message: errorData.message,
-            status: response.status,
-          };
-        }
-
-        const data = await response.json();
-        console.log('✅ Recording uploaded successfully:', data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         return {
-          success: true,
-          data: data.data || data,
+          success: false,
+          error: errorData.error || errorData.message || `HTTP ${response.status}: ${response.statusText}`,
+          message: errorData.message,
+          status: response.status,
         };
+      }
+
+      const data = await response.json();
+        console.log('✅ Recording uploaded successfully:', data);
+      return {
+        success: true,
+        data: data.data || data,
+      };
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         

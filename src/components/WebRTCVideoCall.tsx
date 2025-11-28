@@ -853,19 +853,19 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           };
         } else {
           // Regular video/audio track
-          // Get or create remote stream
-          if (!remoteStreamRef.current) {
-            remoteStreamRef.current = new MediaStream();
-            console.log('📹 Created new remote stream');
-          }
-          
-          // Add track to remote stream
-          remoteStreamRef.current.addTrack(event.track);
-          console.log('📹 Added track to remote stream. Total tracks:', remoteStreamRef.current.getTracks().length);
-          
-          // Update state with the stream
-          const updatedStream = new MediaStream(remoteStreamRef.current.getTracks());
-          setRemoteStream(updatedStream);
+        // Get or create remote stream
+        if (!remoteStreamRef.current) {
+          remoteStreamRef.current = new MediaStream();
+          console.log('📹 Created new remote stream');
+        }
+        
+        // Add track to remote stream
+        remoteStreamRef.current.addTrack(event.track);
+        console.log('📹 Added track to remote stream. Total tracks:', remoteStreamRef.current.getTracks().length);
+        
+        // Update state with the stream
+        const updatedStream = new MediaStream(remoteStreamRef.current.getTracks());
+        setRemoteStream(updatedStream);
           
           // Update remote video element
           if (remoteVideoRef.current) {
@@ -874,24 +874,24 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
               console.error('Error playing remote video:', err);
             });
           }
-          
-          // Log track details
-          event.track.onended = () => {
-            console.log('📹 Remote track ended:', event.track.kind);
-          };
-          
-          event.track.onmute = () => {
-            console.log('📹 Remote track muted:', event.track.kind);
-          };
-          
-          event.track.onunmute = () => {
-            console.log('📹 Remote track unmuted:', event.track.kind);
-          };
-          
-          // Ensure track is enabled
-          if (!event.track.enabled) {
-            console.log('📹 Enabling remote track:', event.track.kind);
-            event.track.enabled = true;
+        
+        // Log track details
+        event.track.onended = () => {
+          console.log('📹 Remote track ended:', event.track.kind);
+        };
+        
+        event.track.onmute = () => {
+          console.log('📹 Remote track muted:', event.track.kind);
+        };
+        
+        event.track.onunmute = () => {
+          console.log('📹 Remote track unmuted:', event.track.kind);
+        };
+        
+        // Ensure track is enabled
+        if (!event.track.enabled) {
+          console.log('📹 Enabling remote track:', event.track.kind);
+          event.track.enabled = true;
           }
         }
       };
@@ -1268,7 +1268,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
       remoteVideo.playsInline = true;
       remoteVideo.muted = true; // Mute to avoid feedback
       recordingRemoteVideoRef.current = remoteVideo;
-      
+
       // Create screen share video element (if screen sharing)
       let screenShareVideo: HTMLVideoElement | null = null;
       if (hasScreenShare) {
@@ -1597,62 +1597,62 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
           }
         } else {
           // No screen share - use side-by-side layout for participants
-          if (hasLocal && hasRemote) {
-            // Side-by-side layout: each video takes half the width, maintaining aspect ratio
-            const videoWidth = canvas.width / 2;
-            
-            // Calculate aspect ratio for remote video
-            const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
-            let remoteDrawWidth = videoWidth;
-            let remoteDrawHeight = videoWidth / remoteAspect;
-            let remoteX = 0;
-            let remoteY = (canvas.height - remoteDrawHeight) / 2;
-            
-            // If height exceeds canvas, scale down
-            if (remoteDrawHeight > canvas.height) {
-              remoteDrawHeight = canvas.height;
-              remoteDrawWidth = remoteDrawHeight * remoteAspect;
-              remoteX = (videoWidth - remoteDrawWidth) / 2;
-              remoteY = 0;
-            }
-            
-            // Draw remote video (left side)
-            ctx.drawImage(remoteVideo, remoteX, remoteY, remoteDrawWidth, remoteDrawHeight);
-            
-            // Calculate aspect ratio for local video
-            const localAspect = localVideo.videoWidth / localVideo.videoHeight;
-            let localDrawWidth = videoWidth;
-            let localDrawHeight = videoWidth / localAspect;
-            let localX = videoWidth;
-            let localY = (canvas.height - localDrawHeight) / 2;
-            
-            // If height exceeds canvas, scale down
-            if (localDrawHeight > canvas.height) {
-              localDrawHeight = canvas.height;
-              localDrawWidth = localDrawHeight * localAspect;
-              localX = videoWidth + (videoWidth - localDrawWidth) / 2;
-              localY = 0;
-            }
-            
-            // Draw local video (right side)
-            ctx.drawImage(localVideo, localX, localY, localDrawWidth, localDrawHeight);
-          } else if (hasLocal) {
-            // Only local video - center it and maintain aspect ratio
-            const scale = Math.min(canvas.width / localVideo.videoWidth, canvas.height / localVideo.videoHeight);
-            const width = localVideo.videoWidth * scale;
-            const height = localVideo.videoHeight * scale;
-            const x = (canvas.width - width) / 2;
-            const y = (canvas.height - height) / 2;
-            ctx.drawImage(localVideo, x, y, width, height);
-          } else if (hasRemote) {
-            // Only remote video - center it and maintain aspect ratio
-            const scale = Math.min(canvas.width / remoteVideo.videoWidth, canvas.height / remoteVideo.videoHeight);
-            const width = remoteVideo.videoWidth * scale;
-            const height = remoteVideo.videoHeight * scale;
-            const x = (canvas.width - width) / 2;
-            const y = (canvas.height - height) / 2;
-            ctx.drawImage(remoteVideo, x, y, width, height);
+        if (hasLocal && hasRemote) {
+          // Side-by-side layout: each video takes half the width, maintaining aspect ratio
+          const videoWidth = canvas.width / 2;
+          
+          // Calculate aspect ratio for remote video
+          const remoteAspect = remoteVideo.videoWidth / remoteVideo.videoHeight;
+          let remoteDrawWidth = videoWidth;
+          let remoteDrawHeight = videoWidth / remoteAspect;
+          let remoteX = 0;
+          let remoteY = (canvas.height - remoteDrawHeight) / 2;
+          
+          // If height exceeds canvas, scale down
+          if (remoteDrawHeight > canvas.height) {
+            remoteDrawHeight = canvas.height;
+            remoteDrawWidth = remoteDrawHeight * remoteAspect;
+            remoteX = (videoWidth - remoteDrawWidth) / 2;
+            remoteY = 0;
           }
+          
+          // Draw remote video (left side)
+          ctx.drawImage(remoteVideo, remoteX, remoteY, remoteDrawWidth, remoteDrawHeight);
+          
+          // Calculate aspect ratio for local video
+          const localAspect = localVideo.videoWidth / localVideo.videoHeight;
+          let localDrawWidth = videoWidth;
+          let localDrawHeight = videoWidth / localAspect;
+          let localX = videoWidth;
+          let localY = (canvas.height - localDrawHeight) / 2;
+          
+          // If height exceeds canvas, scale down
+          if (localDrawHeight > canvas.height) {
+            localDrawHeight = canvas.height;
+            localDrawWidth = localDrawHeight * localAspect;
+            localX = videoWidth + (videoWidth - localDrawWidth) / 2;
+            localY = 0;
+          }
+          
+          // Draw local video (right side)
+          ctx.drawImage(localVideo, localX, localY, localDrawWidth, localDrawHeight);
+        } else if (hasLocal) {
+          // Only local video - center it and maintain aspect ratio
+          const scale = Math.min(canvas.width / localVideo.videoWidth, canvas.height / localVideo.videoHeight);
+          const width = localVideo.videoWidth * scale;
+          const height = localVideo.videoHeight * scale;
+          const x = (canvas.width - width) / 2;
+          const y = (canvas.height - height) / 2;
+          ctx.drawImage(localVideo, x, y, width, height);
+        } else if (hasRemote) {
+          // Only remote video - center it and maintain aspect ratio
+          const scale = Math.min(canvas.width / remoteVideo.videoWidth, canvas.height / remoteVideo.videoHeight);
+          const width = remoteVideo.videoWidth * scale;
+          const height = remoteVideo.videoHeight * scale;
+          const x = (canvas.width - width) / 2;
+          const y = (canvas.height - height) / 2;
+          ctx.drawImage(remoteVideo, x, y, width, height);
+        }
         }
       };
 
@@ -1734,7 +1734,7 @@ export default function WebRTCVideoCall({ meetingId, sessionId, onEndCall }: Web
         localSource.connect(localGain);
         localGain.connect(audioDestination);
         console.log('✅ Connected local audio to mixer');
-      }
+        }
       
       if (remoteAudioTrack && remoteAudioTrack.enabled) {
         const remoteSource = audioContext.createMediaStreamSource(new MediaStream([remoteAudioTrack]));

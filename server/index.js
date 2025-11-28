@@ -24,7 +24,7 @@ if (!process.env.DATABASE_URL) {
   if (process.env.NODE_ENV === 'production') {
     console.warn('⚠️ Continuing without DATABASE_URL - database operations will fail');
   } else {
-    process.exit(1);
+  process.exit(1);
   }
 }
 
@@ -226,10 +226,10 @@ const upload = multer({
 app.get('/api/health', async (req, res) => {
   try {
     const healthStatus = {
-      success: true,
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      port: PORT,
+    success: true,
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    port: PORT,
       environment: process.env.NODE_ENV || 'development',
       uptime: Math.round(process.uptime()),
       memory: {
@@ -420,21 +420,21 @@ app.post('/api/auth/register', upload.fields([
 
     // Prepare user data for OTP storage (don't create user yet)
     const userData = {
-      email,
-      password: hashedPassword,
-      name,
-      userType: finalUserType,
-      phone: phone || null,
-      company: company || null,
-      title: title || null,
-      bio: bio || expertBio || null,
-      experience: experience || yearsOfExperience || null,
-      skills: skillsJson,
-      proficiency: proficiencyJson,
-      hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
-      resumePath: resumePath || null,
-      profilePhotoPath: profilePhotoPath || null,
-      certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
+        email,
+        password: hashedPassword,
+        name,
+        userType: finalUserType,
+        phone: phone || null,
+        company: company || null,
+        title: title || null,
+        bio: bio || expertBio || null,
+        experience: experience || yearsOfExperience || null,
+        skills: skillsJson,
+        proficiency: proficiencyJson,
+        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
+        resumePath: resumePath || null,
+        profilePhotoPath: profilePhotoPath || null,
+        certificationPaths: certificationPaths.length > 0 ? JSON.stringify(certificationPaths) : null,
       isActive: finalUserType === 'expert' ? false : true
     };
 
@@ -548,7 +548,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
   } catch (error) {
     console.error('❌ OTP verification error:', error);
     console.error('❌ Error stack:', error.stack);
-    res.status(500).json({
+    res.status(500).json({ 
       success: false,
       message: 'Internal server error',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -1804,14 +1804,14 @@ app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId(
     let session = null;
     if (userId) {
       session = await prisma.session.findFirst({
-        where: {
-          id: sessionId,
-          OR: [
-            { candidateId: userId },
-            { expertId: userId }
-          ]
-        }
-      });
+      where: {
+        id: sessionId,
+        OR: [
+          { candidateId: userId },
+          { expertId: userId }
+        ]
+      }
+    });
     } else {
       // For test tokens without userId, just check if session exists
       session = await prisma.session.findUnique({
@@ -1883,7 +1883,7 @@ app.get('/api/sessions/:id', authenticateToken, validateObjectId('id'), async (r
     }
 
     // Build where clause - if userId exists, check access; otherwise allow for test tokens
-    let whereClause: any = { id: req.params.id };
+    let whereClause = { id: req.params.id };
     if (userId) {
       whereClause.OR = [
         { candidateId: userId },
@@ -2010,8 +2010,8 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
           const durationMinutes = Math.round((now.getTime() - fallbackStart.getTime()) / (1000 * 60));
           updateData.actualDuration = Math.max(durationMinutes, 1);
         } else {
-          const durationMinutes = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
-          updateData.actualDuration = Math.max(durationMinutes, 1); // At least 1 minute
+      const durationMinutes = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
+      updateData.actualDuration = Math.max(durationMinutes, 1); // At least 1 minute
         }
       } catch (durationError) {
         console.error('❌ Error calculating duration:', durationError);
@@ -2688,10 +2688,10 @@ app.get('/api/realtime', (req, res) => {
   // CRITICAL: Send headers IMMEDIATELY (before any async operations)
   // This prevents timeouts and 502 errors
   try {
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
+    'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': corsOrigin,
       'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Allow-Headers': 'Cache-Control',
@@ -2723,7 +2723,7 @@ app.get('/api/realtime', (req, res) => {
       // Don't end connection, just log error
     }
   };
-  
+
   // Send initial message immediately
   sendInitialMessage(actualUserId);
   
@@ -2746,7 +2746,7 @@ app.get('/api/realtime', (req, res) => {
             console.log('✅ Mapped candidate-001 to database ID for realtime:', actualUserId);
             // Update connection with new userId
             realtimeService.removeConnection(userId, res);
-            realtimeService.addConnection(actualUserId, res);
+  realtimeService.addConnection(actualUserId, res);
           }
         } catch (dbError) {
           console.warn('⚠️ Could not map candidate-001 (using original):', dbError.message);
@@ -2785,10 +2785,10 @@ app.get('/api/realtime', (req, res) => {
   if (!connectionAdded) {
     console.warn(`⚠️ Failed to add connection for user: ${userId}`);
     try {
-      res.write(`data: ${JSON.stringify({
+  res.write(`data: ${JSON.stringify({
         event: 'error',
         data: { message: 'Server at capacity' }
-      })}\n\n`);
+  })}\n\n`);
     } catch (e) {
       // Connection already closed
     }
@@ -2813,14 +2813,14 @@ app.get('/api/realtime', (req, res) => {
       }
     }, 30000); // Every 30 seconds
 
-    // Handle client disconnect
-    req.on('close', () => {
+  // Handle client disconnect
+  req.on('close', () => {
       clearInterval(keepAliveInterval);
       console.log(`🔌 SSE connection closed for user: ${userId}`);
       realtimeService.removeConnection(userId, res);
       // Also remove mapped connection if it exists
       if (actualUserId !== userId) {
-        realtimeService.removeConnection(actualUserId, res);
+    realtimeService.removeConnection(actualUserId, res);
       }
     });
     
@@ -2841,7 +2841,7 @@ app.get('/api/realtime', (req, res) => {
       if (actualUserId !== userId) {
         realtimeService.removeConnection(actualUserId, res);
       }
-    });
+  });
 });
 
 // Start realtime service
@@ -3028,8 +3028,8 @@ const server = app.listen(PORT, () => {
   
   // Initialize WebRTC signaling service (Socket.IO)
   try {
-    webrtcService.initialize(server);
-    console.log(`✅ WebRTC/Socket.IO service initialized`);
+  webrtcService.initialize(server);
+  console.log(`✅ WebRTC/Socket.IO service initialized`);
   } catch (error) {
     console.error('❌ Error initializing WebRTC service:', error);
     // Don't crash - continue without WebRTC

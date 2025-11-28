@@ -156,30 +156,30 @@ export default function Index() {
           <div className="space-y-6">
             <h1 className="text-5xl md:text-6xl font-bold text-gray-900 leading-tight">
               Preparing for Your Next
-            </h1>
+          </h1>
             <p className="text-lg text-gray-600 leading-relaxed">
               Discover the Latest Strategies and Techniques to Excel In Your Next Interview. Our comprehensive guide covers everything from Resume Optimization to Mastering the Art of Communication.
-            </p>
+          </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              {(!user || user.userType === 'candidate') && (
-                <Button 
-                  size="lg" 
+            {(!user || user.userType === 'candidate') && (
+              <Button 
+                size="lg" 
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-6 text-lg rounded-lg"
-                  onClick={user ? () => navigate('/experts') : handleFindExpert}
-                >
+                onClick={user ? () => navigate('/experts') : handleFindExpert}
+              >
                   Get Started
-                </Button>
-              )}
-              {(!user || user.userType === 'expert') && (
-                <Button 
-                  variant="outline" 
-                  size="lg" 
+              </Button>
+            )}
+            {(!user || user.userType === 'expert') && (
+              <Button 
+                variant="outline" 
+                size="lg" 
                   className="px-8 py-6 text-lg border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg"
-                  onClick={user ? () => navigate('/dashboard') : handleBecomeExpert}
-                >
-                  {user ? 'Expert Dashboard' : 'Become an Expert'}
-                </Button>
-              )}
+                onClick={user ? () => navigate('/dashboard') : handleBecomeExpert}
+              >
+                {user ? 'Expert Dashboard' : 'Become an Expert'}
+              </Button>
+            )}
             </div>
           </div>
           
@@ -436,7 +436,7 @@ export default function Index() {
             <div className="space-y-6 order-1 md:order-2">
               <h2 className="text-4xl md:text-5xl font-bold text-gray-900">
                 Our Services
-              </h2>
+          </h2>
               <p className="text-lg text-gray-600 leading-relaxed">
                 We offer comprehensive interview preparation services designed to help you succeed. From expert coaching to detailed feedback, we provide everything you need to excel in your interviews.
               </p>
@@ -529,7 +529,7 @@ export default function Index() {
                   <div>
                     <h3 className="font-bold text-gray-900">{person.name}</h3>
                     <p className="text-sm text-gray-600">{person.role}</p>
-                  </div>
+            </div>
                 </CardContent>
               </Card>
             ))}
@@ -547,9 +547,9 @@ export default function Index() {
             Join thousands of candidates who have successfully landed their dream jobs
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            {(!user || user.userType === 'candidate') && (
-              <Button 
-                size="lg" 
+          {(!user || user.userType === 'candidate') && (
+            <Button 
+              size="lg" 
                 className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-6 text-lg"
                 onClick={() => {
                   if (!user) {
@@ -559,19 +559,19 @@ export default function Index() {
                     navigate('/experts');
                   }
                 }}
-              >
-                Start Your Journey Today
-              </Button>
-            )}
-            {user && user.userType === 'expert' && (
-              <Button 
-                size="lg" 
+            >
+              Start Your Journey Today
+            </Button>
+          )}
+          {user && user.userType === 'expert' && (
+            <Button 
+              size="lg" 
                 className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-6 text-lg"
-                onClick={() => navigate('/dashboard')}
-              >
-                Go to Expert Dashboard
-              </Button>
-            )}
+              onClick={() => navigate('/dashboard')}
+            >
+              Go to Expert Dashboard
+            </Button>
+          )}
             <Button 
               size="lg" 
               variant="outline"
