@@ -2608,78 +2608,44 @@ app.options('/api/realtime', (req, res) => {
 });
 
 // Real-time endpoint (Server-Sent Events) - MUST be before 404 handler
-app.get('/api/realtime', async (req, res) => {
+// Production-ready: Send headers immediately, do async operations after
+app.get('/api/realtime', (req, res) => {
+  const userId = req.query.userId || 'anonymous';
+  
+  console.log(`🔄 SSE connection request from user: ${userId}, origin: ${req.headers.origin}`);
+  
+  // Determine CORS origin - be more permissive for production
+  const origin = req.headers.origin;
+  let corsOrigin = '*';
+  
+  if (origin) {
+    // Allow requests from same origin or configured frontend
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'https://54.91.53.228',
+      'http://54.91.53.228'
+    ].filter(Boolean);
+    
+    // Check if origin matches any allowed origin
+    const originHost = origin.replace(/^https?:\/\//, '').split(':')[0];
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (!allowed) return false;
+      const allowedHost = allowed.replace(/^https?:\/\//, '').split(':')[0];
+      return originHost === allowedHost || origin === allowed;
+    });
+    
+    corsOrigin = isAllowed ? origin : '*';
+  } else if (process.env.FRONTEND_URL) {
+    corsOrigin = process.env.FRONTEND_URL;
+  }
+  
+  console.log(`🌐 CORS origin set to: ${corsOrigin}`);
+  
+  // CRITICAL: Send headers IMMEDIATELY (before any async operations)
+  // This prevents timeouts and 502 errors
   try {
-    const userId = req.query.userId || 'anonymous';
-    
-    console.log(`🔄 SSE connection request from user: ${userId}, origin: ${req.headers.origin}`);
-    
-    // Handle mock IDs - map to database IDs
-    let actualUserId = userId;
-    if (userId === 'candidate-001') {
-      try {
-        const candidate = await prisma.user.findUnique({
-          where: { email: 'john@example.com' },
-          select: { id: true }
-        });
-        if (candidate) {
-          actualUserId = candidate.id;
-          console.log('✅ Mapped candidate-001 to database ID for realtime:', actualUserId);
-        } else {
-          console.warn('⚠️ Could not find candidate with email john@example.com, using original userId');
-        }
-      } catch (dbError) {
-        console.error('❌ Error mapping candidate-001:', dbError);
-        // Continue with original userId
-      }
-    } else if (userId === 'expert-001') {
-      try {
-        const expert = await prisma.user.findUnique({
-          where: { email: 'jane@example.com' },
-          select: { id: true }
-        });
-        if (expert) {
-          actualUserId = expert.id;
-          console.log('✅ Mapped expert-001 to database ID for realtime:', actualUserId);
-        } else {
-          console.warn('⚠️ Could not find expert with email jane@example.com, using original userId');
-        }
-      } catch (dbError) {
-        console.error('❌ Error mapping expert-001:', dbError);
-        // Continue with original userId
-      }
-    }
-    
-    // Determine CORS origin - be more permissive for production
-    const origin = req.headers.origin;
-    let corsOrigin = '*';
-    
-    if (origin) {
-      // Allow requests from same origin or configured frontend
-      const allowedOrigins = [
-        process.env.FRONTEND_URL,
-        'http://localhost:5173',
-        'http://localhost:3000',
-        'https://54.91.53.228',
-        'http://54.91.53.228'
-      ].filter(Boolean);
-      
-      // Check if origin matches any allowed origin
-      const originHost = origin.replace(/^https?:\/\//, '').split(':')[0];
-      const isAllowed = allowedOrigins.some(allowed => {
-        if (!allowed) return false;
-        const allowedHost = allowed.replace(/^https?:\/\//, '').split(':')[0];
-        return originHost === allowedHost || origin === allowed;
-      });
-      
-      corsOrigin = isAllowed ? origin : '*';
-    } else if (process.env.FRONTEND_URL) {
-      corsOrigin = process.env.FRONTEND_URL;
-    }
-    
-    console.log(`🌐 CORS origin set to: ${corsOrigin}`);
-    
-    // Use writeHead to set all headers at once (required for SSE)
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
@@ -2690,21 +2656,86 @@ app.get('/api/realtime', async (req, res) => {
       'X-Accel-Buffering': 'no', // Disable buffering in nginx
       'X-Content-Type-Options': 'nosniff'
     });
-    
-    // Send initial connection message immediately
-    const initialMessage = `data: ${JSON.stringify({
-      event: 'connected',
-      data: { userId: actualUserId, timestamp: new Date().toISOString() }
-    })}\n\n`;
-    
-    try {
-      res.write(initialMessage);
-      console.log(`✅ Initial SSE message sent for user: ${actualUserId}`);
-    } catch (writeError) {
-      console.error(`❌ Error writing initial message for ${actualUserId}:`, writeError);
-      res.end();
-      return;
+  } catch (headerError) {
+    console.error('❌ Error setting SSE headers:', headerError);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Failed to establish connection' });
     }
+    return;
+  }
+  
+  // Start with original userId, will be updated async if needed
+  let actualUserId = userId;
+  
+  // Send initial connection message immediately (before database lookup)
+  const sendInitialMessage = (uid) => {
+    try {
+      const initialMessage = `data: ${JSON.stringify({
+        event: 'connected',
+        data: { userId: uid, timestamp: new Date().toISOString() }
+      })}\n\n`;
+      res.write(initialMessage);
+      console.log(`✅ Initial SSE message sent for user: ${uid}`);
+    } catch (writeError) {
+      console.error(`❌ Error writing initial message for ${uid}:`, writeError);
+      // Don't end connection, just log error
+    }
+  };
+  
+  // Send initial message immediately
+  sendInitialMessage(actualUserId);
+  
+  // Do database lookup asynchronously (non-blocking)
+  // This allows the connection to be established even if DB lookup fails
+  (async () => {
+    try {
+      // Handle mock IDs - map to database IDs
+      if (userId === 'candidate-001') {
+        try {
+          const candidate = await Promise.race([
+            prisma.user.findUnique({
+              where: { email: 'john@example.com' },
+              select: { id: true }
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+          ]);
+          if (candidate) {
+            actualUserId = candidate.id;
+            console.log('✅ Mapped candidate-001 to database ID for realtime:', actualUserId);
+            // Update connection with new userId
+            realtimeService.removeConnection(userId, res);
+            realtimeService.addConnection(actualUserId, res);
+          }
+        } catch (dbError) {
+          console.warn('⚠️ Could not map candidate-001 (using original):', dbError.message);
+          // Continue with original userId
+        }
+      } else if (userId === 'expert-001') {
+        try {
+          const expert = await Promise.race([
+            prisma.user.findUnique({
+              where: { email: 'jane@example.com' },
+              select: { id: true }
+            }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
+          ]);
+          if (expert) {
+            actualUserId = expert.id;
+            console.log('✅ Mapped expert-001 to database ID for realtime:', actualUserId);
+            // Update connection with new userId
+            realtimeService.removeConnection(userId, res);
+            realtimeService.addConnection(actualUserId, res);
+          }
+        } catch (dbError) {
+          console.warn('⚠️ Could not map expert-001 (using original):', dbError.message);
+          // Continue with original userId
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error in async userId mapping:', error);
+      // Continue with original userId - connection already established
+    }
+  })();
 
     // Add connection to real-time service AFTER headers are set
     const connectionAdded = realtimeService.addConnection(actualUserId, res);
@@ -2734,53 +2765,41 @@ app.get('/api/realtime', async (req, res) => {
           clearInterval(keepAliveInterval);
         }
       } catch (error) {
-        console.error(`❌ Error sending keepalive for ${actualUserId}:`, error);
+        console.error(`❌ Error sending keepalive for ${userId}:`, error);
         clearInterval(keepAliveInterval);
-        realtimeService.removeConnection(actualUserId, res);
+        realtimeService.removeConnection(userId, res);
       }
     }, 30000); // Every 30 seconds
 
     // Handle client disconnect
     req.on('close', () => {
       clearInterval(keepAliveInterval);
-      console.log(`🔌 SSE connection closed for user: ${actualUserId}`);
-      realtimeService.removeConnection(actualUserId, res);
+      console.log(`🔌 SSE connection closed for user: ${userId}`);
+      realtimeService.removeConnection(userId, res);
+      // Also remove mapped connection if it exists
+      if (actualUserId !== userId) {
+        realtimeService.removeConnection(actualUserId, res);
+      }
     });
     
     req.on('error', (error) => {
       clearInterval(keepAliveInterval);
-      console.error(`❌ SSE request error for ${actualUserId}:`, error);
-      realtimeService.removeConnection(actualUserId, res);
+      console.error(`❌ SSE request error for ${userId}:`, error);
+      realtimeService.removeConnection(userId, res);
+      if (actualUserId !== userId) {
+        realtimeService.removeConnection(actualUserId, res);
+      }
     });
     
     // Handle response errors
     res.on('error', (error) => {
       clearInterval(keepAliveInterval);
-      console.error(`❌ SSE response error for ${actualUserId}:`, error);
-      realtimeService.removeConnection(actualUserId, res);
-    });
-    
-  } catch (error) {
-    console.error('❌ Error in /api/realtime endpoint:', error);
-    console.error('❌ Error stack:', error.stack);
-    
-    // Try to send error message if response hasn't been sent
-    if (!res.headersSent) {
-      try {
-        res.writeHead(500, {
-          'Content-Type': 'text/event-stream',
-          'Access-Control-Allow-Origin': '*'
-        });
-        res.write(`data: ${JSON.stringify({
-          event: 'error',
-          data: { message: 'Internal server error' }
-        })}\n\n`);
-      } catch (e) {
-        // Can't send response
+      console.error(`❌ SSE response error for ${userId}:`, error);
+      realtimeService.removeConnection(userId, res);
+      if (actualUserId !== userId) {
+        realtimeService.removeConnection(actualUserId, res);
       }
-    }
-    res.end();
-  }
+    });
 });
 
 // Start realtime service
@@ -2936,6 +2955,27 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Global error handlers to prevent server crashes
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('❌ Stack:', error.stack);
+  // Don't exit in production - log and continue
+  if (process.env.NODE_ENV === 'production') {
+    monitoringService.logError(error, { type: 'uncaughtException' });
+  } else {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise);
+  console.error('❌ Reason:', reason);
+  // Don't exit in production - log and continue
+  if (process.env.NODE_ENV === 'production') {
+    monitoringService.logError(reason, { type: 'unhandledRejection' });
+  }
+});
+
 // Set server limits for high concurrency
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
@@ -2945,8 +2985,13 @@ const server = app.listen(PORT, () => {
   console.log(`💻 CPU Cores: ${require('os').cpus().length}`);
   
   // Initialize WebRTC signaling service (Socket.IO)
-  webrtcService.initialize(server);
-  console.log(`✅ WebRTC/Socket.IO service initialized`);
+  try {
+    webrtcService.initialize(server);
+    console.log(`✅ WebRTC/Socket.IO service initialized`);
+  } catch (error) {
+    console.error('❌ Error initializing WebRTC service:', error);
+    // Don't crash - continue without WebRTC
+  }
   
   // Track active meetings for monitoring
   setInterval(async () => {
@@ -2960,6 +3005,7 @@ const server = app.listen(PORT, () => {
       monitoringService.updateConcurrentMeetings(activeSessions);
     } catch (error) {
       console.error('Error updating concurrent meetings:', error);
+      // Don't crash - just log the error
     }
   }, 10000); // Update every 10 seconds
 });
