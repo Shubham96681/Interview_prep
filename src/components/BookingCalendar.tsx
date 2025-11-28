@@ -367,32 +367,39 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                     variant={selectedTime === time ? "default" : "outline"}
                     className={`flex items-center gap-2 relative transition-all duration-200 ${
                       isBooked 
-                        ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400' 
+                        ? 'cursor-not-allowed bg-red-50 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-600 hover:border-red-300 opacity-75' 
                         : isPastTime
                         ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400'
                         : isAvailable
                         ? 'hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'
                         : 'opacity-60 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-500'
                     }`}
-                    onClick={() => isAvailable && !isPastTime && setSelectedTime(time)}
+                    onClick={() => isAvailable && !isPastTime && !isBooked && setSelectedTime(time)}
                     disabled={isBooked || !isAvailable || isPastTime}
                   >
                     <Clock className={`h-4 w-4 ${
-                      isBooked || isPastTime ? 'text-gray-400' : isAvailable ? 'text-blue-600' : 'text-gray-500'
+                      isBooked ? 'text-red-600' : isPastTime ? 'text-gray-400' : isAvailable ? 'text-blue-600' : 'text-gray-500'
                     }`} />
-                    {time}
+                    <span className={isBooked ? 'line-through decoration-2 decoration-red-500' : ''}>
+                      {time}
+                    </span>
                     {isBooked && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-full h-0.5 bg-red-400 transform rotate-45"></div>
-                      </div>
+                      <>
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-full h-0.5 bg-red-500 transform rotate-45 opacity-80"></div>
+                        </div>
+                        <Badge variant="destructive" className="absolute -top-1 -right-1 text-[10px] px-1 py-0 h-4">
+                          Booked
+                        </Badge>
+                      </>
                     )}
                     {isPastTime && !isBooked && (
-                      <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
                       </div>
                     )}
                     {!isAvailable && !isBooked && !isPastTime && (
-                      <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                         <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
                       </div>
                     )}
