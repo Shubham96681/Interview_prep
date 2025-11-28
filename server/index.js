@@ -959,7 +959,11 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
 
     // Send emails to candidate and expert
     try {
-      await Promise.all([
+      console.log('📧 Attempting to send booking emails...');
+      console.log('📧 Candidate email:', session.candidate.email);
+      console.log('📧 Expert email:', session.expert.email);
+      
+      const emailResults = await Promise.allSettled([
         emailService.sendMeetingBookingEmailToCandidate(
           session.candidate.email,
           session.candidate.name,
@@ -973,9 +977,17 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
           session
         )
       ]);
-      console.log('✅ Meeting booking emails sent to candidate and expert');
+      
+      emailResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          console.log(`✅ Email ${index === 0 ? 'to candidate' : 'to expert'} sent successfully:`, result.value.messageId);
+        } else {
+          console.error(`❌ Failed to send email ${index === 0 ? 'to candidate' : 'to expert'}:`, result.reason);
+        }
+      });
     } catch (emailError) {
       console.error('❌ Error sending meeting booking emails:', emailError);
+      console.error('❌ Error stack:', emailError.stack);
       // Don't fail the booking if email fails
     }
 

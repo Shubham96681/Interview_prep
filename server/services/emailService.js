@@ -3,22 +3,28 @@ const nodemailer = require('nodemailer');
 class EmailService {
   constructor() {
     // Gmail configuration
-    this.transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'testshubham6287@gmail.com',
-        pass: 'xohf qieb wucb dpne' // App password
-      }
-    });
+    try {
+      this.transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'testshubham6287@gmail.com',
+          pass: 'xohf qieb wucb dpne' // App password
+        }
+      });
 
-    // Verify connection
-    this.transporter.verify((error, success) => {
-      if (error) {
-        console.error('❌ Email service connection error:', error);
-      } else {
-        console.log('✅ Email service ready');
-      }
-    });
+      // Verify connection
+      this.transporter.verify((error, success) => {
+        if (error) {
+          console.error('❌ Email service connection error:', error);
+          console.error('❌ Email service error details:', error.message);
+        } else {
+          console.log('✅ Email service ready and verified');
+        }
+      });
+    } catch (error) {
+      console.error('❌ Failed to initialize email service:', error);
+      this.transporter = null;
+    }
   }
 
   /**
@@ -149,7 +155,12 @@ class EmailService {
    * Send meeting booking confirmation to candidate
    */
   async sendMeetingBookingEmailToCandidate(candidateEmail, candidateName, expertName, session) {
+    if (!this.transporter) {
+      throw new Error('Email service not initialized');
+    }
+    
     try {
+      console.log(`📧 Preparing to send booking email to candidate: ${candidateEmail}`);
       const scheduledDate = new Date(session.scheduledDate);
       const formattedDate = scheduledDate.toLocaleDateString('en-US', { 
         weekday: 'long', 
@@ -244,7 +255,12 @@ class EmailService {
    * Send meeting booking notification to expert
    */
   async sendMeetingBookingEmailToExpert(expertEmail, expertName, candidateName, session) {
+    if (!this.transporter) {
+      throw new Error('Email service not initialized');
+    }
+    
     try {
+      console.log(`📧 Preparing to send booking email to expert: ${expertEmail}`);
       const scheduledDate = new Date(session.scheduledDate);
       const formattedDate = scheduledDate.toLocaleDateString('en-US', { 
         weekday: 'long', 
