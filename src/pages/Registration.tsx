@@ -46,6 +46,11 @@ export default function Registration() {
   const { login } = useAuth();
   const [activeTab, setActiveTab] = useState<'candidate' | 'expert'>('candidate');
   
+  // OTP verification state
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState('');
+  const [pendingUserName, setPendingUserName] = useState('');
+  
   // Common fields
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState<string>('');
@@ -317,6 +322,9 @@ export default function Registration() {
   };
 
   const handleOTPVerificationSuccess = (userData: UserData, token: string) => {
+    if (token) {
+      localStorage.setItem('token', token);
+    }
     authService.login(userData);
     login(userData);
     

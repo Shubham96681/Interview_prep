@@ -17,7 +17,7 @@ interface OTPVerificationModalProps {
 export default function OTPVerificationModal({
   isOpen,
   email,
-  userName,
+  userName: _userName,
   onVerificationSuccess,
   onClose
 }: OTPVerificationModalProps) {
