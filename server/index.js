@@ -2570,13 +2570,15 @@ app.post('/api/contact', async (req, res) => {
         <p>${message.replace(/\n/g, '<br>')}</p>
       `;
 
-      // Send email to admin/support
-      await emailService.transporter.sendMail({
+      // Send email to admin/support using email service
+      const mailOptions = {
         from: 'testshubham6287@gmail.com',
         to: 'testshubham6287@gmail.com', // Admin email
         subject: emailSubject,
         html: emailBody
-      });
+      };
+      
+      await emailService.transporter.sendMail(mailOptions);
 
       console.log(`✅ Contact form submission received from ${email}`);
     } catch (emailError) {
