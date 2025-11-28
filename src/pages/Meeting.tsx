@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Video, Users, Clock, Calendar, Star, MessageSquare } from 'lucide-react';
+import { Video, Users, Clock, Calendar, Star, MessageSquare, ArrowLeft } from 'lucide-react';
 import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
 import WebRTCVideoCall from '@/components/WebRTCVideoCall';
@@ -406,10 +406,20 @@ export default function Meeting() {
       <div className="max-w-4xl mx-auto">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Video className="h-6 w-6" />
-              Interview Session
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Video className="h-6 w-6" />
+                Interview Session
+              </CardTitle>
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate('/dashboard')}
+                className="flex items-center gap-2 text-gray-700 hover:text-gray-900"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Dashboard
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid md:grid-cols-2 gap-4">
