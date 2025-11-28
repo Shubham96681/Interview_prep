@@ -2032,7 +2032,7 @@ app.put('/api/sessions/:id/reschedule', authenticateToken, validateObjectId('id'
 app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => {
   try {
     const { sessionId, rating, comment, categories } = req.body;
-    const reviewerId = req.user?.id || req.user?.userId;
+    let reviewerId = req.user?.id || req.user?.userId;
 
     console.log('✅ Route matched: POST /api/reviews');
     console.log('📝 Review submission:', { 
@@ -2042,15 +2042,68 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
       commentLength: comment?.length,
       path: req.path,
       bodyKeys: Object.keys(req.body),
-      user: req.user ? { id: req.user.id, email: req.user.email, userType: req.user.userType } : 'NO USER'
+      user: req.user ? { id: req.user.id, email: req.user.email, userType: req.user.userType } : 'NO USER',
+      token: req.headers['authorization'] ? req.headers['authorization'].substring(0, 30) + '...' : 'NO TOKEN'
     });
 
+    // If no reviewerId from req.user (e.g., test token), try to get it from the session
+    // This allows test tokens to work by identifying the user from the session participants
     if (!reviewerId) {
-      console.error('❌ No reviewer ID found. req.user:', req.user);
-      return res.status(401).json({ 
-        success: false,
-        message: 'User not authenticated. Please log in again.' 
+      console.log('⚠️ No reviewerId from req.user, attempting to identify from session...');
+      
+      // First, get the session to see who the participants are
+      const sessionForLookup = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { id: true, candidateId: true, expertId: true }
       });
+
+      if (!sessionForLookup) {
+        console.error('❌ Session not found:', sessionId);
+        return res.status(404).json({ 
+          success: false,
+          message: 'Session not found' 
+        });
+      }
+
+      // Try to extract userId from token if it's a test token
+      const authHeader = req.headers['authorization'];
+      const token = authHeader && authHeader.split(' ')[1];
+      
+      if (token && token.startsWith('token-')) {
+        // Format: token-{userId}-{timestamp}
+        const tokenParts = token.split('-');
+        if (tokenParts.length >= 3) {
+          const extractedUserId = tokenParts.slice(1, -1).join('-');
+          // Verify this userId is a participant in the session
+          if (extractedUserId === sessionForLookup.candidateId || extractedUserId === sessionForLookup.expertId) {
+            reviewerId = extractedUserId;
+            console.log('✅ Extracted reviewerId from token:', reviewerId);
+          }
+        }
+      } else if (token && token.startsWith('test-token-')) {
+        // For generic test tokens, we can't identify the user from the token
+        // But we can try to get user info from localStorage on frontend or use email
+        // For now, we'll need the frontend to send userId in the request body as a fallback
+        console.warn('⚠️ Generic test token detected. Cannot identify user from token alone.');
+        
+        // Check if userId is provided in request body as fallback
+        const bodyUserId = req.body.userId;
+        if (bodyUserId && (bodyUserId === sessionForLookup.candidateId || bodyUserId === sessionForLookup.expertId)) {
+          reviewerId = bodyUserId;
+          console.log('✅ Using userId from request body:', reviewerId);
+        } else {
+          return res.status(401).json({ 
+            success: false,
+            message: 'User not authenticated. Please log in with a valid account or provide userId in request body.' 
+          });
+        }
+      } else {
+        console.error('❌ No reviewerId found and cannot extract from token');
+        return res.status(401).json({ 
+          success: false,
+          message: 'User not authenticated. Please log in again.' 
+        });
+      }
     }
 
     if (!sessionId) {

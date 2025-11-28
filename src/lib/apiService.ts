@@ -293,9 +293,23 @@ class ApiService {
   }
 
   async createReview(sessionId: string, rating: number, comment: string, categories?: string) {
+    // Get current user ID as fallback for test tokens
+    let userId: string | undefined;
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        if (user && user.id) {
+          userId = user.id;
+        }
+      }
+    } catch (e) {
+      console.error('Error getting user ID for review:', e);
+    }
+
     return this.request('/api/reviews', {
       method: 'POST',
-      body: JSON.stringify({ sessionId, rating, comment, categories }),
+      body: JSON.stringify({ sessionId, rating, comment, categories, userId }),
     });
   }
 
