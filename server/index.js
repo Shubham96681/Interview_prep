@@ -2725,23 +2725,6 @@ app.get('/api/realtime', async (req, res) => {
     
     console.log(`✅ SSE connection established for user: ${actualUserId}`);
 
-    // Handle client disconnect
-    req.on('close', () => {
-      console.log(`🔌 SSE connection closed for user: ${actualUserId}`);
-      realtimeService.removeConnection(actualUserId, res);
-    });
-    
-    req.on('error', (error) => {
-      console.error(`❌ SSE request error for ${actualUserId}:`, error);
-      realtimeService.removeConnection(actualUserId, res);
-    });
-    
-    // Handle response errors
-    res.on('error', (error) => {
-      console.error(`❌ SSE response error for ${actualUserId}:`, error);
-      realtimeService.removeConnection(actualUserId, res);
-    });
-    
     // Keep connection alive with periodic heartbeat
     const keepAliveInterval = setInterval(() => {
       try {
@@ -2756,10 +2739,25 @@ app.get('/api/realtime', async (req, res) => {
         realtimeService.removeConnection(actualUserId, res);
       }
     }, 30000); // Every 30 seconds
-    
-    // Clean up interval on disconnect
+
+    // Handle client disconnect
     req.on('close', () => {
       clearInterval(keepAliveInterval);
+      console.log(`🔌 SSE connection closed for user: ${actualUserId}`);
+      realtimeService.removeConnection(actualUserId, res);
+    });
+    
+    req.on('error', (error) => {
+      clearInterval(keepAliveInterval);
+      console.error(`❌ SSE request error for ${actualUserId}:`, error);
+      realtimeService.removeConnection(actualUserId, res);
+    });
+    
+    // Handle response errors
+    res.on('error', (error) => {
+      clearInterval(keepAliveInterval);
+      console.error(`❌ SSE response error for ${actualUserId}:`, error);
+      realtimeService.removeConnection(actualUserId, res);
     });
     
   } catch (error) {
