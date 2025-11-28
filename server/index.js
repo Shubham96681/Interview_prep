@@ -1310,7 +1310,7 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     }
     
     // Build date range query
-    const whereClause: any = {
+    const whereClause = {
       expertId: actualExpertId,
       status: {
         notIn: ['cancelled']
