@@ -299,12 +299,12 @@ class ApiService {
     
     if (!finalUserId) {
       try {
-        // First try: AuthContext user (most reliable, has real database ID)
+        // First try: AuthContext user (most reliable)
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const user = JSON.parse(userStr);
-          if (user && user.id && !user.id.startsWith('user-') && !user.id.startsWith('candidate-') && !user.id.startsWith('expert-')) {
-            // Only use if it's a real database ID (not frontend-generated or test user ID)
+          if (user && user.id) {
+            // Include all IDs - backend will map test IDs to database IDs
             finalUserId = user.id;
             console.log('✅ Using userId from localStorage user:', finalUserId);
           }

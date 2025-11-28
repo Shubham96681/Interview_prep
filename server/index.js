@@ -2087,6 +2087,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
         
         const bodyUserId = req.body.userId;
         if (bodyUserId) {
+          console.log('📝 Received userId in request body:', bodyUserId);
           // Check if it's a test user ID that needs mapping
           let actualUserId = bodyUserId;
           
@@ -2099,6 +2100,8 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
             if (candidate) {
               actualUserId = candidate.id;
               console.log('✅ Mapped candidate-001 to database ID:', actualUserId);
+            } else {
+              console.error('❌ Could not find candidate with email john@example.com');
             }
           } else if (bodyUserId === 'expert-001') {
             const expert = await prisma.user.findUnique({
@@ -2108,8 +2111,19 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
             if (expert) {
               actualUserId = expert.id;
               console.log('✅ Mapped expert-001 to database ID:', actualUserId);
+            } else {
+              console.error('❌ Could not find expert with email jane@example.com');
             }
           }
+          
+          console.log('🔍 Checking session access:', {
+            bodyUserId,
+            actualUserId,
+            sessionCandidateId: sessionForLookup.candidateId,
+            sessionExpertId: sessionForLookup.expertId,
+            matchesCandidate: actualUserId === sessionForLookup.candidateId,
+            matchesExpert: actualUserId === sessionForLookup.expertId
+          });
           
           // Verify this userId is a participant in the session
           if (actualUserId === sessionForLookup.candidateId || actualUserId === sessionForLookup.expertId) {
@@ -2129,6 +2143,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
           }
         } else {
           console.error('❌ No userId in request body for test token');
+          console.error('❌ Request body:', JSON.stringify(req.body));
           return res.status(401).json({ 
             success: false,
             message: 'User not authenticated. Please log in with a valid account or provide userId in request body.' 

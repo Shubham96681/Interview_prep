@@ -46,10 +46,9 @@ export default function FeedbackForm({
 
     setIsSubmitting(true);
     try {
-      // Pass userId from AuthContext to ensure we use the real database ID
-      const userId = user?.id && !user.id.startsWith('user-') && !user.id.startsWith('candidate-') && !user.id.startsWith('expert-')
-        ? user.id
-        : undefined;
+      // Pass userId from AuthContext - include test IDs too, backend will map them
+      const userId = user?.id || undefined;
+      console.log('📝 FeedbackForm: Submitting review with userId:', userId);
       const response = await apiService.createReview(sessionId, rating, comment, undefined, userId);
       
       if (response.success) {
