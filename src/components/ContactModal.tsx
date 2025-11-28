@@ -50,13 +50,25 @@ export default function ContactModal({ isOpen, onClose }: ContactModalProps) {
     setIsSubmitting(true);
     
     try {
-      // Here you can add API call to send contact form data to backend
-      // For now, we'll just show a success message
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Contact form submission:', formData);
+      // Send contact form data to backend
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          subject: 'General Inquiry',
+          message: formData.inquiry
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to submit your inquiry');
+      }
       
       toast.success('Thank you for contacting us! We will get back to you soon.');
       

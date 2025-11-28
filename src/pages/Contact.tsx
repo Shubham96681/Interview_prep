@@ -65,10 +65,20 @@ export default function Contact() {
     setIsSubmitting(true);
     
     try {
-      // Here you can add API call to send contact form data to backend
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('Contact form submission:', formData);
+      // Send contact form data to backend
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to submit your inquiry');
+      }
       
       toast.success('Thank you for contacting us! We will get back to you soon.');
       
@@ -239,7 +249,6 @@ export default function Contact() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="technical-support">Technical Support</SelectItem>
-                        <SelectItem value="course-inquiry">Course Inquiry</SelectItem>
                         <SelectItem value="partnership">Partnership Opportunities</SelectItem>
                         <SelectItem value="feedback">Feedback & Suggestions</SelectItem>
                         <SelectItem value="general">General Inquiry</SelectItem>
