@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -30,6 +30,19 @@ export default function FeedbackForm({
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState(existingReview?.comment || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Update form when existingReview changes (e.g., when user revisits page)
+  useEffect(() => {
+    if (existingReview) {
+      console.log('🔄 FeedbackForm: Updating form with existing review:', existingReview);
+      setRating(existingReview.rating || 0);
+      setComment(existingReview.comment || '');
+    } else {
+      // Reset form if no existing review
+      setRating(0);
+      setComment('');
+    }
+  }, [existingReview]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

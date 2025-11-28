@@ -74,8 +74,8 @@ export default function Meeting() {
           });
           setSession(sessionData);
           
-          // Fetch reviews if session is completed or if we're showing feedback tab
-          if ((sessionData.status === 'completed' || shouldShowFeedback) && sessionData.id) {
+          // Always fetch reviews when session is loaded (so both candidate and expert can see all feedback)
+          if (sessionData.id) {
             fetchReviews(sessionData.id);
           }
         } else {
@@ -518,8 +518,8 @@ export default function Meeting() {
               </div>
             )}
 
-            {/* Feedback Section - Show when session is completed or when tab=feedback */}
-            {(session.status === 'completed' || shouldShowFeedback) && (
+            {/* Feedback Section - Show when session is completed or when tab=feedback or when reviews exist */}
+            {(session.status === 'completed' || shouldShowFeedback || reviews.length > 0) && (
               <div className="border-t pt-6 space-y-6" id="feedback-section">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold flex items-center gap-2">
