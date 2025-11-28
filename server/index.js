@@ -2082,16 +2082,53 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
         }
       } else if (token && token.startsWith('test-token-')) {
         // For generic test tokens, we can't identify the user from the token
-        // But we can try to get user info from localStorage on frontend or use email
-        // For now, we'll need the frontend to send userId in the request body as a fallback
-        console.warn('⚠️ Generic test token detected. Cannot identify user from token alone.');
-        
         // Check if userId is provided in request body as fallback
+        console.warn('⚠️ Generic test token detected. Checking request body for userId...');
+        
         const bodyUserId = req.body.userId;
-        if (bodyUserId && (bodyUserId === sessionForLookup.candidateId || bodyUserId === sessionForLookup.expertId)) {
-          reviewerId = bodyUserId;
-          console.log('✅ Using userId from request body:', reviewerId);
+        if (bodyUserId) {
+          // Check if it's a test user ID that needs mapping
+          let actualUserId = bodyUserId;
+          
+          // Map test user IDs to database IDs
+          if (bodyUserId === 'candidate-001') {
+            const candidate = await prisma.user.findUnique({
+              where: { email: 'john@example.com' },
+              select: { id: true }
+            });
+            if (candidate) {
+              actualUserId = candidate.id;
+              console.log('✅ Mapped candidate-001 to database ID:', actualUserId);
+            }
+          } else if (bodyUserId === 'expert-001') {
+            const expert = await prisma.user.findUnique({
+              where: { email: 'jane@example.com' },
+              select: { id: true }
+            });
+            if (expert) {
+              actualUserId = expert.id;
+              console.log('✅ Mapped expert-001 to database ID:', actualUserId);
+            }
+          }
+          
+          // Verify this userId is a participant in the session
+          if (actualUserId === sessionForLookup.candidateId || actualUserId === sessionForLookup.expertId) {
+            reviewerId = actualUserId;
+            console.log('✅ Using userId from request body (mapped):', reviewerId);
+          } else {
+            console.error('❌ userId from request body does not match session participants:', {
+              bodyUserId,
+              actualUserId,
+              sessionCandidateId: sessionForLookup.candidateId,
+              sessionExpertId: sessionForLookup.expertId
+            });
+            return res.status(403).json({ 
+              success: false,
+              message: 'You do not have access to provide feedback for this session.' 
+            });
+          }
         } else {
+          console.error('❌ No userId in request body for test token');
           return res.status(401).json({ 
             success: false,
             message: 'User not authenticated. Please log in with a valid account or provide userId in request body.' 

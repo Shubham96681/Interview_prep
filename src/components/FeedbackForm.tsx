@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Star, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '@/lib/apiService';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface FeedbackFormProps {
   sessionId: string;
@@ -24,6 +25,7 @@ export default function FeedbackForm({
   onFeedbackSubmitted,
   existingReview
 }: FeedbackFormProps) {
+  const { user } = useAuth();
   const [rating, setRating] = useState(existingReview?.rating || 0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [comment, setComment] = useState(existingReview?.comment || '');
@@ -44,7 +46,11 @@ export default function FeedbackForm({
 
     setIsSubmitting(true);
     try {
-      const response = await apiService.createReview(sessionId, rating, comment);
+      // Pass userId from AuthContext to ensure we use the real database ID
+      const userId = user?.id && !user.id.startsWith('user-') && !user.id.startsWith('candidate-') && !user.id.startsWith('expert-')
+        ? user.id
+        : undefined;
+      const response = await apiService.createReview(sessionId, rating, comment, undefined, userId);
       
       if (response.success) {
         toast.success('Feedback submitted successfully!');

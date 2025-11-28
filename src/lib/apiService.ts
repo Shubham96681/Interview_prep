@@ -292,24 +292,32 @@ class ApiService {
     return this.request(`/api/sessions/${sessionId}/reviews`);
   }
 
-  async createReview(sessionId: string, rating: number, comment: string, categories?: string) {
+  async createReview(sessionId: string, rating: number, comment: string, categories?: string, userId?: string) {
     // Get current user ID as fallback for test tokens
-    let userId: string | undefined;
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        if (user && user.id) {
-          userId = user.id;
+    // Try multiple sources: provided userId, AuthContext user, localStorage user
+    let finalUserId: string | undefined = userId;
+    
+    if (!finalUserId) {
+      try {
+        // First try: AuthContext user (most reliable, has real database ID)
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user && user.id && !user.id.startsWith('user-') && !user.id.startsWith('candidate-') && !user.id.startsWith('expert-')) {
+            // Only use if it's a real database ID (not frontend-generated or test user ID)
+            finalUserId = user.id;
+            console.log('✅ Using userId from localStorage user:', finalUserId);
+          }
         }
+      } catch (e) {
+        console.error('Error getting user ID for review:', e);
       }
-    } catch (e) {
-      console.error('Error getting user ID for review:', e);
     }
 
+    console.log('📝 Creating review with userId:', finalUserId || 'NOT PROVIDED');
     return this.request('/api/reviews', {
       method: 'POST',
-      body: JSON.stringify({ sessionId, rating, comment, categories, userId }),
+      body: JSON.stringify({ sessionId, rating, comment, categories, userId: finalUserId }),
     });
   }
 
