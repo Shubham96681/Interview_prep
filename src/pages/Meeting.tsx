@@ -109,11 +109,37 @@ export default function Meeting() {
     try {
       console.log('📋 Fetching reviews for session:', sessionId);
       const response = await apiService.getSessionReviews(sessionId);
-      console.log('📋 Reviews response:', response);
-      if (response.success && response.data?.reviews) {
-        const fetchedReviews = response.data.reviews;
-        console.log('📋 Fetched reviews:', fetchedReviews);
+      console.log('📋 Reviews response (full):', JSON.stringify(response, null, 2));
+      
+      // Handle different response structures
+      let fetchedReviews: any[] = [];
+      
+      if (response.success) {
+        // Try different possible response structures
+        if (response.data?.reviews && Array.isArray(response.data.reviews)) {
+          fetchedReviews = response.data.reviews;
+          console.log('✅ Found reviews in response.data.reviews:', fetchedReviews.length);
+        } else if (response.data && Array.isArray(response.data)) {
+          fetchedReviews = response.data;
+          console.log('✅ Found reviews in response.data (array):', fetchedReviews.length);
+        } else if (response.reviews && Array.isArray(response.reviews)) {
+          fetchedReviews = response.reviews;
+          console.log('✅ Found reviews in response.reviews:', fetchedReviews.length);
+        } else {
+          console.warn('⚠️ Reviews not found in expected structure:', {
+            hasData: !!response.data,
+            dataKeys: response.data ? Object.keys(response.data) : [],
+            responseKeys: Object.keys(response)
+          });
+        }
+      } else {
+        console.warn('⚠️ Response not successful:', response);
+      }
+      
+      if (fetchedReviews.length > 0) {
+        console.log('📋 Setting reviews in state:', fetchedReviews);
         setReviews(fetchedReviews);
+        
         // Auto-show feedback form if coming from feedback button and user hasn't submitted
         if (shouldShowFeedback && user) {
           setTimeout(() => {
@@ -131,7 +157,7 @@ export default function Meeting() {
           }, 300);
         }
       } else {
-        console.warn('⚠️ No reviews in response or response not successful:', response);
+        console.log('📋 No reviews found, setting empty array');
         setReviews([]);
       }
     } catch (error) {
@@ -587,8 +613,10 @@ export default function Meeting() {
                 {/* Display Reviews */}
                 {reviews.length > 0 && (
                   <div className="space-y-4">
-                    <h4 className="font-medium">Feedback from Participants</h4>
-                    {reviews.map((review) => (
+                    <h4 className="font-medium">Feedback from Participants ({reviews.length})</h4>
+                    {reviews.map((review: any) => {
+                      console.log('🎨 Rendering review:', review);
+                      return (
                       <Card key={review.id}>
                         <CardContent className="pt-6">
                           <div className="flex items-start justify-between mb-2">
