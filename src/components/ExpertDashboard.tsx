@@ -27,6 +27,7 @@ interface ExpertDashboardProps {
 export default function ExpertDashboard({ user }: ExpertDashboardProps) {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'analytics'>('dashboard');
 
   // Fetch sessions from backend API
@@ -41,6 +42,37 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
+    }
+  }, [user?.id]);
+
+  // Fetch reviews received by expert
+  const fetchReviews = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Map test user IDs to database IDs
+      let actualUserId = user.id;
+      if (user.id === 'expert-001') {
+        // For test users, we'll need to get the real ID from the backend
+        // For now, try the endpoint with the test ID - backend should handle it
+        actualUserId = user.id;
+      }
+      
+      // Use apiService to get reviews
+      const response = await apiService.request(`/api/reviews/${actualUserId}?limit=50`);
+      if (response && response.reviews && Array.isArray(response.reviews)) {
+        setReviews(response.reviews);
+        console.log('✅ Fetched reviews for expert:', response.reviews.length);
+      } else if (response && Array.isArray(response)) {
+        // Handle case where response is direct array
+        setReviews(response);
+      } else {
+        console.warn('⚠️ Unexpected reviews response format:', response);
+        setReviews([]);
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      setReviews([]);
     }
   }, [user?.id]);
 
@@ -78,13 +110,14 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
 
     // Initial fetch
     fetchSessions();
+    fetchReviews();
 
     // Cleanup on unmount
     return () => {
       realtimeService.off('session_created', handleSessionCreated);
       realtimeService.off('session_updated', handleSessionUpdated);
     };
-  }, [user.id, fetchSessions]);
+  }, [user.id, fetchSessions, fetchReviews]);
 
   // Filter sessions based on status
   // Exclude sessions with recordings from upcoming (recordings mean session is completed)
@@ -442,7 +475,22 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
                           <div className="flex items-center gap-4 text-sm text-gray-500 mt-1">
                             <span>{formatDate(session.scheduledDate || session.date || '', session.time)}</span>
                             <span className="text-green-600 font-medium">${session.paymentAmount}</span>
+                            {/* Show review if exists for this session */}
+                            {reviews.find(r => r.session?.id === session.id) && (
+                              <div className="flex items-center gap-1">
+                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                <span className="text-yellow-600 font-medium">
+                                  {reviews.find(r => r.session?.id === session.id)?.rating}/5
+                                </span>
+                              </div>
+                            )}
                           </div>
+                          {/* Show review comment if exists */}
+                          {reviews.find(r => r.session?.id === session.id)?.comment && (
+                            <p className="text-sm text-gray-600 mt-1 italic">
+                              "{reviews.find(r => r.session?.id === session.id)?.comment}"
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex gap-2">
