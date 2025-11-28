@@ -20,7 +20,12 @@ if (!process.env.JWT_SECRET) {
 
 if (!process.env.DATABASE_URL) {
   console.error('❌ DATABASE_URL not found in .env');
-  process.exit(1);
+  // In production, try to continue with a default or warn
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('⚠️ Continuing without DATABASE_URL - database operations will fail');
+  } else {
+    process.exit(1);
+  }
 }
 
 console.log('🔧 Environment loaded successfully');
@@ -218,7 +223,8 @@ const upload = multer({
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+// Health check endpoint - must work even if database is down
+app.get('/api/health', async (req, res) => {
   res.json({ 
     success: true,
     status: 'OK', 

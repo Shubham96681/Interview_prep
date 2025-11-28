@@ -31,10 +31,14 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
-// Add connection health check
+// Add connection health check - don't exit in production
 prisma.$connect().catch((error) => {
   console.error('❌ Failed to connect to database:', error);
-  process.exit(1);
+  console.error('⚠️ Server will continue but database operations may fail');
+  // Don't exit in production - allow server to start and handle errors gracefully
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
 });
 
 module.exports = prisma;
