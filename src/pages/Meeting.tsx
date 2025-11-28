@@ -532,7 +532,10 @@ export default function Meeting() {
                       onClick={() => {
                         // Check if user has already submitted feedback
                         const userReview = reviews.find(
-                          (r) => r.reviewerId === user?.id || r.reviewer?.id === user?.id
+                          (r: any) => {
+                            const reviewerId = r.reviewerId || r.reviewer?.id;
+                            return reviewerId === user?.id;
+                          }
                         );
                         if (!userReview) {
                           setShowFeedbackForm(true);
