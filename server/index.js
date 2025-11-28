@@ -1880,11 +1880,26 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
       }
       
       // Calculate actual duration
-      const startTime = updateData.actualStartTime 
-        ? new Date(updateData.actualStartTime) 
-        : new Date(session.actualStartTime || session.scheduledDate);
-      const durationMinutes = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
-      updateData.actualDuration = Math.max(durationMinutes, 1); // At least 1 minute
+      try {
+        const startTime = updateData.actualStartTime 
+          ? new Date(updateData.actualStartTime) 
+          : (session.actualStartTime ? new Date(session.actualStartTime) : new Date(session.scheduledDate));
+        
+        // Ensure startTime is valid
+        if (isNaN(startTime.getTime())) {
+          console.warn('⚠️ Invalid startTime, using scheduledDate');
+          const fallbackStart = new Date(session.scheduledDate);
+          const durationMinutes = Math.round((now.getTime() - fallbackStart.getTime()) / (1000 * 60));
+          updateData.actualDuration = Math.max(durationMinutes, 1);
+        } else {
+          const durationMinutes = Math.round((now.getTime() - startTime.getTime()) / (1000 * 60));
+          updateData.actualDuration = Math.max(durationMinutes, 1); // At least 1 minute
+        }
+      } catch (durationError) {
+        console.error('❌ Error calculating duration:', durationError);
+        // Set a default duration if calculation fails
+        updateData.actualDuration = session.duration || 60;
+      }
       
       console.log(`✅ Marking session ${sessionId} as completed. Duration: ${updateData.actualDuration} minutes`);
     }
