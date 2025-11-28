@@ -2015,26 +2015,60 @@ app.get('/api/realtime', (req, res) => {
     actualUserId = 'jane@example.com';
   }
   
+  // Determine CORS origin - allow same origin or configured frontend URL
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'https://54.91.53.228',
+    'http://54.91.53.228'
+  ].filter(Boolean);
+  
+  const corsOrigin = origin && allowedOrigins.some(allowed => origin.includes(allowed.split('://')[1]?.split(':')[0] || '')) 
+    ? origin 
+    : (process.env.FRONTEND_URL || '*');
+  
   // Set SSE headers
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
     'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': process.env.FRONTEND_URL || 'http://localhost:5173',
-    'Access-Control-Allow-Credentials': 'true'
+    'Access-Control-Allow-Origin': corsOrigin,
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Allow-Headers': 'Cache-Control',
+    'X-Accel-Buffering': 'no' // Disable buffering in nginx
   });
 
   // Add connection to real-time service
-  realtimeService.addConnection(actualUserId, res);
+  try {
+    realtimeService.addConnection(actualUserId, res);
 
-  // Send initial connection message
-  res.write(`data: ${JSON.stringify({
-    event: 'connected',
-    data: { userId: actualUserId, timestamp: new Date().toISOString() }
-  })}\n\n`);
+    // Send initial connection message
+    res.write(`data: ${JSON.stringify({
+      event: 'connected',
+      data: { userId: actualUserId, timestamp: new Date().toISOString() }
+    })}\n\n`);
+    
+    console.log(`✅ SSE connection established for user: ${actualUserId}`);
+  } catch (error) {
+    console.error(`❌ Error establishing SSE connection for ${actualUserId}:`, error);
+    res.write(`data: ${JSON.stringify({
+      event: 'error',
+      data: { message: 'Failed to establish connection' }
+    })}\n\n`);
+    res.end();
+    return;
+  }
 
   // Handle client disconnect
   req.on('close', () => {
+    console.log(`🔌 SSE connection closed for user: ${actualUserId}`);
+    realtimeService.removeConnection(actualUserId, res);
+  });
+  
+  req.on('error', (error) => {
+    console.error(`❌ SSE connection error for ${actualUserId}:`, error);
     realtimeService.removeConnection(actualUserId, res);
   });
 });
