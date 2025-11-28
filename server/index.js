@@ -1153,12 +1153,21 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
     }
 
     // Check for existing bookings at the same date and time for this expert
-    if (date && time) {
+    // Since Session model only has scheduledDate, we check by comparing scheduledDate
+    if (date && time && finalScheduledDate) {
+      // Check for sessions within the same hour (to account for slight time differences)
+      const bookingStart = new Date(finalScheduledDate);
+      bookingStart.setMinutes(0, 0, 0);
+      const bookingEnd = new Date(bookingStart);
+      bookingEnd.setHours(bookingEnd.getHours() + 1);
+      
       const existingSession = await prisma.session.findFirst({
         where: {
           expertId: actualExpertId,
-          date: date,
-          time: time,
+          scheduledDate: {
+            gte: bookingStart,
+            lt: bookingEnd
+          },
           status: {
             notIn: ['cancelled', 'completed']
           }
@@ -1172,25 +1181,20 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
           message: `This time slot (${date} at ${time}) is already booked. Please select another time.`
         });
       }
-    }
-
-    // Also check using scheduledDate if provided
-    if (finalScheduledDate) {
-      const sessionDateStr = finalScheduledDate.toISOString().split('T')[0];
-      const sessionTimeStr = time || finalScheduledDate.toTimeString().split(' ')[0].substring(0, 5);
+    } else if (finalScheduledDate) {
+      // Fallback check using scheduledDate if date/time not provided
+      const bookingStart = new Date(finalScheduledDate);
+      bookingStart.setMinutes(0, 0, 0);
+      const bookingEnd = new Date(bookingStart);
+      bookingEnd.setHours(bookingEnd.getHours() + 1);
       
       const existingSessionByDate = await prisma.session.findFirst({
         where: {
           expertId: actualExpertId,
-          OR: [
-            { date: sessionDateStr, time: sessionTimeStr },
-            { 
-              scheduledDate: {
-                gte: new Date(finalScheduledDate.getTime() - 30 * 60 * 1000), // 30 minutes before
-                lte: new Date(finalScheduledDate.getTime() + (parseInt(duration) || 60) * 60 * 1000) // duration after
-              }
-            }
-          ],
+          scheduledDate: {
+            gte: bookingStart,
+            lt: bookingEnd
+          },
           status: {
             notIn: ['cancelled', 'completed']
           }
@@ -1199,8 +1203,6 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
 
       if (existingSessionByDate) {
         console.error('❌ Time slot conflict detected:', { 
-          date: sessionDateStr, 
-          time: sessionTimeStr, 
           scheduledDate: finalScheduledDate,
           expertId: actualExpertId 
         });
@@ -1218,14 +1220,12 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       ? `${baseUrl}/meeting/${meetingId}`
       : `/meeting/${meetingId}`;
 
-    // Create session - store date and time exactly as provided (preserve format)
+    // Create session - Session model only has scheduledDate (not separate date/time fields)
     const session = await prisma.session.create({
       data: {
         title: title || `${sessionType || 'Technical'} Interview Session`,
-        description: description || `Interview session scheduled for ${date || scheduledDate} at ${time || ''}`,
+        description: description || `Interview session scheduled for ${date || (finalScheduledDate ? finalScheduledDate.toISOString().split('T')[0] : '')} at ${time || (finalScheduledDate ? finalScheduledDate.toTimeString().split(' ')[0].substring(0, 5) : '')}`,
         scheduledDate: finalScheduledDate,
-        date: date || (finalScheduledDate ? finalScheduledDate.toISOString().split('T')[0] : null), // Store date as-is (YYYY-MM-DD)
-        time: time || (finalScheduledDate ? finalScheduledDate.toTimeString().split(' ')[0].substring(0, 5) : null), // Store time as-is (HH:MM format, e.g., "21:00" for 9pm)
         duration: parseInt(duration) || 60,
         sessionType: sessionType || 'technical',
         candidateId: actualCandidateId,
@@ -1309,7 +1309,7 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       if (expert) actualExpertId = expert.id;
     }
     
-    // Build date range query
+    // Build date range query using scheduledDate (Session model doesn't have separate date/time fields)
     const whereClause = {
       expertId: actualExpertId,
       status: {
@@ -1318,14 +1318,18 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     };
     
     if (startDate || endDate) {
-      whereClause.OR = [];
+      whereClause.scheduledDate = {};
       if (startDate) {
-        whereClause.OR.push({ date: { gte: startDate } });
-        whereClause.OR.push({ scheduledDate: { gte: new Date(startDate) } });
+        // Start of the start date
+        const startDateTime = new Date(startDate);
+        startDateTime.setHours(0, 0, 0, 0);
+        whereClause.scheduledDate.gte = startDateTime;
       }
       if (endDate) {
-        whereClause.OR.push({ date: { lte: endDate } });
-        whereClause.OR.push({ scheduledDate: { lte: new Date(endDate) } });
+        // End of the end date (23:59:59)
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        whereClause.scheduledDate.lte = endDateTime;
       }
     }
     
@@ -1333,8 +1337,6 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       where: whereClause,
       select: {
         id: true,
-        date: true,
-        time: true,
         scheduledDate: true,
         duration: true,
         status: true
@@ -1344,14 +1346,21 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       }
     });
     
-    // Format response with date and time
-    const bookedSlots = sessions.map(session => ({
-      date: session.date || (session.scheduledDate ? session.scheduledDate.toISOString().split('T')[0] : null),
-      time: session.time || (session.scheduledDate ? session.scheduledDate.toTimeString().split(' ')[0].substring(0, 5) : null),
-      scheduledDate: session.scheduledDate,
-      duration: session.duration,
-      status: session.status
-    }));
+    // Format response with date and time extracted from scheduledDate
+    const bookedSlots = sessions.map(session => {
+      const dateStr = session.scheduledDate ? session.scheduledDate.toISOString().split('T')[0] : null;
+      const timeStr = session.scheduledDate 
+        ? session.scheduledDate.toTimeString().split(' ')[0].substring(0, 5) 
+        : null;
+      
+      return {
+        date: dateStr,
+        time: timeStr,
+        scheduledDate: session.scheduledDate,
+        duration: session.duration,
+        status: session.status
+      };
+    });
     
     console.log('✅ Booked slots fetched:', bookedSlots.length);
     res.json({
