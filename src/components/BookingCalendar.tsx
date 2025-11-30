@@ -195,9 +195,11 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           
           // Calculate available slots using the formula:
           // AvailableSlots = TotalSlots - (BookedSlots + NotAvailableSlots)
+          // Create Sets for reliable comparison (use Set sizes for accurate count)
           const bookedSet = new Set(normalizedBookedTimes);
           const notAvailableSet = new Set(notAvailableTimes);
           
+          // Filter available times (for display purposes)
           const availableTimes = allTimes.filter(time => {
             // Normalize time for comparison (allTimes are already in HH:MM format, but ensure consistency)
             const timeParts = time.split(':');
@@ -207,20 +209,29 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             return !bookedSet.has(normalizedTime) && !notAvailableSet.has(normalizedTime);
           });
           
-          // Calculate final count using the formula
+          // Calculate final count using the formula:
+          // AvailableSlots = TotalSlots - (BookedSlots + NotAvailableSlots)
+          // Use Set sizes to ensure accurate count (handles duplicates and ensures consistency)
           const totalSlots = allTimes.length;
-          const bookedCount = normalizedBookedTimes.length;
-          const notAvailableCount = notAvailableTimes.length;
+          const bookedCount = bookedSet.size;
+          const notAvailableCount = notAvailableSet.size;
           const availableCount = totalSlots - bookedCount - notAvailableCount;
           
           // Verification: availableCount should match availableTimes.length
           if (isTodayDate) {
             console.log(`📊 Date ${dateStr} (TODAY): ${availableCount} available slots`, {
               formula: `${totalSlots} - (${bookedCount} booked + ${notAvailableCount} not available) = ${availableCount}`,
+              breakdown: {
+                totalSlots: totalSlots,
+                bookedSlots: bookedCount,
+                notAvailableSlots: notAvailableCount,
+                calculatedAvailable: availableCount,
+                filteredAvailableCount: availableTimes.length
+              },
               currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
-              availableTimes: availableTimes,
               bookedTimes: normalizedBookedTimes,
-              notAvailableTimes: notAvailableTimes
+              notAvailableTimes: notAvailableTimes,
+              availableTimes: availableTimes
             });
           }
         
