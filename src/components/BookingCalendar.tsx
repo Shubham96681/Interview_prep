@@ -68,17 +68,15 @@ function calculateAvailableSlots(
   const bookedSet = new Set(normalizedBooked);
   const notAvailableSet = new Set(normalizedNotAvailable);
   
-  // Filter available slots
+  // Filter available slots (this is the source of truth)
   const availableSlots = allSlots.filter(slot => {
     const normalizedSlot = normalizeTime(slot);
     return !bookedSet.has(normalizedSlot) && !notAvailableSet.has(normalizedSlot);
   });
   
-  // Calculate count using formula: Total - (Booked + NotAvailable)
-  const totalSlots = allSlots.length;
-  const bookedCount = bookedSet.size;
-  const notAvailableCount = notAvailableSet.size;
-  const availableCount = totalSlots - bookedCount - notAvailableCount;
+  // The count MUST match the actual filtered array length
+  // This ensures the displayed count matches what's visible
+  const availableCount = availableSlots.length;
   
   return { availableSlots, availableCount };
 }
@@ -777,7 +775,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                     {slot.isAvailable ? (
                       <>
                         <CheckCircle className="h-3 w-3 text-green-600" />
-                        <span className="font-medium">{slot.availableCount ?? slot.availableTimes.length} slots</span>
+                        <span className="font-medium">{slot.availableTimes.length} slots</span>
                       </>
                     ) : (
                       <>
