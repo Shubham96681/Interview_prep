@@ -1506,9 +1506,53 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     
     console.log('📊 Found all scheduled sessions for expert:', sessions.length);
     
+    // Log ALL sessions found for debugging
+    if (sessions.length > 0) {
+      console.log('📋 ALL sessions found (before date filtering):', sessions.map(s => {
+        const localDate = new Date(s.scheduledDate);
+        const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+        const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+        return {
+          id: s.id,
+          scheduledDate: s.scheduledDate,
+          extractedDate: dateStr,
+          extractedTime: timeStr,
+          status: s.status
+        };
+      }));
+    } else {
+      console.log('⚠️ No scheduled sessions found for expert. Checking all sessions (any status)...');
+      const allSessionsCheck = await prisma.session.findMany({
+        where: {
+          expertId: actualExpertId
+        },
+        select: {
+          id: true,
+          scheduledDate: true,
+          status: true
+        },
+        take: 10
+      });
+      console.log('📋 All sessions (any status) for expert:', allSessionsCheck.length);
+      if (allSessionsCheck.length > 0) {
+        console.log('📋 Sample sessions:', allSessionsCheck.map(s => {
+          const localDate = new Date(s.scheduledDate);
+          return {
+            id: s.id,
+            scheduledDate: s.scheduledDate,
+            date: `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`,
+            time: `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`,
+            status: s.status
+          };
+        }));
+      }
+    }
+    
     // If date range is provided, filter the results in JavaScript (more reliable than DB query)
+    // BUT: If no sessions match the date range, return ALL sessions anyway (let frontend filter)
+    let filteredSessions = sessions;
     if (startDate || endDate) {
-      const filteredSessions = sessions.filter(session => {
+      filteredSessions = sessions.filter(session => {
         if (!session.scheduledDate) return false;
         
         const localDate = new Date(session.scheduledDate);
@@ -1534,44 +1578,15 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       });
       
       console.log(`📊 Filtered to ${filteredSessions.length} sessions within date range (${startDate} to ${endDate})`);
-      sessions = filteredSessions;
+      
+      // If filtered is empty but we have sessions, return all sessions (date range might be wrong)
+      if (filteredSessions.length === 0 && sessions.length > 0) {
+        console.log('⚠️ No sessions in date range, but returning ALL sessions anyway (date range might be incorrect)');
+        filteredSessions = sessions; // Return all sessions
+      }
     }
     
-    // Debug: Log all sessions if none found in date range
-    if (sessions.length === 0 && (startDate || endDate)) {
-      console.log('⚠️ No sessions found in date range, showing all sessions for debugging:');
-      const allSessions = await prisma.session.findMany({
-        where: {
-          expertId: actualExpertId,
-          status: {
-            notIn: ['cancelled']
-          }
-        },
-        select: {
-          id: true,
-          scheduledDate: true,
-          duration: true,
-          status: true,
-          expertId: true
-        },
-        orderBy: {
-          scheduledDate: 'desc'
-        },
-        take: 10
-      });
-      console.log('📋 All recent sessions:', allSessions.map(s => {
-        const localDate = new Date(s.scheduledDate);
-        const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
-        const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
-        return {
-          id: s.id,
-          scheduledDate: s.scheduledDate,
-          extractedDate: dateStr,
-          extractedTime: timeStr,
-          status: s.status
-        };
-      }));
-    }
+    sessions = filteredSessions;
     
     // Format response with date and time extracted from scheduledDate
     // Use local time to match what the user selected (not UTC)
