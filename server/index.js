@@ -1363,19 +1363,24 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     });
     
     // Format response with date and time extracted from scheduledDate
-    // Use UTC to ensure consistent format matching with frontend
+    // Use local time to match what the user selected (not UTC)
     const bookedSlots = sessions.map(session => {
       if (!session.scheduledDate) {
         return null;
       }
       
-      // Convert to UTC for consistent date/time extraction
-      const utcDate = new Date(session.scheduledDate);
-      const dateStr = utcDate.toISOString().split('T')[0]; // YYYY-MM-DD
+      // Convert to local time for date/time extraction (matches user's timezone)
+      const localDate = new Date(session.scheduledDate);
       
-      // Extract time in HH:MM format (24-hour, zero-padded)
-      const hours = String(utcDate.getUTCHours()).padStart(2, '0');
-      const minutes = String(utcDate.getUTCMinutes()).padStart(2, '0');
+      // Get date in YYYY-MM-DD format (local timezone)
+      const year = localDate.getFullYear();
+      const month = String(localDate.getMonth() + 1).padStart(2, '0');
+      const day = String(localDate.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+      
+      // Extract time in HH:MM format (local time, 24-hour, zero-padded)
+      const hours = String(localDate.getHours()).padStart(2, '0');
+      const minutes = String(localDate.getMinutes()).padStart(2, '0');
       const timeStr = `${hours}:${minutes}`;
       
       return {

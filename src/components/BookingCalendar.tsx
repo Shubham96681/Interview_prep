@@ -74,18 +74,28 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         bookedSlots.forEach((slot: any) => {
           if (slot.date && slot.time && slot.status !== 'cancelled') {
             // Normalize time format to HH:MM (ensure it matches our format)
-            const normalizedTime = slot.time.length === 5 ? slot.time : 
+            let normalizedTime = slot.time.length === 5 ? slot.time : 
               slot.time.substring(0, 5); // Take first 5 chars (HH:MM)
+            
+            // If time is in format like "13:00:00", extract just "13:00"
+            if (normalizedTime.includes(':')) {
+              const parts = normalizedTime.split(':');
+              normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+            }
             
             if (!bookedByDate[slot.date]) {
               bookedByDate[slot.date] = [];
             }
             bookedByDate[slot.date].push(normalizedTime);
-            console.log(`📅 Marking slot as booked: ${slot.date} at ${normalizedTime}`);
+            console.log(`📅 Marking slot as booked: ${slot.date} at ${normalizedTime}`, {
+              originalTime: slot.time,
+              scheduledDate: slot.scheduledDate,
+              status: slot.status
+            });
           }
         });
         
-        console.log('📅 Booked slots by date:', bookedByDate);
+        console.log('📅 Booked slots by date:', JSON.stringify(bookedByDate, null, 2));
         
         // Generate availability slots for next 7 days (starting from today, excluding past dates)
       const slots = [];
@@ -229,14 +239,38 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
   const isSlotBooked = (date: string, time: string) => {
     if (!availabilityData) return false;
     const slot = availabilityData.slots.find(s => s.date === date);
-    if (!slot) return false;
+    if (!slot) {
+      console.log(`⚠️ No slot found for date: ${date}`);
+      return false;
+    }
     
     // Normalize time format for comparison (ensure HH:MM format)
-    const normalizedTime = time.length === 5 ? time : time.substring(0, 5);
-    const isBooked = slot.bookedTimes.includes(normalizedTime);
+    let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
+    // Ensure format is exactly HH:MM
+    if (normalizedTime.includes(':')) {
+      const parts = normalizedTime.split(':');
+      normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+    }
+    
+    // Check if this time is in the booked times array
+    const isBooked = slot.bookedTimes.some(bookedTime => {
+      // Normalize booked time for comparison
+      let normalizedBookedTime = bookedTime.length === 5 ? bookedTime : bookedTime.substring(0, 5);
+      if (normalizedBookedTime.includes(':')) {
+        const parts = normalizedBookedTime.split(':');
+        normalizedBookedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+      }
+      return normalizedBookedTime === normalizedTime;
+    });
     
     if (isBooked) {
       console.log(`🔴 Slot is booked: ${date} at ${normalizedTime}`, {
+        bookedTimes: slot.bookedTimes,
+        checkingTime: normalizedTime,
+        slotDate: slot.date
+      });
+    } else if (slot.bookedTimes.length > 0) {
+      console.log(`🔵 Slot NOT booked: ${date} at ${normalizedTime}`, {
         bookedTimes: slot.bookedTimes,
         checkingTime: normalizedTime
       });
@@ -387,7 +421,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                   <button
                     key={time}
                     className={`
-                      flex items-center gap-2 w-24 justify-center py-2 rounded-lg border transition-all duration-200
+                      flex items-center gap-2 w-24 justify-center py-2 rounded-lg border transition-all duration-200 relative
                       ${isBooked ? "line-through opacity-40 cursor-not-allowed border-gray-300" : ""}
                       ${isAvailable && !isBooked && !isPastTime ? "border-blue-500 text-blue-600 hover:bg-blue-50" : ""}
                       ${isUnavailable && !isBooked ? "opacity-40 cursor-not-allowed border-gray-300" : ""}
@@ -400,6 +434,12 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                       }
                     }}
                   >
+                    {/* Diagonal cut line for booked slots */}
+                    {isBooked && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-full h-0.5 bg-red-500 transform rotate-45 opacity-80"></div>
+                      </div>
+                    )}
                     <Clock className="h-4 w-4" />
                     <span>{time}</span>
                   </button>
