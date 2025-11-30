@@ -46,7 +46,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       setLoading(true);
       try {
         // Calculate date range (today and next 6 days - 7 days total, excluding past dates)
-        const today = new Date();
+      const today = new Date();
         today.setHours(0, 0, 0, 0); // Reset to start of day for accurate comparison
         const endDate = new Date(today);
         endDate.setDate(today.getDate() + 6); // Next 6 days + today = 7 days
@@ -88,12 +88,12 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         console.log('📅 Booked slots by date:', bookedByDate);
         
         // Generate availability slots for next 7 days (starting from today, excluding past dates)
-        const slots = [];
-        for (let i = 0; i < 7; i++) {
-          const currentDate = new Date(today);
-          currentDate.setDate(today.getDate() + i);
-          const dateStr = currentDate.toISOString().split('T')[0];
-          
+      const slots = [];
+      for (let i = 0; i < 7; i++) {
+        const currentDate = new Date(today);
+        currentDate.setDate(today.getDate() + i);
+        const dateStr = currentDate.toISOString().split('T')[0];
+        
           // Skip if this date is in the past (shouldn't happen with our loop, but safety check)
           const dateObj = new Date(dateStr);
           dateObj.setHours(0, 0, 0, 0);
@@ -121,21 +121,21 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             
             return true;
           });
-          
-          slots.push({
-            date: dateStr,
-            dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
-            availableTimes,
-            bookedTimes,
-            isAvailable: availableTimes.length > 0
-          });
-        }
         
+        slots.push({
+          date: dateStr,
+          dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+          availableTimes,
+          bookedTimes,
+          isAvailable: availableTimes.length > 0
+        });
+      }
+      
         setAvailabilityData({
-          expertId,
+        expertId,
           workingHours: { start: '09:00', end: '21:00' },
           daysAvailable: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-          slots
+        slots
         });
       } catch (error) {
         console.error('Error fetching availability:', error);
@@ -381,49 +381,28 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                   return slotDateTime < today;
                 })();
                 
+                const isUnavailable = !isAvailable || isPastTime;
+                
                 return (
-                  <Button
+                  <button
                     key={time}
-                    variant={selectedTime === time ? "default" : "outline"}
-                    className={`flex items-center gap-2 relative transition-all duration-200 ${
-                      isBooked 
-                        ? 'cursor-not-allowed bg-red-50 border-red-300 text-red-600 hover:bg-red-50 hover:text-red-600 hover:border-red-300 opacity-75' 
-                        : isPastTime
-                        ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400'
-                        : isAvailable
-                        ? 'hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700'
-                        : 'opacity-60 cursor-not-allowed bg-gray-100 border-gray-200 text-gray-500'
-                    }`}
-                    onClick={() => isAvailable && !isPastTime && !isBooked && setSelectedTime(time)}
-                    disabled={isBooked || !isAvailable || isPastTime}
+                    className={`
+                      flex items-center gap-2 w-24 justify-center py-2 rounded-lg border transition-all duration-200
+                      ${isBooked ? "line-through opacity-40 cursor-not-allowed border-gray-300" : ""}
+                      ${isAvailable && !isBooked && !isPastTime ? "border-blue-500 text-blue-600 hover:bg-blue-50" : ""}
+                      ${isUnavailable && !isBooked ? "opacity-40 cursor-not-allowed border-gray-300" : ""}
+                      ${selectedTime === time && !isBooked && !isUnavailable ? "bg-blue-100 border-blue-600" : ""}
+                    `}
+                    disabled={isBooked || isUnavailable}
+                    onClick={() => {
+                      if (isAvailable && !isPastTime && !isBooked) {
+                        setSelectedTime(time);
+                      }
+                    }}
                   >
-                    <Clock className={`h-4 w-4 ${
-                      isBooked ? 'text-red-600' : isPastTime ? 'text-gray-400' : isAvailable ? 'text-blue-600' : 'text-gray-500'
-                    }`} />
-                    <span className={isBooked ? 'line-through decoration-2 decoration-red-500' : ''}>
-                      {time}
-                    </span>
-                    {isBooked && (
-                      <>
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-full h-0.5 bg-red-500 transform rotate-45 opacity-80"></div>
-                        </div>
-                        <Badge variant="destructive" className="absolute -top-1 -right-1 text-[10px] px-1 py-0 h-4">
-                          Booked
-                        </Badge>
-                      </>
-                    )}
-                    {isPastTime && !isBooked && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
-                      </div>
-                    )}
-                    {!isAvailable && !isBooked && !isPastTime && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
-                      </div>
-                    )}
-                  </Button>
+                    <Clock className="h-4 w-4" />
+                    <span>{time}</span>
+                  </button>
                 );
               })}
             </div>

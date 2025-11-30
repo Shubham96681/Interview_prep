@@ -57,3 +57,8 @@
     @apply bg-white text-foreground;
   }
 }
+
+/* Stronger cut line for booked slots */
+.line-through {
+  text-decoration: line-through 2px solid red !important;
+}
