@@ -48,6 +48,9 @@ const s3Service = require('./services/s3Service');
 // Import email service
 const emailService = require('./services/emailService');
 
+// Import reminder service
+const reminderService = require('./services/reminderService');
+
 // Import OTP service
 const otpService = require('./services/otpService');
 
@@ -3493,6 +3496,9 @@ process.on('unhandledRejection', (reason, promise) => {
 // Set server limits for high concurrency
 const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  
+  // Start reminder service for sending meeting reminders
+  reminderService.start();
   console.log(`📊 Database: ${process.env.DATABASE_URL?.includes('postgresql') ? 'PostgreSQL' : 'SQLite'} with Prisma`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`👥 Process ID: ${process.pid}`);
@@ -3598,6 +3604,14 @@ const gracefulShutdown = async (signal) => {
     console.log('✅ Database connections closed');
   } catch (error) {
     console.error('❌ Error closing database:', error);
+  }
+  
+  // Stop reminder service
+  try {
+    reminderService.stop();
+    console.log('✅ Reminder service stopped');
+  } catch (error) {
+    console.error('❌ Error stopping reminder service:', error);
   }
   
   // Stop realtime service

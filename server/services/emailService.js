@@ -455,6 +455,216 @@ class EmailService {
       throw error;
     }
   }
+
+  /**
+   * Send meeting reminder email to candidate (1 hour before)
+   */
+  async sendMeetingReminderEmailToCandidate(candidateEmail, candidateName, expertName, session) {
+    if (!this.transporter) {
+      throw new Error('Email service not initialized');
+    }
+    
+    try {
+      console.log(`📧 Preparing to send reminder email to candidate: ${candidateEmail}`);
+      const scheduledDate = new Date(session.scheduledDate);
+      const formattedDate = scheduledDate.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      const formattedTime = scheduledDate.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      const mailOptions = {
+        from: 'testshubham6287@gmail.com',
+        to: candidateEmail,
+        subject: `⏰ Reminder: Interview Session in 1 Hour - ${formattedDate}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .reminder-box { background: #fff3cd; border-left: 4px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 5px; }
+              .meeting-details { background: white; padding: 20px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #667eea; }
+              .detail-row { margin: 10px 0; }
+              .detail-label { font-weight: bold; color: #667eea; }
+              .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>⏰ Interview Session Reminder</h1>
+              </div>
+              <div class="content">
+                <div class="reminder-box">
+                  <h2 style="margin-top: 0; color: #f57c00;">Your interview session starts in 1 hour!</h2>
+                </div>
+                
+                <p>Hello ${candidateName},</p>
+                <p>This is a friendly reminder that your interview session is scheduled to begin in <strong>1 hour</strong>.</p>
+                
+                <div class="meeting-details">
+                  <h3>Meeting Details:</h3>
+                  <div class="detail-row">
+                    <span class="detail-label">Expert:</span> ${expertName}
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Date:</span> ${formattedDate}
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Time:</span> ${formattedTime}
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Duration:</span> ${session.duration} minutes
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Session Type:</span> ${session.sessionType || 'Technical Interview'}
+                  </div>
+                  ${session.title ? `<div class="detail-row"><span class="detail-label">Title:</span> ${session.title}</div>` : ''}
+                </div>
+                
+                <p><strong>Please prepare:</strong></p>
+                <ul>
+                  <li>✅ Test your microphone and camera</li>
+                  <li>✅ Ensure a stable internet connection</li>
+                  <li>✅ Have your materials ready</li>
+                  <li>✅ Join the meeting 5 minutes early</li>
+                </ul>
+                
+                <p>We look forward to your session!</p>
+                <p>Best regards,<br>Interview Prep Platform Team</p>
+              </div>
+              <div class="footer">
+                <p>This is an automated email. Please do not reply to this message.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Meeting reminder email sent to candidate:', info.messageId);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error('❌ Error sending meeting reminder email to candidate:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send meeting reminder email to expert (1 hour before)
+   */
+  async sendMeetingReminderEmailToExpert(expertEmail, expertName, candidateName, session) {
+    if (!this.transporter) {
+      throw new Error('Email service not initialized');
+    }
+    
+    try {
+      console.log(`📧 Preparing to send reminder email to expert: ${expertEmail}`);
+      const scheduledDate = new Date(session.scheduledDate);
+      const formattedDate = scheduledDate.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+      const formattedTime = scheduledDate.toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: true 
+      });
+
+      const mailOptions = {
+        from: 'testshubham6287@gmail.com',
+        to: expertEmail,
+        subject: `⏰ Reminder: Interview Session in 1 Hour - ${formattedDate}`,
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #ff9800 0%, #f57c00 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .reminder-box { background: #fff3cd; border-left: 4px solid #ff9800; padding: 20px; margin: 20px 0; border-radius: 5px; }
+              .meeting-details { background: white; padding: 20px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #667eea; }
+              .detail-row { margin: 10px 0; }
+              .detail-label { font-weight: bold; color: #667eea; }
+              .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>⏰ Interview Session Reminder</h1>
+              </div>
+              <div class="content">
+                <div class="reminder-box">
+                  <h2 style="margin-top: 0; color: #f57c00;">Your interview session starts in 1 hour!</h2>
+                </div>
+                
+                <p>Hello ${expertName},</p>
+                <p>This is a friendly reminder that you have an interview session scheduled to begin in <strong>1 hour</strong>.</p>
+                
+                <div class="meeting-details">
+                  <h3>Meeting Details:</h3>
+                  <div class="detail-row">
+                    <span class="detail-label">Candidate:</span> ${candidateName}
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Date:</span> ${formattedDate}
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Time:</span> ${formattedTime}
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Duration:</span> ${session.duration} minutes
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">Session Type:</span> ${session.sessionType || 'Technical Interview'}
+                  </div>
+                  ${session.title ? `<div class="detail-row"><span class="detail-label">Title:</span> ${session.title}</div>` : ''}
+                </div>
+                
+                <p><strong>Please prepare:</strong></p>
+                <ul>
+                  <li>✅ Review your interview questions and materials</li>
+                  <li>✅ Test your equipment (microphone, camera)</li>
+                  <li>✅ Ensure a stable internet connection</li>
+                  <li>✅ Be ready to join 5 minutes early</li>
+                </ul>
+                
+                <p>Thank you for your commitment to helping candidates succeed!</p>
+                <p>Best regards,<br>Interview Prep Platform Team</p>
+              </div>
+              <div class="footer">
+                <p>This is an automated email. Please do not reply to this message.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Meeting reminder email sent to expert:', info.messageId);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error('❌ Error sending meeting reminder email to expert:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new EmailService();
