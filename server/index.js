@@ -1315,7 +1315,7 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       endDate
     });
     
-    // Map test expert IDs
+    // Map test expert IDs and find actual expert ID
     let actualExpertId = expertId;
     if (expertId === 'expert-001') {
       const expert = await prisma.user.findUnique({
@@ -1323,7 +1323,30 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
         select: { id: true }
       });
       if (expert) actualExpertId = expert.id;
+    } else {
+      // Verify expert exists and get actual ID
+      const expert = await prisma.user.findFirst({
+        where: { 
+          OR: [
+            { id: expertId },
+            { email: expertId }
+          ],
+          userType: 'expert'
+        },
+        select: { id: true }
+      });
+      if (expert) {
+        actualExpertId = expert.id;
+      } else {
+        console.log('⚠️ Expert not found:', expertId);
+        return res.json({
+          success: true,
+          data: { bookedSlots: [] }
+        });
+      }
     }
+    
+    console.log('🔍 Using expert ID:', actualExpertId);
     
     // Build date range query using scheduledDate (Session model doesn't have separate date/time fields)
     const whereClause = {
@@ -1336,18 +1359,33 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     if (startDate || endDate) {
       whereClause.scheduledDate = {};
       if (startDate) {
-        // Start of the start date
-        const startDateTime = new Date(startDate);
-        startDateTime.setHours(0, 0, 0, 0);
-        whereClause.scheduledDate.gte = startDateTime;
+        // Start of the start date (handle timezone properly)
+        const startDateTime = new Date(startDate + 'T00:00:00');
+        // If date string doesn't include timezone, use local timezone
+        if (isNaN(startDateTime.getTime())) {
+          // Fallback: parse as local date
+          const [year, month, day] = startDate.split('-').map(Number);
+          const localStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+          whereClause.scheduledDate.gte = localStart;
+        } else {
+          whereClause.scheduledDate.gte = startDateTime;
+        }
       }
       if (endDate) {
         // End of the end date (23:59:59)
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        whereClause.scheduledDate.lte = endDateTime;
+        const endDateTime = new Date(endDate + 'T23:59:59');
+        if (isNaN(endDateTime.getTime())) {
+          // Fallback: parse as local date
+          const [year, month, day] = endDate.split('-').map(Number);
+          const localEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+          whereClause.scheduledDate.lte = localEnd;
+        } else {
+          whereClause.scheduledDate.lte = endDateTime;
+        }
       }
     }
+    
+    console.log('🔍 Query whereClause:', JSON.stringify(whereClause, null, 2));
     
     const sessions = await prisma.session.findMany({
       where: whereClause,
@@ -1355,12 +1393,47 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
         id: true,
         scheduledDate: true,
         duration: true,
-        status: true
+        status: true,
+        expertId: true
       },
       orderBy: {
         scheduledDate: 'asc'
       }
     });
+    
+    console.log('📊 Found sessions:', sessions.length);
+    
+    // If no sessions found with date range, try without date range to debug
+    if (sessions.length === 0 && (startDate || endDate)) {
+      console.log('⚠️ No sessions found with date range, trying without date filter...');
+      const allSessions = await prisma.session.findMany({
+        where: {
+          expertId: actualExpertId,
+          status: {
+            notIn: ['cancelled']
+          }
+        },
+        select: {
+          id: true,
+          scheduledDate: true,
+          duration: true,
+          status: true,
+          expertId: true
+        },
+        orderBy: {
+          scheduledDate: 'asc'
+        },
+        take: 50 // Limit to recent 50 sessions
+      });
+      console.log('📊 All sessions for expert (no date filter):', allSessions.length);
+      if (allSessions.length > 0) {
+        console.log('📋 Sample sessions:', allSessions.slice(0, 3).map(s => ({
+          id: s.id,
+          scheduledDate: s.scheduledDate,
+          status: s.status
+        })));
+      }
+    }
     
     // Format response with date and time extracted from scheduledDate
     // Use local time to match what the user selected (not UTC)
@@ -1394,6 +1467,13 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     
     console.log('✅ Booked slots fetched:', bookedSlots.length);
     console.log('📋 Booked slots details:', JSON.stringify(bookedSlots, null, 2));
+    console.log('📋 Raw sessions from DB:', sessions.map(s => ({
+      id: s.id,
+      scheduledDate: s.scheduledDate,
+      status: s.status,
+      expertId: s.expertId
+    })));
+    
     res.json({
       success: true,
       data: { bookedSlots }

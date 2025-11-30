@@ -48,10 +48,19 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         // Calculate date range (today and next 6 days - 7 days total, excluding past dates)
       const today = new Date();
         today.setHours(0, 0, 0, 0); // Reset to start of day for accurate comparison
+        
+        // Ensure we're using the correct year (handle any timezone issues)
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const startDateStr = `${year}-${month}-${day}`;
+        
         const endDate = new Date(today);
         endDate.setDate(today.getDate() + 6); // Next 6 days + today = 7 days
-        const startDateStr = today.toISOString().split('T')[0];
-        const endDateStr = endDate.toISOString().split('T')[0];
+        const endYear = endDate.getFullYear();
+        const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+        const endDay = String(endDate.getDate()).padStart(2, '0');
+        const endDateStr = `${endYear}-${endMonth}-${endDay}`;
         
         console.log('📅 Fetching booked slots from:', startDateStr, 'to', endDateStr);
         
@@ -534,6 +543,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                 })();
                 
                 const isUnavailable = !isAvailable || isPastTime;
+                const showDiagonalCut = isBooked || isUnavailable;
                 
                 return (
                   <button
@@ -552,10 +562,12 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                       }
                     }}
                   >
-                    {/* Diagonal cut line for booked slots */}
-                    {isBooked && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="w-full h-0.5 bg-red-500 transform rotate-45 opacity-80"></div>
+                    {/* Diagonal cut line for booked and unavailable slots */}
+                    {showDiagonalCut && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                        <div className={`w-full h-0.5 transform rotate-45 opacity-80 ${
+                          isBooked ? 'bg-red-500' : 'bg-gray-400'
+                        }`}></div>
                       </div>
                     )}
                     <Clock className="h-4 w-4" />
