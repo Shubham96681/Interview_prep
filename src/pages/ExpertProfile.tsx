@@ -373,6 +373,8 @@ export default function ExpertProfile() {
             description: conflictMessage,
             duration: 5000
           });
+          // Trigger availability refresh when conflict is detected
+          window.dispatchEvent(new CustomEvent('booking-error'));
         } else if (response.status === 403 || response.error === 'Expert not approved') {
           // Handle approval error
           const errorMessage = response.message || response.error || 'This expert profile is pending admin approval and cannot be booked yet.';

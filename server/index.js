@@ -1349,39 +1349,30 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     console.log('🔍 Using expert ID:', actualExpertId);
     
     // Build date range query using scheduledDate (Session model doesn't have separate date/time fields)
+    // Include all non-cancelled sessions, then filter by date range
     const whereClause = {
       expertId: actualExpertId,
       status: {
-        notIn: ['cancelled']
+        notIn: ['cancelled', 'completed'] // Exclude cancelled and completed sessions
       }
     };
     
+    // Always add date range filter if provided, but be more lenient
     if (startDate || endDate) {
       whereClause.scheduledDate = {};
       if (startDate) {
-        // Start of the start date (handle timezone properly)
-        const startDateTime = new Date(startDate + 'T00:00:00');
-        // If date string doesn't include timezone, use local timezone
-        if (isNaN(startDateTime.getTime())) {
-          // Fallback: parse as local date
-          const [year, month, day] = startDate.split('-').map(Number);
-          const localStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-          whereClause.scheduledDate.gte = localStart;
-        } else {
-          whereClause.scheduledDate.gte = startDateTime;
-        }
+        // Parse date string and create start of day in local timezone
+        const [year, month, day] = startDate.split('-').map(Number);
+        const localStart = new Date(year, month - 1, day, 0, 0, 0, 0);
+        whereClause.scheduledDate.gte = localStart;
+        console.log('📅 Start date filter:', { startDate, localStart });
       }
       if (endDate) {
-        // End of the end date (23:59:59)
-        const endDateTime = new Date(endDate + 'T23:59:59');
-        if (isNaN(endDateTime.getTime())) {
-          // Fallback: parse as local date
-          const [year, month, day] = endDate.split('-').map(Number);
-          const localEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
-          whereClause.scheduledDate.lte = localEnd;
-        } else {
-          whereClause.scheduledDate.lte = endDateTime;
-        }
+        // Parse date string and create end of day in local timezone
+        const [year, month, day] = endDate.split('-').map(Number);
+        const localEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
+        whereClause.scheduledDate.lte = localEnd;
+        console.log('📅 End date filter:', { endDate, localEnd });
       }
     }
     
@@ -1403,9 +1394,9 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
     
     console.log('📊 Found sessions:', sessions.length);
     
-    // If no sessions found with date range, try without date range to debug
-    if (sessions.length === 0 && (startDate || endDate)) {
-      console.log('⚠️ No sessions found with date range, trying without date filter...');
+    // Debug: If no sessions found with date range, check all sessions for this expert
+    if (sessions.length === 0) {
+      console.log('⚠️ No sessions found with date range, checking all sessions for expert...');
       const allSessions = await prisma.session.findMany({
         where: {
           expertId: actualExpertId,
@@ -1421,17 +1412,26 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
           expertId: true
         },
         orderBy: {
-          scheduledDate: 'asc'
+          scheduledDate: 'desc'
         },
-        take: 50 // Limit to recent 50 sessions
+        take: 20 // Limit to recent 20 sessions
       });
       console.log('📊 All sessions for expert (no date filter):', allSessions.length);
       if (allSessions.length > 0) {
-        console.log('📋 Sample sessions:', allSessions.slice(0, 3).map(s => ({
-          id: s.id,
-          scheduledDate: s.scheduledDate,
-          status: s.status
-        })));
+        console.log('📋 Recent sessions:', allSessions.map(s => {
+          const localDate = new Date(s.scheduledDate);
+          const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+          const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+          return {
+            id: s.id,
+            scheduledDate: s.scheduledDate,
+            extractedDate: dateStr,
+            extractedTime: timeStr,
+            status: s.status
+          };
+        }));
+      } else {
+        console.log('⚠️ No sessions found for expert at all. Expert ID:', actualExpertId);
       }
     }
     

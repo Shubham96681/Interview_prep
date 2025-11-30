@@ -201,6 +201,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     const handleAvailabilityUpdate = (data: any) => {
       console.log('📅 Availability update received from backend:', data);
       if (data.expertId === expertId) {
+        console.log('🔄 Refreshing availability due to real-time update');
         fetchAvailability();
       }
     };
@@ -208,6 +209,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     const handleSessionCreated = (session: any) => {
       console.log('📅 Session created, refreshing availability:', session);
       if (session.expertId === expertId || session.expert?.id === expertId) {
+        console.log('🔄 Refreshing availability due to session creation');
         fetchAvailability();
       }
     };
@@ -238,106 +240,252 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
   const handlePaymentSuccess = async (paymentData: any) => {
     console.log('Payment successful:', paymentData);
-    // Call the original booking function after successful payment
-    await onBookSession(selectedDate, selectedTime);
     setShowPaymentModal(false);
     
-    // Force immediate refresh of availability after booking
-    console.log('🔄 Refreshing availability after booking:', { selectedDate, selectedTime });
+    // Call the original booking function after successful payment
+    try {
+      await onBookSession(selectedDate, selectedTime);
+      
+      // Wait a moment for backend to process, then refresh
+      setTimeout(() => {
+        refreshAvailability();
+      }, 1500);
+    } catch (error: any) {
+      console.error('❌ Booking error:', error);
+      // Even if booking fails (e.g., conflict), refresh availability to show current state
+      setTimeout(() => {
+        refreshAvailability();
+      }, 1000);
+    }
+  };
+  
+  // Manual refresh function (exposed for external use)
+  const refreshAvailability = async () => {
+    console.log('🔄 Manual availability refresh triggered');
+    // Re-fetch availability
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    const startDateStr = `${year}-${month}-${day}`;
     
-    // Wait a moment for backend to process, then refresh
-    setTimeout(async () => {
-      try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const endDate = new Date(today);
-        endDate.setDate(today.getDate() + 6);
-        const startDateStr = today.toISOString().split('T')[0];
-        const endDateStr = endDate.toISOString().split('T')[0];
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 6);
+    const endYear = endDate.getFullYear();
+    const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+    const endDay = String(endDate.getDate()).padStart(2, '0');
+    const endDateStr = `${endYear}-${endMonth}-${endDay}`;
+    
+    try {
+      const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
+      const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
+        ? bookedResponse.data.bookedSlots 
+        : [];
+      
+      console.log('🔄 Refreshed booked slots:', bookedSlots);
+      
+      // Regenerate availability data (same logic as in useEffect)
+      const allTimes = [];
+      for (let hour = 9; hour <= 21; hour++) {
+        allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+      }
+      
+      const bookedByDate: Record<string, string[]> = {};
+      bookedSlots.forEach((slot: any) => {
+        if (slot.date && slot.time && slot.status !== 'cancelled') {
+          let normalizedDate = slot.date;
+          if (slot.scheduledDate) {
+            const dateFromScheduled = new Date(slot.scheduledDate);
+            const year = dateFromScheduled.getFullYear();
+            const month = String(dateFromScheduled.getMonth() + 1).padStart(2, '0');
+            const day = String(dateFromScheduled.getDate()).padStart(2, '0');
+            normalizedDate = `${year}-${month}-${day}`;
+          }
+          
+          let normalizedTime = slot.time.length === 5 ? slot.time : slot.time.substring(0, 5);
+          if (normalizedTime.includes(':')) {
+            const parts = normalizedTime.split(':');
+            normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+          }
+          
+          if (!bookedByDate[normalizedDate]) {
+            bookedByDate[normalizedDate] = [];
+          }
+          bookedByDate[normalizedDate].push(normalizedTime);
+        }
+      });
+      
+      const slots = [];
+      for (let i = 0; i < 7; i++) {
+        const currentDate = new Date(today);
+        currentDate.setDate(today.getDate() + i);
+        const dateStr = currentDate.toISOString().split('T')[0];
         
-        const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
-        const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
-          ? bookedResponse.data.bookedSlots 
-          : [];
-        
-        console.log('🔄 Refreshed booked slots after booking:', bookedSlots);
-        
-        // Regenerate availability data
-        const allTimes = [];
-        for (let hour = 9; hour <= 21; hour++) {
-          allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+        const dateObj = new Date(dateStr);
+        dateObj.setHours(0, 0, 0, 0);
+        if (dateObj < today) {
+          continue;
         }
         
-        const bookedByDate: Record<string, string[]> = {};
-        bookedSlots.forEach((slot: any) => {
-          if (slot.date && slot.time && slot.status !== 'cancelled') {
-            let normalizedTime = slot.time.length === 5 ? slot.time : slot.time.substring(0, 5);
-            if (normalizedTime.includes(':')) {
-              const parts = normalizedTime.split(':');
-              normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-            }
-            
-            if (!bookedByDate[slot.date]) {
-              bookedByDate[slot.date] = [];
-            }
-            bookedByDate[slot.date].push(normalizedTime);
-          }
-        });
-        
-        const slots = [];
-        for (let i = 0; i < 7; i++) {
-          const currentDate = new Date(today);
-          currentDate.setDate(today.getDate() + i);
-          const dateStr = currentDate.toISOString().split('T')[0];
-          
-          const dateObj = new Date(dateStr);
-          dateObj.setHours(0, 0, 0, 0);
-          if (dateObj < today) {
-            continue;
+        const bookedTimes = bookedByDate[dateStr] || [];
+        const availableTimes = allTimes.filter(time => {
+          if (bookedTimes.includes(time)) {
+            return false;
           }
           
-          const bookedTimes = bookedByDate[dateStr] || [];
-          const availableTimes = allTimes.filter(time => {
-            if (bookedTimes.includes(time)) {
+          if (i === 0) {
+            const [hours, minutes] = time.split(':').map(Number);
+            const slotDateTime = new Date(today);
+            slotDateTime.setHours(hours, minutes, 0, 0);
+            const now = new Date();
+            if (slotDateTime < now) {
               return false;
             }
-            
-            if (i === 0) {
-              const [hours, minutes] = time.split(':').map(Number);
-              const slotDateTime = new Date(today);
-              slotDateTime.setHours(hours, minutes, 0, 0);
-              const now = new Date();
-              if (slotDateTime < now) {
-                return false;
+          }
+          
+          return true;
+        });
+        
+        slots.push({
+          date: dateStr,
+          dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+          availableTimes,
+          bookedTimes,
+          isAvailable: availableTimes.length > 0
+        });
+      }
+      
+      setAvailabilityData({
+        expertId,
+        workingHours: { start: '09:00', end: '21:00' },
+        daysAvailable: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+        slots
+      });
+    } catch (error) {
+      console.error('Error refreshing availability:', error);
+    }
+  };
+  
+  // Refresh availability when booking fails (conflict detected)
+  useEffect(() => {
+    const handleBookingError = () => {
+      console.log('🔄 Booking error detected, refreshing availability...');
+      // Re-trigger the main fetchAvailability from useEffect
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const year = today.getFullYear();
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const day = String(today.getDate()).padStart(2, '0');
+      const startDateStr = `${year}-${month}-${day}`;
+      
+      const endDate = new Date(today);
+      endDate.setDate(today.getDate() + 6);
+      const endYear = endDate.getFullYear();
+      const endMonth = String(endDate.getMonth() + 1).padStart(2, '0');
+      const endDay = String(endDate.getDate()).padStart(2, '0');
+      const endDateStr = `${endYear}-${endMonth}-${endDay}`;
+      
+      setTimeout(async () => {
+        try {
+          const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
+          const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
+            ? bookedResponse.data.bookedSlots 
+            : [];
+          
+          console.log('🔄 Refreshed booked slots after error:', bookedSlots);
+          
+          // Regenerate availability (same logic as in main useEffect)
+          const allTimes = [];
+          for (let hour = 9; hour <= 21; hour++) {
+            allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
+          }
+          
+          const bookedByDate: Record<string, string[]> = {};
+          bookedSlots.forEach((slot: any) => {
+            if (slot.date && slot.time && slot.status !== 'cancelled') {
+              let normalizedDate = slot.date;
+              if (slot.scheduledDate) {
+                const dateFromScheduled = new Date(slot.scheduledDate);
+                const year = dateFromScheduled.getFullYear();
+                const month = String(dateFromScheduled.getMonth() + 1).padStart(2, '0');
+                const day = String(dateFromScheduled.getDate()).padStart(2, '0');
+                normalizedDate = `${year}-${month}-${day}`;
               }
+              
+              let normalizedTime = slot.time.length === 5 ? slot.time : slot.time.substring(0, 5);
+              if (normalizedTime.includes(':')) {
+                const parts = normalizedTime.split(':');
+                normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+              }
+              
+              if (!bookedByDate[normalizedDate]) {
+                bookedByDate[normalizedDate] = [];
+              }
+              bookedByDate[normalizedDate].push(normalizedTime);
             }
-            
-            return true;
           });
           
-          slots.push({
-            date: dateStr,
-            dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
-            availableTimes,
-            bookedTimes,
-            isAvailable: availableTimes.length > 0
+          const slots = [];
+          for (let i = 0; i < 7; i++) {
+            const currentDate = new Date(today);
+            currentDate.setDate(today.getDate() + i);
+            const dateStr = currentDate.toISOString().split('T')[0];
+            
+            const dateObj = new Date(dateStr);
+            dateObj.setHours(0, 0, 0, 0);
+            if (dateObj < today) {
+              continue;
+            }
+            
+            const bookedTimes = bookedByDate[dateStr] || [];
+            const availableTimes = allTimes.filter(time => {
+              if (bookedTimes.includes(time)) {
+                return false;
+              }
+              
+              if (i === 0) {
+                const [hours, minutes] = time.split(':').map(Number);
+                const slotDateTime = new Date(today);
+                slotDateTime.setHours(hours, minutes, 0, 0);
+                const now = new Date();
+                if (slotDateTime < now) {
+                  return false;
+                }
+              }
+              
+              return true;
+            });
+            
+            slots.push({
+              date: dateStr,
+              dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
+              availableTimes,
+              bookedTimes,
+              isAvailable: availableTimes.length > 0
+            });
+          }
+          
+          setAvailabilityData({
+            expertId,
+            workingHours: { start: '09:00', end: '21:00' },
+            daysAvailable: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+            slots
           });
+        } catch (error) {
+          console.error('Error refreshing availability after booking error:', error);
         }
-        
-        setAvailabilityData({
-          expertId,
-          workingHours: { start: '09:00', end: '21:00' },
-          daysAvailable: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-          slots
-        });
-      } catch (error) {
-        console.error('Error refreshing availability:', error);
-      }
-    }, 1000); // Wait 1 second for backend to process
+      }, 1000);
+    };
     
-    // Backend will also broadcast availability update via real-time service
-    // The useEffect listener will automatically refresh availability
-  };
+    // Listen for booking errors via custom event
+    window.addEventListener('booking-error', handleBookingError);
+    return () => {
+      window.removeEventListener('booking-error', handleBookingError);
+    };
+  }, [expertId]);
+  
+  
 
   const isSlotAvailable = (date: string, time: string) => {
     if (!availabilityData) return false;
