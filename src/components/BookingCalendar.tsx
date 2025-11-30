@@ -207,6 +207,24 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
               
               // Compare with current time (also in local time) - use <= to exclude current hour
               const isPast = slotDateTime.getTime() <= currentTime.getTime();
+              
+              // Debug log for ALL times on today to see what's happening
+              if (normalizedTime === '09:00' || normalizedTime === '11:00' || normalizedTime === '12:00' || normalizedTime === '15:00') {
+                console.log(`🔍 Checking time slot: ${normalizedTime}`, {
+                  slotDateTime: slotDateTime.toLocaleString(),
+                  currentTime: currentTime.toLocaleString(),
+                  slotTime: slotDateTime.getTime(),
+                  nowTime: currentTime.getTime(),
+                  isPast: isPast,
+                  hours: hours,
+                  minutes: minutes,
+                  currentHours: currentTime.getHours(),
+                  currentMinutes: currentTime.getMinutes(),
+                  i: i,
+                  dateStr: dateStr
+                });
+              }
+              
               if (isPast) {
                 console.log(`⏰ Excluding past time slot: ${normalizedTime}`, {
                   slotDateTime: slotDateTime.toLocaleString(),
