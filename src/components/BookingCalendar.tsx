@@ -178,11 +178,12 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             return normalized;
           });
           
-          // Log if this is today for debugging
+          // Determine if this is today's date
           const isTodayDate = i === 0;
-          if (isTodayDate) {
-            console.log(`📅 Processing TODAY (i=${i}): dateStr=${dateStr}, currentTime=${currentTime.toLocaleString()}, currentHours=${currentTime.getHours()}, currentMinutes=${currentTime.getMinutes()}, allTimes count=${allTimes.length}`);
-          }
+          
+          // Get current time components for comparison (only for today)
+          const currentHour = currentTime.getHours();
+          const currentMinute = currentTime.getMinutes();
           
           const availableTimes = allTimes.filter(time => {
             // Normalize time for comparison
@@ -197,52 +198,13 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
               return false;
             }
             
-            // For today's date, also check if the time slot is in the past
-            if (isTodayDate) { // Today
-              console.log(`🔍 Filtering today's slot: ${normalizedTime}, i=${i}`);
+            // For today's date, exclude past time slots
+            if (isTodayDate) {
               const [hours, minutes] = normalizedTime.split(':').map(Number);
-              // Create slot datetime using the current date (today) - use local time
-              const slotDateTime = new Date(
-                currentTime.getFullYear(),
-                currentTime.getMonth(),
-                currentTime.getDate(),
-                hours,
-                minutes,
-                0,
-                0
-              );
               
-              // Compare with current time (also in local time) - use <= to exclude current hour
-              const isPast = slotDateTime.getTime() <= currentTime.getTime();
-              
-              // Debug log for ALL times on today to see what's happening
-              if (normalizedTime === '09:00' || normalizedTime === '11:00' || normalizedTime === '12:00' || normalizedTime === '15:00') {
-                console.log(`🔍 Checking time slot: ${normalizedTime}`, {
-                  slotDateTime: slotDateTime.toLocaleString(),
-                  currentTime: currentTime.toLocaleString(),
-                  slotTime: slotDateTime.getTime(),
-                  nowTime: currentTime.getTime(),
-                  isPast: isPast,
-                  hours: hours,
-                  minutes: minutes,
-                  currentHours: currentTime.getHours(),
-                  currentMinutes: currentTime.getMinutes(),
-                  i: i,
-                  dateStr: dateStr
-                });
-              }
-              
-              if (isPast) {
-                console.log(`⏰ Excluding past time slot: ${normalizedTime}`, {
-                  slotDateTime: slotDateTime.toLocaleString(),
-                  currentTime: currentTime.toLocaleString(),
-                  slotTime: slotDateTime.getTime(),
-                  nowTime: currentTime.getTime(),
-                  hours: hours,
-                  minutes: minutes,
-                  currentHours: currentTime.getHours(),
-                  currentMinutes: currentTime.getMinutes()
-                });
+              // Simple comparison: if slot hour is less than current hour, it's past
+              // If same hour, check minutes
+              if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
                 return false; // Past time slot
               }
             }
@@ -250,29 +212,21 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             return true;
           });
           
-          // Count past times for today (for debugging)
+          // Count past times for today (for debugging/logging)
           let pastTimesCount = 0;
-          if (i === 0) { // Today
+          if (isTodayDate) {
             allTimes.forEach(time => {
               const [hours, minutes] = time.split(':').map(Number);
-              const slotDateTime = new Date(
-                currentTime.getFullYear(),
-                currentTime.getMonth(),
-                currentTime.getDate(),
-                hours,
-                minutes,
-                0,
-                0
-              );
-              if (slotDateTime <= currentTime) {
+              if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
                 pastTimesCount++;
               }
             });
           }
           
-          console.log(`📊 Date ${dateStr}: ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${pastTimesCount} past, ${allTimes.length} total)`);
-          console.log(`📊 Available times for ${dateStr}:`, availableTimes);
-          console.log(`📊 Booked times for ${dateStr}:`, normalizedBookedTimes);
+          // Production logging (can be removed or made conditional in production)
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`📊 Date ${dateStr}: ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${pastTimesCount} past, ${allTimes.length} total)`);
+          }
         
         slots.push({
           date: dateStr,
