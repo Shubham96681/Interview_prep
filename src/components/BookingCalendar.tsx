@@ -124,15 +124,10 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
               }
             }
             
-            // Normalize time format to HH:MM (ensure it matches our format)
-            let normalizedTime = slot.time.length === 5 ? slot.time : 
-              slot.time.substring(0, 5); // Take first 5 chars (HH:MM)
-            
-            // If time is in format like "13:00:00", extract just "13:00"
-            if (normalizedTime.includes(':')) {
-              const parts = normalizedTime.split(':');
-              normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-            }
+            // ALWAYS convert booked time to HH:MM format (handle "09:00:00" -> "09:00")
+            // Split by ':' and take first two parts (hours and minutes)
+            const timeParts = slot.time.split(':');
+            const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
             
             if (!bookedByDate[normalizedDate]) {
               bookedByDate[normalizedDate] = [];
@@ -171,13 +166,10 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           const bookedTimes = bookedByDate[dateStr] || [];
           
           // Normalize booked times for comparison (ensure HH:MM format)
+          // ALWAYS convert to HH:MM format (handle "09:00:00" -> "09:00")
           const normalizedBookedTimes = bookedTimes.map(bt => {
-            let normalized = bt.length === 5 ? bt : bt.substring(0, 5);
-            if (normalized.includes(':')) {
-              const parts = normalized.split(':');
-              normalized = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-            }
-            return normalized;
+            const timeParts = bt.split(':');
+            return timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
           });
           
           // Determine if this is today's date
@@ -193,12 +185,9 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             allTimes.forEach(time => {
               const [hours, minutes] = time.split(':').map(Number);
               if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
-                // Normalize time format
-                let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
-                if (normalizedTime.includes(':')) {
-                  const parts = normalizedTime.split(':');
-                  normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-                }
+                // Normalize time format (allTimes are already HH:MM, but ensure consistency)
+                const timeParts = time.split(':');
+                const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
                 notAvailableTimes.push(normalizedTime);
               }
             });
@@ -210,14 +199,11 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           const notAvailableSet = new Set(notAvailableTimes);
           
           const availableTimes = allTimes.filter(time => {
-            // Normalize time for comparison
-            let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
-            if (normalizedTime.includes(':')) {
-              const parts = normalizedTime.split(':');
-              normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-            }
+            // Normalize time for comparison (allTimes are already in HH:MM format, but ensure consistency)
+            const timeParts = time.split(':');
+            const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
             
-            // Exclude if booked or not available
+            // Exclude if booked or not available (use Set for reliable comparison)
             return !bookedSet.has(normalizedTime) && !notAvailableSet.has(normalizedTime);
           });
           
@@ -388,11 +374,9 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             normalizedDate = `${year}-${month}-${day}`;
           }
           
-          let normalizedTime = slot.time.length === 5 ? slot.time : slot.time.substring(0, 5);
-          if (normalizedTime.includes(':')) {
-            const parts = normalizedTime.split(':');
-            normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-          }
+          // ALWAYS convert booked time to HH:MM format (handle "09:00:00" -> "09:00")
+          const timeParts = slot.time.split(':');
+          const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
           
           if (!bookedByDate[normalizedDate]) {
             bookedByDate[normalizedDate] = [];
@@ -414,8 +398,20 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         }
         
         const bookedTimes = bookedByDate[dateStr] || [];
+        // Normalize booked times and create Set for reliable comparison
+        const normalizedBookedTimes = bookedTimes.map(bt => {
+          const timeParts = bt.split(':');
+          return timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+        });
+        const bookedSet = new Set(normalizedBookedTimes);
+        
         const availableTimes = allTimes.filter(time => {
-          if (bookedTimes.includes(time)) {
+          // Normalize time for comparison
+          const timeParts = time.split(':');
+          const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+          
+          // Use Set for reliable comparison (NOT array.includes)
+          if (bookedSet.has(normalizedTime)) {
             return false;
           }
           
@@ -507,11 +503,9 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                 normalizedDate = `${year}-${month}-${day}`;
               }
               
-              let normalizedTime = slot.time.length === 5 ? slot.time : slot.time.substring(0, 5);
-              if (normalizedTime.includes(':')) {
-                const parts = normalizedTime.split(':');
-                normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
-              }
+              // ALWAYS convert booked time to HH:MM format (handle "09:00:00" -> "09:00")
+              const timeParts = slot.time.split(':');
+              const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
               
               if (!bookedByDate[normalizedDate]) {
                 bookedByDate[normalizedDate] = [];
@@ -533,8 +527,20 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             }
             
             const bookedTimes = bookedByDate[dateStr] || [];
+            // Normalize booked times and create Set for reliable comparison
+            const normalizedBookedTimes = bookedTimes.map(bt => {
+              const timeParts = bt.split(':');
+              return timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+            });
+            const bookedSet = new Set(normalizedBookedTimes);
+            
             const availableTimes = allTimes.filter(time => {
-              if (bookedTimes.includes(time)) {
+              // Normalize time for comparison
+              const timeParts = time.split(':');
+              const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+              
+              // Use Set for reliable comparison (NOT array.includes)
+              if (bookedSet.has(normalizedTime)) {
                 return false;
               }
               
