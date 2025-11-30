@@ -212,7 +212,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             return true;
           });
           
-          // Count past times for today (for debugging/logging)
+          // Count past times for today (for verification)
           let pastTimesCount = 0;
           if (isTodayDate) {
             allTimes.forEach(time => {
@@ -221,11 +221,12 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                 pastTimesCount++;
               }
             });
-          }
-          
-          // Production logging (can be removed or made conditional in production)
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`📊 Date ${dateStr}: ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${pastTimesCount} past, ${allTimes.length} total)`);
+            // Log for verification (always log for today to verify fix)
+            console.log(`📊 Date ${dateStr} (TODAY): ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${pastTimesCount} past, ${allTimes.length} total)`, {
+              currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
+              availableTimes: availableTimes,
+              bookedTimes: normalizedBookedTimes
+            });
           }
         
         slots.push({
