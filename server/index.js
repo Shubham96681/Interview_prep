@@ -1357,29 +1357,15 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       }
     };
     
-    // Always add date range filter if provided, but be more lenient
-    if (startDate || endDate) {
-      whereClause.scheduledDate = {};
-      if (startDate) {
-        // Parse date string and create start of day in local timezone
-        const [year, month, day] = startDate.split('-').map(Number);
-        const localStart = new Date(year, month - 1, day, 0, 0, 0, 0);
-        whereClause.scheduledDate.gte = localStart;
-        console.log('📅 Start date filter:', { startDate, localStart });
-      }
-      if (endDate) {
-        // Parse date string and create end of day in local timezone
-        const [year, month, day] = endDate.split('-').map(Number);
-        const localEnd = new Date(year, month - 1, day, 23, 59, 59, 999);
-        whereClause.scheduledDate.lte = localEnd;
-        console.log('📅 End date filter:', { endDate, localEnd });
-      }
-    }
-    
-    console.log('🔍 Query whereClause:', JSON.stringify(whereClause, null, 2));
-    
-    const sessions = await prisma.session.findMany({
-      where: whereClause,
+    // First, try to get ALL scheduled sessions for this expert (without date filter)
+    // This ensures we don't miss any sessions due to date format issues
+    let sessions = await prisma.session.findMany({
+      where: {
+        expertId: actualExpertId,
+        status: {
+          notIn: ['cancelled', 'completed']
+        }
+      },
       select: {
         id: true,
         scheduledDate: true,
@@ -1392,11 +1378,42 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       }
     });
     
-    console.log('📊 Found sessions:', sessions.length);
+    console.log('📊 Found all scheduled sessions for expert:', sessions.length);
     
-    // Debug: If no sessions found with date range, check all sessions for this expert
-    if (sessions.length === 0) {
-      console.log('⚠️ No sessions found with date range, checking all sessions for expert...');
+    // If date range is provided, filter the results in JavaScript (more reliable than DB query)
+    if (startDate || endDate) {
+      const filteredSessions = sessions.filter(session => {
+        if (!session.scheduledDate) return false;
+        
+        const localDate = new Date(session.scheduledDate);
+        const sessionYear = localDate.getFullYear();
+        const sessionMonth = localDate.getMonth() + 1;
+        const sessionDay = localDate.getDate();
+        
+        if (startDate) {
+          const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+          const sessionDate = new Date(sessionYear, sessionMonth - 1, sessionDay);
+          const startDateObj = new Date(startYear, startMonth - 1, startDay);
+          if (sessionDate < startDateObj) return false;
+        }
+        
+        if (endDate) {
+          const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+          const sessionDate = new Date(sessionYear, sessionMonth - 1, sessionDay);
+          const endDateObj = new Date(endYear, endMonth - 1, endDay);
+          if (sessionDate > endDateObj) return false;
+        }
+        
+        return true;
+      });
+      
+      console.log(`📊 Filtered to ${filteredSessions.length} sessions within date range (${startDate} to ${endDate})`);
+      sessions = filteredSessions;
+    }
+    
+    // Debug: Log all sessions if none found in date range
+    if (sessions.length === 0 && (startDate || endDate)) {
+      console.log('⚠️ No sessions found in date range, showing all sessions for debugging:');
       const allSessions = await prisma.session.findMany({
         where: {
           expertId: actualExpertId,
@@ -1414,25 +1431,20 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
         orderBy: {
           scheduledDate: 'desc'
         },
-        take: 20 // Limit to recent 20 sessions
+        take: 10
       });
-      console.log('📊 All sessions for expert (no date filter):', allSessions.length);
-      if (allSessions.length > 0) {
-        console.log('📋 Recent sessions:', allSessions.map(s => {
-          const localDate = new Date(s.scheduledDate);
-          const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
-          const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
-          return {
-            id: s.id,
-            scheduledDate: s.scheduledDate,
-            extractedDate: dateStr,
-            extractedTime: timeStr,
-            status: s.status
-          };
-        }));
-      } else {
-        console.log('⚠️ No sessions found for expert at all. Expert ID:', actualExpertId);
-      }
+      console.log('📋 All recent sessions:', allSessions.map(s => {
+        const localDate = new Date(s.scheduledDate);
+        const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+        const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+        return {
+          id: s.id,
+          scheduledDate: s.scheduledDate,
+          extractedDate: dateStr,
+          extractedTime: timeStr,
+          status: s.status
+        };
+      }));
     }
     
     // Format response with date and time extracted from scheduledDate
