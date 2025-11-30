@@ -166,15 +166,33 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           }
           
           const bookedTimes = bookedByDate[dateStr] || [];
+          
+          // Normalize booked times for comparison (ensure HH:MM format)
+          const normalizedBookedTimes = bookedTimes.map(bt => {
+            let normalized = bt.length === 5 ? bt : bt.substring(0, 5);
+            if (normalized.includes(':')) {
+              const parts = normalized.split(':');
+              normalized = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+            }
+            return normalized;
+          });
+          
           const availableTimes = allTimes.filter(time => {
-            // Check if time is booked
-            if (bookedTimes.includes(time)) {
+            // Normalize time for comparison
+            let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
+            if (normalizedTime.includes(':')) {
+              const parts = normalizedTime.split(':');
+              normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+            }
+            
+            // Check if time is booked (using normalized comparison)
+            if (normalizedBookedTimes.includes(normalizedTime)) {
               return false;
             }
             
             // For today's date, also check if the time slot is in the past
             if (i === 0) { // Today
-              const [hours, minutes] = time.split(':').map(Number);
+              const [hours, minutes] = normalizedTime.split(':').map(Number);
               const slotDateTime = new Date(today);
               slotDateTime.setHours(hours, minutes, 0, 0);
               const now = new Date();
@@ -185,6 +203,8 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             
             return true;
           });
+          
+          console.log(`📊 Date ${dateStr}: ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${allTimes.length} total)`);
         
         slots.push({
           date: dateStr,
