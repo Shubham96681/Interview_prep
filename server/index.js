@@ -1303,6 +1303,132 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
   }
 });
 
+// Get expert availability with status for each time slot
+app.get('/api/experts/:expertId/availability', async (req, res) => {
+  try {
+    const { expertId } = req.params;
+    const { date } = req.query; // Single date: YYYY-MM-DD
+    
+    console.log('📅 GET /api/experts/:expertId/availability - Request received:', {
+      expertId,
+      date
+    });
+    
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: 'Date parameter is required (format: YYYY-MM-DD)'
+      });
+    }
+    
+    // Map test expert IDs and find actual expert ID
+    let actualExpertId = expertId;
+    if (expertId === 'expert-001') {
+      const expert = await prisma.user.findUnique({
+        where: { email: 'jane@example.com' },
+        select: { id: true }
+      });
+      if (expert) actualExpertId = expert.id;
+    } else {
+      const expert = await prisma.user.findFirst({
+        where: { 
+          OR: [
+            { id: expertId },
+            { email: expertId }
+          ],
+          userType: 'expert'
+        },
+        select: { id: true }
+      });
+      if (expert) {
+        actualExpertId = expert.id;
+      } else {
+        console.log('⚠️ Expert not found:', expertId);
+        // Return all slots as available if expert not found
+        const allSlots = [];
+        for (let hour = 9; hour <= 21; hour++) {
+          allSlots.push({
+            time: `${String(hour).padStart(2, '0')}:00`,
+            status: 'available'
+          });
+        }
+        return res.json({
+          success: true,
+          data: { slots: allSlots }
+        });
+      }
+    }
+    
+    console.log('🔍 Using expert ID:', actualExpertId);
+    
+    // Get all scheduled sessions for this expert
+    const sessions = await prisma.session.findMany({
+      where: {
+        expertId: actualExpertId,
+        status: {
+          notIn: ['cancelled', 'completed']
+        }
+      },
+      select: {
+        scheduledDate: true
+      }
+    });
+    
+    console.log('📊 Found all scheduled sessions for expert:', sessions.length);
+    
+    // Extract booked times for the requested date
+    const [requestYear, requestMonth, requestDay] = date.split('-').map(Number);
+    const bookedTimes = new Set();
+    
+    sessions.forEach(session => {
+      if (!session.scheduledDate) return;
+      
+      const localDate = new Date(session.scheduledDate);
+      const sessionYear = localDate.getFullYear();
+      const sessionMonth = localDate.getMonth() + 1;
+      const sessionDay = localDate.getDate();
+      
+      // Check if this session is on the requested date
+      if (sessionYear === requestYear && 
+          sessionMonth === requestMonth && 
+          sessionDay === requestDay) {
+        // Extract time in HH:MM format
+        const hours = String(localDate.getHours()).padStart(2, '0');
+        const minutes = String(localDate.getMinutes()).padStart(2, '0');
+        const timeStr = `${hours}:${minutes}`;
+        bookedTimes.add(timeStr);
+      }
+    });
+    
+    console.log('📋 Booked times for', date, ':', Array.from(bookedTimes));
+    
+    // Generate all time slots (9 AM to 9 PM)
+    const allSlots = [];
+    for (let hour = 9; hour <= 21; hour++) {
+      const time = `${String(hour).padStart(2, '0')}:00`;
+      allSlots.push({
+        time,
+        status: bookedTimes.has(time) ? 'booked' : 'available'
+      });
+    }
+    
+    console.log('✅ Returning availability:', allSlots.filter(s => s.status === 'booked').length, 'booked slots');
+    
+    res.json({
+      success: true,
+      data: { slots: allSlots }
+    });
+  } catch (error) {
+    console.error('❌ Get availability error:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Get expert booked sessions for availability checking
 app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
   try {
