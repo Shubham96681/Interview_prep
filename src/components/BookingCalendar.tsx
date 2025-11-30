@@ -19,6 +19,8 @@ interface AvailabilitySlot {
   dayName: string;
   availableTimes: string[];
   bookedTimes: string[];
+  notAvailableTimes?: string[];
+  availableCount?: number; // Calculated count using formula: Total - (Booked + NotAvailable)
   isAvailable: boolean;
 }
 
@@ -185,6 +187,28 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           const currentHour = currentTime.getHours();
           const currentMinute = currentTime.getMinutes();
           
+          // Calculate not available slots (past times for today)
+          const notAvailableTimes: string[] = [];
+          if (isTodayDate) {
+            allTimes.forEach(time => {
+              const [hours, minutes] = time.split(':').map(Number);
+              if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
+                // Normalize time format
+                let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
+                if (normalizedTime.includes(':')) {
+                  const parts = normalizedTime.split(':');
+                  normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
+                }
+                notAvailableTimes.push(normalizedTime);
+              }
+            });
+          }
+          
+          // Calculate available slots using the formula:
+          // AvailableSlots = TotalSlots - (BookedSlots + NotAvailableSlots)
+          const bookedSet = new Set(normalizedBookedTimes);
+          const notAvailableSet = new Set(notAvailableTimes);
+          
           const availableTimes = allTimes.filter(time => {
             // Normalize time for comparison
             let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
@@ -193,39 +217,24 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
               normalizedTime = `${parts[0].padStart(2, '0')}:${parts[1]?.padStart(2, '0') || '00'}`;
             }
             
-            // Check if time is booked (using normalized comparison)
-            if (normalizedBookedTimes.includes(normalizedTime)) {
-              return false;
-            }
-            
-            // For today's date, exclude past time slots
-            if (isTodayDate) {
-              const [hours, minutes] = normalizedTime.split(':').map(Number);
-              
-              // Simple comparison: if slot hour is less than current hour, it's past
-              // If same hour, check minutes
-              if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
-                return false; // Past time slot
-              }
-            }
-            
-            return true;
+            // Exclude if booked or not available
+            return !bookedSet.has(normalizedTime) && !notAvailableSet.has(normalizedTime);
           });
           
-          // Count past times for today (for verification)
-          let pastTimesCount = 0;
+          // Calculate final count using the formula
+          const totalSlots = allTimes.length;
+          const bookedCount = normalizedBookedTimes.length;
+          const notAvailableCount = notAvailableTimes.length;
+          const availableCount = totalSlots - bookedCount - notAvailableCount;
+          
+          // Verification: availableCount should match availableTimes.length
           if (isTodayDate) {
-            allTimes.forEach(time => {
-              const [hours, minutes] = time.split(':').map(Number);
-              if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
-                pastTimesCount++;
-              }
-            });
-            // Log for verification (always log for today to verify fix)
-            console.log(`📊 Date ${dateStr} (TODAY): ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${pastTimesCount} past, ${allTimes.length} total)`, {
+            console.log(`📊 Date ${dateStr} (TODAY): ${availableCount} available slots`, {
+              formula: `${totalSlots} - (${bookedCount} booked + ${notAvailableCount} not available) = ${availableCount}`,
               currentTime: `${currentHour}:${String(currentMinute).padStart(2, '0')}`,
               availableTimes: availableTimes,
-              bookedTimes: normalizedBookedTimes
+              bookedTimes: normalizedBookedTimes,
+              notAvailableTimes: notAvailableTimes
             });
           }
         
@@ -233,8 +242,10 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           date: dateStr,
           dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
           availableTimes,
-          bookedTimes,
-          isAvailable: availableTimes.length > 0
+          bookedTimes: normalizedBookedTimes,
+          notAvailableTimes: notAvailableTimes,
+          availableCount: availableCount, // Calculated using formula: Total - (Booked + NotAvailable)
+          isAvailable: availableCount > 0
         });
       }
       
@@ -706,7 +717,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                     {slot.isAvailable ? (
                       <>
                         <CheckCircle className="h-3 w-3 text-green-600" />
-                        <span className="font-medium">{slot.availableTimes.length} slots</span>
+                        <span className="font-medium">{slot.availableCount ?? slot.availableTimes.length} slots</span>
                       </>
                     ) : (
                       <>
