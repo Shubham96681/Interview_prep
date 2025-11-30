@@ -178,6 +178,11 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             return normalized;
           });
           
+          // Log if this is today for debugging
+          if (i === 0) {
+            console.log(`📅 Processing TODAY (i=${i}): dateStr=${dateStr}, currentTime=${currentTime.toLocaleString()}, allTimes count=${allTimes.length}`);
+          }
+          
           const availableTimes = allTimes.filter(time => {
             // Normalize time for comparison
             let normalizedTime = time.length === 5 ? time : time.substring(0, 5);
@@ -192,7 +197,8 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             }
             
             // For today's date, also check if the time slot is in the past
-            if (i === 0) { // Today
+            const isToday = i === 0;
+            if (isToday) { // Today
               const [hours, minutes] = normalizedTime.split(':').map(Number);
               // Create slot datetime using the current date (today) - use local time
               const slotDateTime = new Date(
