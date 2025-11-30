@@ -24,6 +24,65 @@ interface AvailabilitySlot {
   isAvailable: boolean;
 }
 
+// Production-level slot utilities
+const SLOT_DURATION_MIN = 60; // 1-hour slot
+const START_TIME = "09:00";
+const END_TIME = "21:00"; // 9 PM (21:00)
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function toTimeString(mins: number): string {
+  return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+}
+
+function generateDailySlots(): string[] {
+  const slots: string[] = [];
+  let current = toMinutes(START_TIME);
+  const end = toMinutes(END_TIME);
+
+  while (current < end) {
+    slots.push(toTimeString(current));
+    current += SLOT_DURATION_MIN;
+  }
+  return slots;
+}
+
+function normalizeTime(time: string): string {
+  const timeParts = time.split(':');
+  return timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+}
+
+function calculateAvailableSlots(
+  allSlots: string[],
+  bookedSlots: string[],
+  notAvailableSlots: string[]
+): { availableSlots: string[]; availableCount: number } {
+  // Normalize all times to HH:MM format
+  const normalizedBooked = bookedSlots.map(normalizeTime);
+  const normalizedNotAvailable = notAvailableSlots.map(normalizeTime);
+  
+  // Create Sets for reliable comparison
+  const bookedSet = new Set(normalizedBooked);
+  const notAvailableSet = new Set(normalizedNotAvailable);
+  
+  // Filter available slots
+  const availableSlots = allSlots.filter(slot => {
+    const normalizedSlot = normalizeTime(slot);
+    return !bookedSet.has(normalizedSlot) && !notAvailableSet.has(normalizedSlot);
+  });
+  
+  // Calculate count using formula: Total - (Booked + NotAvailable)
+  const totalSlots = allSlots.length;
+  const bookedCount = bookedSet.size;
+  const notAvailableCount = notAvailableSet.size;
+  const availableCount = totalSlots - bookedCount - notAvailableCount;
+  
+  return { availableSlots, availableCount };
+}
+
 interface AvailabilityData {
   expertId: string;
   workingHours: {
@@ -94,11 +153,8 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           bookedSlotsCount: bookedSlots.length
         });
         
-        // Generate time slots (9am to 9pm, hourly) - format: "09:00", "10:00", etc.
-        const allTimes = [];
-        for (let hour = 9; hour <= 21; hour++) {
-          allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
-        }
+        // Generate time slots using production utility (9am to 9pm, hourly)
+        const allTimes = generateDailySlots();
         
         // Group booked slots by date
         const bookedByDate: Record<string, string[]> = {};
@@ -193,29 +249,20 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             });
           }
           
-          // Calculate available slots using the formula:
-          // AvailableSlots = TotalSlots - (BookedSlots + NotAvailableSlots)
-          // Create Sets for reliable comparison (use Set sizes for accurate count)
-          const bookedSet = new Set(normalizedBookedTimes);
-          const notAvailableSet = new Set(notAvailableTimes);
+          // Calculate available slots using production utility
+          // This ensures consistent normalization and accurate counting
+          const { availableSlots: availableTimes, availableCount } = calculateAvailableSlots(
+            allTimes,
+            normalizedBookedTimes,
+            notAvailableTimes
+          );
           
-          // Filter available times (for display purposes)
-          const availableTimes = allTimes.filter(time => {
-            // Normalize time for comparison (allTimes are already in HH:MM format, but ensure consistency)
-            const timeParts = time.split(':');
-            const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
-            
-            // Exclude if booked or not available (use Set for reliable comparison)
-            return !bookedSet.has(normalizedTime) && !notAvailableSet.has(normalizedTime);
-          });
-          
-          // Calculate final count using the formula:
-          // AvailableSlots = TotalSlots - (BookedSlots + NotAvailableSlots)
-          // Use Set sizes to ensure accurate count (handles duplicates and ensures consistency)
-          const totalSlots = allTimes.length;
+          // Get counts for logging
+          const bookedSet = new Set(normalizedBookedTimes.map(normalizeTime));
+          const notAvailableSet = new Set(notAvailableTimes.map(normalizeTime));
           const bookedCount = bookedSet.size;
           const notAvailableCount = notAvailableSet.size;
-          const availableCount = totalSlots - bookedCount - notAvailableCount;
+          const totalSlots = allTimes.length;
           
           // Verification: availableCount should match availableTimes.length
           if (isTodayDate) {
@@ -368,10 +415,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       console.log('🔄 Refreshed booked slots:', bookedSlots);
       
       // Regenerate availability data (same logic as in useEffect)
-      const allTimes = [];
-      for (let hour = 9; hour <= 21; hour++) {
-        allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
-      }
+      const allTimes = generateDailySlots();
       
       const bookedByDate: Record<string, string[]> = {};
       bookedSlots.forEach((slot: any) => {
@@ -409,42 +453,43 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         }
         
         const bookedTimes = bookedByDate[dateStr] || [];
-        // Normalize booked times and create Set for reliable comparison
+        // Normalize booked times for comparison
         const normalizedBookedTimes = bookedTimes.map(bt => {
           const timeParts = bt.split(':');
           return timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
         });
-        const bookedSet = new Set(normalizedBookedTimes);
         
-        const availableTimes = allTimes.filter(time => {
-          // Normalize time for comparison
-          const timeParts = time.split(':');
-          const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
-          
-          // Use Set for reliable comparison (NOT array.includes)
-          if (bookedSet.has(normalizedTime)) {
-            return false;
-          }
-          
-          if (i === 0) {
+        // Calculate not available slots (past times for today)
+        const currentTime = new Date();
+        const currentHour = currentTime.getHours();
+        const currentMinute = currentTime.getMinutes();
+        const notAvailableTimes: string[] = [];
+        if (i === 0) { // Today
+          allTimes.forEach(time => {
             const [hours, minutes] = time.split(':').map(Number);
-            const slotDateTime = new Date(today);
-            slotDateTime.setHours(hours, minutes, 0, 0);
-            const now = new Date();
-            if (slotDateTime < now) {
-              return false;
+            if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
+              const timeParts = time.split(':');
+              const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+              notAvailableTimes.push(normalizedTime);
             }
-          }
-          
-          return true;
-        });
+          });
+        }
+        
+        // Calculate available slots using production utility
+        const { availableSlots: availableTimes, availableCount } = calculateAvailableSlots(
+          allTimes,
+          normalizedBookedTimes,
+          notAvailableTimes
+        );
         
         slots.push({
           date: dateStr,
           dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
           availableTimes,
-          bookedTimes,
-          isAvailable: availableTimes.length > 0
+          bookedTimes: normalizedBookedTimes,
+          notAvailableTimes: notAvailableTimes,
+          availableCount: availableCount,
+          isAvailable: availableCount > 0
         });
       }
       
@@ -497,10 +542,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           console.log('🔄 Refreshed booked slots after error:', bookedSlots);
           
           // Regenerate availability (same logic as in main useEffect)
-          const allTimes = [];
-          for (let hour = 9; hour <= 21; hour++) {
-            allTimes.push(`${hour.toString().padStart(2, '0')}:00`);
-          }
+          const allTimes = generateDailySlots();
           
           const bookedByDate: Record<string, string[]> = {};
           bookedSlots.forEach((slot: any) => {
@@ -538,42 +580,43 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             }
             
             const bookedTimes = bookedByDate[dateStr] || [];
-            // Normalize booked times and create Set for reliable comparison
+            // Normalize booked times for comparison
             const normalizedBookedTimes = bookedTimes.map(bt => {
               const timeParts = bt.split(':');
               return timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
             });
-            const bookedSet = new Set(normalizedBookedTimes);
             
-            const availableTimes = allTimes.filter(time => {
-              // Normalize time for comparison
-              const timeParts = time.split(':');
-              const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
-              
-              // Use Set for reliable comparison (NOT array.includes)
-              if (bookedSet.has(normalizedTime)) {
-                return false;
-              }
-              
-              if (i === 0) {
+            // Calculate not available slots (past times for today)
+            const currentTime = new Date();
+            const currentHour = currentTime.getHours();
+            const currentMinute = currentTime.getMinutes();
+            const notAvailableTimes: string[] = [];
+            if (i === 0) { // Today
+              allTimes.forEach(time => {
                 const [hours, minutes] = time.split(':').map(Number);
-                const slotDateTime = new Date(today);
-                slotDateTime.setHours(hours, minutes, 0, 0);
-                const now = new Date();
-                if (slotDateTime < now) {
-                  return false;
+                if (hours < currentHour || (hours === currentHour && minutes <= currentMinute)) {
+                  const timeParts = time.split(':');
+                  const normalizedTime = timeParts[0].padStart(2, '0') + ":" + (timeParts[1] || '00').padStart(2, '0');
+                  notAvailableTimes.push(normalizedTime);
                 }
-              }
-              
-              return true;
-            });
+              });
+            }
+            
+            // Calculate available slots using production utility
+            const { availableSlots: availableTimes, availableCount } = calculateAvailableSlots(
+              allTimes,
+              normalizedBookedTimes,
+              notAvailableTimes
+            );
             
             slots.push({
               date: dateStr,
               dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
               availableTimes,
-              bookedTimes,
-              isAvailable: availableTimes.length > 0
+              bookedTimes: normalizedBookedTimes,
+              notAvailableTimes: notAvailableTimes,
+              availableCount: availableCount,
+              isAvailable: availableCount > 0
             });
           }
           
