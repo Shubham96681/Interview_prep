@@ -723,7 +723,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                 
                 // Slot class mapping
                 const slotClasses = {
-                  booked: "line-through opacity-40 cursor-not-allowed border-gray-300 bg-red-50",
+                  booked: "opacity-40 cursor-not-allowed border-gray-300 bg-red-50",
                   not_available: "opacity-40 cursor-not-allowed border-gray-300",
                   available: "border-blue-500 text-blue-600 hover:bg-blue-50"
                 };
