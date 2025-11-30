@@ -153,7 +153,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         
         // Generate availability slots for next 7 days (starting from today, excluding past dates)
       const slots = [];
-      const now = new Date(); // Get current time once
+      const currentTime = new Date(); // Get current time once for all comparisons
       for (let i = 0; i < 7; i++) {
         const currentDate = new Date(today);
         currentDate.setDate(today.getDate() + i);
@@ -192,14 +192,32 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             }
             
             // For today's date, also check if the time slot is in the past
-            const isToday = i === 0;
-            if (isToday) {
+            if (i === 0) { // Today
               const [hours, minutes] = normalizedTime.split(':').map(Number);
-              // Create slot datetime using the current date (today)
-              const slotDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+              // Create slot datetime using the current date (today) - use local time
+              const slotDateTime = new Date(
+                currentTime.getFullYear(),
+                currentTime.getMonth(),
+                currentTime.getDate(),
+                hours,
+                minutes,
+                0,
+                0
+              );
               
-              if (slotDateTime < now) {
-                console.log(`⏰ Excluding past time slot: ${normalizedTime} (slot: ${slotDateTime.toLocaleTimeString()}, now: ${now.toLocaleTimeString()})`);
+              // Compare with current time (also in local time) - use <= to exclude current hour
+              const isPast = slotDateTime.getTime() <= currentTime.getTime();
+              if (isPast) {
+                console.log(`⏰ Excluding past time slot: ${normalizedTime}`, {
+                  slotDateTime: slotDateTime.toLocaleString(),
+                  currentTime: currentTime.toLocaleString(),
+                  slotTime: slotDateTime.getTime(),
+                  nowTime: currentTime.getTime(),
+                  hours: hours,
+                  minutes: minutes,
+                  currentHours: currentTime.getHours(),
+                  currentMinutes: currentTime.getMinutes()
+                });
                 return false; // Past time slot
               }
             }
@@ -209,11 +227,19 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           
           // Count past times for today (for debugging)
           let pastTimesCount = 0;
-          if (i === 0) {
+          if (i === 0) { // Today
             allTimes.forEach(time => {
               const [hours, minutes] = time.split(':').map(Number);
-              const slotDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
-              if (slotDateTime < now) {
+              const slotDateTime = new Date(
+                currentTime.getFullYear(),
+                currentTime.getMonth(),
+                currentTime.getDate(),
+                hours,
+                minutes,
+                0,
+                0
+              );
+              if (slotDateTime <= currentTime) {
                 pastTimesCount++;
               }
             });
