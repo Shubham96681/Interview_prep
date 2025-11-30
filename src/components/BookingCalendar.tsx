@@ -42,10 +42,10 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const start = normalizeDate(today.toISOString());
+      const start = normalizeDate(today);
       const endDate = new Date(today);
       endDate.setDate(today.getDate() + 6);
-      const end = normalizeDate(endDate.toISOString());
+      const end = normalizeDate(endDate);
 
       const response = await apiService.getExpertBookedSlots(expertId, start, end);
       let booked: any[] = [];
@@ -75,7 +75,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() + i);
-        const dateStr = normalizeDate(d.toISOString());
+        const dateStr = normalizeDate(d);
 
         const bookedTimes = grouped[dateStr] || [];
         const disabled: string[] = [];
@@ -249,7 +249,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
                 // Check if this is a past time slot for today
                 const today = new Date();
-                const todayStr = normalizeDate(today.toISOString());
+                const todayStr = normalizeDate(today);
                 const isPastTime =
                   selectedDate === todayStr &&
                   (() => {
