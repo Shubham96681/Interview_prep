@@ -153,6 +153,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         
         // Generate availability slots for next 7 days (starting from today, excluding past dates)
       const slots = [];
+      const now = new Date(); // Get current time once
       for (let i = 0; i < 7; i++) {
         const currentDate = new Date(today);
         currentDate.setDate(today.getDate() + i);
@@ -191,12 +192,14 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             }
             
             // For today's date, also check if the time slot is in the past
-            if (i === 0) { // Today
+            const isToday = i === 0;
+            if (isToday) {
               const [hours, minutes] = normalizedTime.split(':').map(Number);
-              const slotDateTime = new Date(today);
-              slotDateTime.setHours(hours, minutes, 0, 0);
-              const now = new Date();
+              // Create slot datetime using the current date (today)
+              const slotDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+              
               if (slotDateTime < now) {
+                console.log(`⏰ Excluding past time slot: ${normalizedTime} (slot: ${slotDateTime.toLocaleTimeString()}, now: ${now.toLocaleTimeString()})`);
                 return false; // Past time slot
               }
             }
@@ -204,7 +207,21 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             return true;
           });
           
-          console.log(`📊 Date ${dateStr}: ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${allTimes.length} total)`);
+          // Count past times for today (for debugging)
+          let pastTimesCount = 0;
+          if (i === 0) {
+            allTimes.forEach(time => {
+              const [hours, minutes] = time.split(':').map(Number);
+              const slotDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+              if (slotDateTime < now) {
+                pastTimesCount++;
+              }
+            });
+          }
+          
+          console.log(`📊 Date ${dateStr}: ${availableTimes.length} available slots (${normalizedBookedTimes.length} booked, ${pastTimesCount} past, ${allTimes.length} total)`);
+          console.log(`📊 Available times for ${dateStr}:`, availableTimes);
+          console.log(`📊 Booked times for ${dateStr}:`, normalizedBookedTimes);
         
         slots.push({
           date: dateStr,
