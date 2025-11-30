@@ -66,11 +66,31 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         
         // Fetch booked slots from backend (real-time)
         const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
-        const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
-          ? bookedResponse.data.bookedSlots 
-          : [];
+        
+        // Handle nested response structure (API service wraps backend response)
+        // Backend returns: { success: true, data: { bookedSlots: [...] } }
+        // API service wraps it: { success: true, data: { success: true, data: { bookedSlots: [...] } } }
+        let bookedSlots = [];
+        if (bookedResponse.success && bookedResponse.data) {
+          // Check nested structure first (API service wraps the response)
+          if (bookedResponse.data.data && bookedResponse.data.data.bookedSlots) {
+            bookedSlots = bookedResponse.data.data.bookedSlots;
+          } else if (bookedResponse.data.bookedSlots) {
+            bookedSlots = bookedResponse.data.bookedSlots;
+          } else if (Array.isArray(bookedResponse.data)) {
+            bookedSlots = bookedResponse.data;
+          }
+        }
         
         console.log('📅 Fetched booked slots (raw):', JSON.stringify(bookedSlots, null, 2));
+        console.log('📅 Full booked response structure:', {
+          success: bookedResponse.success,
+          hasData: !!bookedResponse.data,
+          dataKeys: bookedResponse.data ? Object.keys(bookedResponse.data) : [],
+          hasNestedData: !!(bookedResponse.data && bookedResponse.data.data),
+          nestedDataKeys: (bookedResponse.data && bookedResponse.data.data) ? Object.keys(bookedResponse.data.data) : [],
+          bookedSlotsCount: bookedSlots.length
+        });
         
         // Generate time slots (9am to 9pm, hourly) - format: "09:00", "10:00", etc.
         const allTimes = [];
@@ -279,9 +299,20 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
     
     try {
       const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
-      const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
-        ? bookedResponse.data.bookedSlots 
-        : [];
+      
+      // Handle nested response structure (API service wraps backend response)
+      // Backend: { success: true, data: { bookedSlots: [...] } }
+      // API service wraps: { success: true, data: { success: true, data: { bookedSlots: [...] } } }
+      let bookedSlots = [];
+      if (bookedResponse.success && bookedResponse.data) {
+        if (bookedResponse.data.data && bookedResponse.data.data.bookedSlots) {
+          bookedSlots = bookedResponse.data.data.bookedSlots;
+        } else if (bookedResponse.data.bookedSlots) {
+          bookedSlots = bookedResponse.data.bookedSlots;
+        } else if (Array.isArray(bookedResponse.data)) {
+          bookedSlots = bookedResponse.data;
+        }
+      }
       
       console.log('🔄 Refreshed booked slots:', bookedSlots);
       
@@ -389,9 +420,18 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       setTimeout(async () => {
         try {
           const bookedResponse = await apiService.getExpertBookedSlots(expertId, startDateStr, endDateStr);
-          const bookedSlots = bookedResponse.success && bookedResponse.data?.bookedSlots 
-            ? bookedResponse.data.bookedSlots 
-            : [];
+          
+          // Handle nested response structure (API service wraps backend response)
+          let bookedSlots = [];
+          if (bookedResponse.success && bookedResponse.data) {
+            if (bookedResponse.data.data && bookedResponse.data.data.bookedSlots) {
+              bookedSlots = bookedResponse.data.data.bookedSlots;
+            } else if (bookedResponse.data.bookedSlots) {
+              bookedSlots = bookedResponse.data.bookedSlots;
+            } else if (Array.isArray(bookedResponse.data)) {
+              bookedSlots = bookedResponse.data;
+            }
+          }
           
           console.log('🔄 Refreshed booked slots after error:', bookedSlots);
           
