@@ -3427,6 +3427,516 @@ setInterval(() => {
   monitoringService.updateWebSocketConnections(connectionCount);
 }, 5000);
 
+// Admin API Endpoints
+// Get all sessions (admin only)
+app.get('/api/admin/sessions', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const sessions = await prisma.session.findMany({
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true, hourlyRate: true }
+        },
+        reviews: {
+          select: { id: true, rating: true, comment: true, createdAt: true }
+        }
+      },
+      orderBy: { scheduledDate: 'desc' }
+    });
+
+    // Format sessions to match frontend expectations
+    const formattedSessions = sessions.map(session => {
+      const localDate = new Date(session.scheduledDate);
+      const dateStr = `${String(localDate.getFullYear())}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+      
+      return {
+        id: session.id,
+        expertId: session.expertId,
+        candidateId: session.candidateId,
+        expertName: session.expert?.name || 'Unknown',
+        candidateName: session.candidate?.name || 'Unknown',
+        date: dateStr,
+        time: timeStr,
+        scheduledDate: session.scheduledDate.toISOString(),
+        duration: session.duration,
+        sessionType: session.sessionType,
+        status: session.status,
+        paymentAmount: session.paymentAmount,
+        paymentStatus: session.paymentStatus,
+        meetingLink: session.meetingLink,
+        meetingId: session.meetingId,
+        recordingUrl: session.recordingUrl,
+        isRecordingEnabled: session.isRecordingEnabled,
+        feedbackRating: session.feedbackRating,
+        feedbackComment: session.feedbackComment,
+        reviews: session.reviews || [],
+        createdAt: session.createdAt.toISOString()
+      };
+    });
+
+    res.json({
+      success: true,
+      data: { sessions: formattedSessions }
+    });
+  } catch (error) {
+    console.error('Error getting admin sessions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get sessions'
+    });
+  }
+});
+
+// Get all users (admin only)
+app.get('/api/admin/users', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        userType: true,
+        isActive: true,
+        isVerified: true,
+        rating: true,
+        totalSessions: true,
+        hourlyRate: true,
+        company: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({
+      success: true,
+      data: { users }
+    });
+  } catch (error) {
+    console.error('Error getting admin users:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get users'
+    });
+  }
+});
+
+// Get all reviews (admin only)
+app.get('/api/admin/reviews', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const reviews = await prisma.review.findMany({
+      include: {
+        session: {
+          include: {
+            candidate: { select: { name: true, email: true } },
+            expert: { select: { name: true, email: true } }
+          }
+        },
+        reviewer: { select: { name: true, email: true } },
+        reviewee: { select: { name: true, email: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const formattedReviews = reviews.map(review => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      categories: review.categories ? JSON.parse(review.categories) : null,
+      createdAt: review.createdAt.toISOString(),
+      session: {
+        id: review.session.id,
+        title: review.session.title || 'Interview Session',
+        candidate: review.session.candidate,
+        expert: review.session.expert
+      },
+      reviewer: review.reviewer,
+      reviewee: review.reviewee
+    }));
+
+    res.json({
+      success: true,
+      data: { reviews: formattedReviews }
+    });
+  } catch (error) {
+    console.error('Error getting admin reviews:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get reviews'
+    });
+  }
+});
+
+// Get analytics (admin only)
+app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email, period = 'month' } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Calculate date range based on period
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (period) {
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case 'quarter':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      default:
+        startDate.setMonth(now.getMonth() - 1);
+    }
+
+    // Get all data
+    const [totalUsers, activeUsers, totalSessions, totalReviews, sessionsByStatus, usersByType, completedSessions] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isActive: true } }),
+      prisma.session.count(),
+      prisma.review.count(),
+      prisma.session.groupBy({
+        by: ['status'],
+        _count: { status: true }
+      }),
+      prisma.user.groupBy({
+        by: ['userType'],
+        _count: { userType: true }
+      }),
+      prisma.session.findMany({
+        where: {
+          status: 'completed',
+          paymentStatus: 'completed'
+        },
+        select: { paymentAmount: true }
+      })
+    ]);
+
+    // Calculate revenue
+    const totalRevenue = completedSessions.reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    const completedRevenue = totalRevenue;
+
+    // Calculate average rating
+    const reviews = await prisma.review.findMany({
+      select: { rating: true }
+    });
+    const averageRating = reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0;
+
+    // Format sessions by status
+    const sessionsByStatusObj = {};
+    sessionsByStatus.forEach(item => {
+      sessionsByStatusObj[item.status] = item._count.status;
+    });
+
+    // Format users by type
+    const usersByTypeObj = {};
+    usersByType.forEach(item => {
+      usersByTypeObj[item.userType] = item._count.userType;
+    });
+
+    // Get new signups for the period
+    const newSignups = await prisma.user.findMany({
+      where: {
+        createdAt: { gte: startDate }
+      },
+      select: { userType: true }
+    });
+    
+    const newCandidates = newSignups.filter(u => u.userType === 'candidate').length;
+    const newExperts = newSignups.filter(u => u.userType === 'expert').length;
+
+    // Get sessions over time
+    const sessionsOverTime = await prisma.session.findMany({
+      where: {
+        createdAt: { gte: startDate }
+      },
+      select: { createdAt: true }
+    });
+
+    const sessionsByDate = {};
+    sessionsOverTime.forEach(session => {
+      const date = new Date(session.createdAt).toISOString().split('T')[0];
+      sessionsByDate[date] = (sessionsByDate[date] || 0) + 1;
+    });
+
+    const sessionsOverTimeArray = Object.entries(sessionsByDate).map(([date, count]) => ({
+      date,
+      count
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Get revenue over time
+    const revenueSessions = await prisma.session.findMany({
+      where: {
+        status: 'completed',
+        paymentStatus: 'completed',
+        updatedAt: { gte: startDate }
+      },
+      select: { paymentAmount: true, updatedAt: true }
+    });
+
+    const revenueByDate = {};
+    revenueSessions.forEach(session => {
+      const date = new Date(session.updatedAt).toISOString().split('T')[0];
+      revenueByDate[date] = (revenueByDate[date] || 0) + (session.paymentAmount || 0);
+    });
+
+    const revenueOverTimeArray = Object.entries(revenueByDate).map(([date, amount]) => ({
+      date,
+      amount
+    })).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Get popular session types
+    const sessionTypes = await prisma.session.groupBy({
+      by: ['sessionType'],
+      _count: { sessionType: true }
+    });
+
+    const popularExpertiseAreas = sessionTypes.map(item => ({
+      type: item.sessionType,
+      count: item._count.sessionType
+    })).sort((a, b) => b.count - a.count);
+
+    // Get average expert rating
+    const expertReviews = await prisma.review.findMany({
+      where: {
+        reviewee: {
+          userType: 'expert'
+        }
+      },
+      include: {
+        reviewee: { select: { userType: true } }
+      },
+      select: { rating: true }
+    });
+
+    const averageExpertRating = expertReviews.length > 0
+      ? expertReviews.reduce((sum, r) => sum + r.rating, 0) / expertReviews.length
+      : 0;
+
+    const analytics = {
+      totalUsers,
+      activeUsers,
+      totalSessions,
+      totalReviews,
+      averageRating: Math.round(averageRating * 10) / 10,
+      sessionsByStatus: sessionsByStatusObj,
+      usersByType: usersByTypeObj,
+      totalRevenue,
+      completedRevenue,
+      newSignups: {
+        candidates: newCandidates,
+        experts: newExperts,
+        total: newCandidates + newExperts
+      },
+      periodInterviews: sessionsOverTime.length,
+      platformUtilizationRate: totalUsers > 0 ? Math.round((activeUsers / totalUsers) * 100) : 0,
+      sessionsOverTime: sessionsOverTimeArray,
+      revenueOverTime: revenueOverTimeArray,
+      popularExpertiseAreas,
+      averageExpertRating: Math.round(averageExpertRating * 10) / 10,
+      systemHealth: {
+        apiLatency: 50, // Placeholder - should come from monitoring service
+        serverUptime: 99.9, // Placeholder
+        videoIntegrationStatus: 'operational' // Placeholder
+      }
+    };
+
+    res.json({
+      success: true,
+      data: { analytics }
+    });
+  } catch (error) {
+    console.error('Error getting admin analytics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get analytics'
+    });
+  }
+});
+
+// Get financial transactions (admin only)
+app.get('/api/admin/financial/transactions', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        paymentAmount: { not: null }
+      },
+      include: {
+        candidate: { select: { name: true, email: true } },
+        expert: { select: { name: true, email: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const transactions = sessions.map(session => ({
+      id: session.id,
+      sessionId: session.id,
+      candidate: session.candidate.name,
+      expert: session.expert.name,
+      amount: session.paymentAmount,
+      status: session.paymentStatus,
+      date: session.createdAt.toISOString(),
+      type: 'session_payment'
+    }));
+
+    // Calculate summary
+    const totalRevenue = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const completedRevenue = transactions
+      .filter(t => t.status === 'completed')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+    const pendingRevenue = transactions
+      .filter(t => t.status === 'pending')
+      .reduce((sum, t) => sum + (t.amount || 0), 0);
+
+    res.json({
+      success: true,
+      data: {
+        transactions,
+        summary: {
+          totalRevenue,
+          completedRevenue,
+          pendingRevenue,
+          totalTransactions: transactions.length
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error getting admin transactions:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get transactions'
+    });
+  }
+});
+
+// Get payouts (admin only)
+app.get('/api/admin/financial/payouts', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // For now, calculate payouts from completed sessions
+    // In a real system, you'd have a separate payouts table
+    const completedSessions = await prisma.session.findMany({
+      where: {
+        status: 'completed',
+        paymentStatus: 'completed',
+        paymentAmount: { not: null }
+      },
+      include: {
+        expert: { select: { id: true, name: true, email: true } }
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
+
+    // Group by expert and calculate totals
+    const payoutsByExpert = {};
+    completedSessions.forEach(session => {
+      const expertId = session.expertId;
+      if (!payoutsByExpert[expertId]) {
+        payoutsByExpert[expertId] = {
+          expertId,
+          expertName: session.expert.name,
+          expertEmail: session.expert.email,
+          totalAmount: 0,
+          sessionCount: 0,
+          lastPayout: null
+        };
+      }
+      payoutsByExpert[expertId].totalAmount += session.paymentAmount || 0;
+      payoutsByExpert[expertId].sessionCount += 1;
+      if (!payoutsByExpert[expertId].lastPayout || session.updatedAt > payoutsByExpert[expertId].lastPayout) {
+        payoutsByExpert[expertId].lastPayout = session.updatedAt;
+      }
+    });
+
+    const payouts = Object.values(payoutsByExpert).map(payout => ({
+      id: `payout-${payout.expertId}`,
+      expertId: payout.expertId,
+      expertName: payout.expertName,
+      expertEmail: payout.expertEmail,
+      amount: payout.totalAmount,
+      status: 'pending', // In real system, this would come from payouts table
+      sessionCount: payout.sessionCount,
+      lastPayout: payout.lastPayout?.toISOString() || null,
+      createdAt: payout.lastPayout?.toISOString() || new Date().toISOString()
+    }));
+
+    res.json({
+      success: true,
+      data: { payouts }
+    });
+  } catch (error) {
+    console.error('Error getting admin payouts:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get payouts'
+    });
+  }
+});
+
 // Admin Monitoring Endpoints
 app.get('/api/admin/monitoring', authenticateToken, async (req, res) => {
   try {
