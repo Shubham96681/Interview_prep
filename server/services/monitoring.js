@@ -54,6 +54,9 @@ class MonitoringService extends EventEmitter {
   }
 
   startMonitoring() {
+    // Collect initial metrics immediately
+    this.collectSystemMetrics();
+    
     // Collect system metrics every 5 seconds
     setInterval(() => {
       this.collectSystemMetrics();
@@ -68,17 +71,25 @@ class MonitoringService extends EventEmitter {
   }
 
   collectSystemMetrics() {
-    const cpuUsage = process.cpuUsage();
     const memUsage = process.memoryUsage();
     const loadAvg = os.loadavg();
+    const cpus = os.cpus();
     
-    // CPU percentage (approximate)
-    const cpuPercent = (cpuUsage.user + cpuUsage.system) / 1000000; // Convert to seconds
+    // Calculate CPU usage more accurately
+    // For Node.js, we'll use a simple approach based on load average
+    // Load average / number of CPUs gives approximate CPU usage percentage
+    const numCpus = cpus.length;
+    const cpuPercent = Math.min(100, (loadAvg[0] / numCpus) * 100); // 1-minute load average as percentage
     
     // Memory in MB
     const memUsedMB = memUsage.heapUsed / 1024 / 1024;
     const memTotalMB = memUsage.heapTotal / 1024 / 1024;
-    const memPercent = (memUsedMB / memTotalMB) * 100;
+    const memPercent = memTotalMB > 0 ? (memUsedMB / memTotalMB) * 100 : 0;
+    
+    // Also get system total memory
+    const systemTotalMemMB = os.totalmem() / 1024 / 1024;
+    const systemUsedMemMB = systemTotalMemMB - (os.freemem() / 1024 / 1024);
+    const systemMemPercent = systemTotalMemMB > 0 ? (systemUsedMemMB / systemTotalMemMB) * 100 : 0;
     
     // Keep last 100 data points (5 minutes at 5s intervals)
     this.metrics.serverCpu.push({
@@ -94,7 +105,10 @@ class MonitoringService extends EventEmitter {
       timestamp: Date.now(),
       used: memUsedMB,
       total: memTotalMB,
-      percent: memPercent
+      percent: memPercent,
+      systemUsed: systemUsedMemMB,
+      systemTotal: systemTotalMemMB,
+      systemPercent: systemMemPercent
     });
     if (this.metrics.serverMemory.length > 100) {
       this.metrics.serverMemory.shift();

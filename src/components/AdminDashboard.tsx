@@ -1165,19 +1165,37 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       <p className="text-sm text-muted-foreground mb-2">Server Memory</p>
                       <div className="space-y-1">
                         <div className="flex justify-between text-sm">
-                          <span>Used:</span>
+                          <span>Heap Used:</span>
                           <span className="font-bold">{monitoring.appMonitoring?.serverMemory?.current?.used || 0} MB</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span>Total:</span>
+                          <span>Heap Total:</span>
                           <span className="font-bold">{monitoring.appMonitoring?.serverMemory?.current?.total || 0} MB</span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span>Usage:</span>
+                          <span>Heap Usage:</span>
                           <span className={`font-bold ${(monitoring.appMonitoring?.serverMemory?.current?.percent || 0) > 80 ? 'text-red-500' : 'text-green-500'}`}>
                             {(monitoring.appMonitoring?.serverMemory?.current?.percent || 0).toFixed(1)}%
                           </span>
                         </div>
+                        {monitoring.appMonitoring?.serverMemory?.current?.systemTotal && (
+                          <>
+                            <div className="flex justify-between text-sm pt-1 border-t">
+                              <span>System Used:</span>
+                              <span className="font-bold">{monitoring.appMonitoring?.serverMemory?.current?.systemUsed || 0} MB</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span>System Total:</span>
+                              <span className="font-bold">{monitoring.appMonitoring?.serverMemory?.current?.systemTotal || 0} MB</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span>System Usage:</span>
+                              <span className={`font-bold ${(monitoring.appMonitoring?.serverMemory?.current?.systemPercent || 0) > 80 ? 'text-red-500' : 'text-green-500'}`}>
+                                {(monitoring.appMonitoring?.serverMemory?.current?.systemPercent || 0).toFixed(1)}%
+                              </span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
