@@ -2688,6 +2688,27 @@ app.put('/api/sessions/:id/reschedule', authenticateToken, validateObjectId('id'
       console.error('❌ Error sending reschedule email:', emailError);
       // Don't fail if email fails
     }
+    
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event (reschedule) to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
 
     res.json({ 
       message: 'Session rescheduled successfully', 
