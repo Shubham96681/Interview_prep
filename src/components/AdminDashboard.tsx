@@ -342,10 +342,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
   useEffect(() => {
     loadMonitoring();
-    // Refresh every 5 seconds for real-time updates
+    // Refresh every 10 seconds for real-time updates (reduced from 5s to avoid rate limiting)
     const interval = setInterval(() => {
       loadMonitoring();
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [monitoringTimeRange]);
 

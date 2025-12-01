@@ -102,7 +102,8 @@ app.use((req, res, next) => {
   // Track response
   res.on('finish', () => {
     const duration = Date.now() - startTime;
-    const success = res.statusCode < 400;
+    // Don't count rate limit errors (429) as actual errors - they're throttling, not failures
+    const success = res.statusCode < 400 || res.statusCode === 429;
     monitoringService.recordApiRequest(duration, success, endpoint);
   });
   
@@ -160,10 +161,25 @@ const limiter = rateLimit({
   },
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting for email check endpoint (it has its own limiter)
-  skip: (req) => req.path === '/api/auth/check-email',
+  // Skip rate limiting for email check and admin monitoring endpoints
+  skip: (req) => {
+    return req.path === '/api/auth/check-email' || 
+           req.path.startsWith('/api/admin/monitoring');
+  },
   // Use Redis or memory store for distributed rate limiting in production
   // For now, using default memory store (works per process)
+});
+
+// More lenient rate limiting for admin monitoring endpoints (real-time updates need frequent polling)
+const adminMonitoringLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 60, // Allow 60 requests per minute (1 per second) for monitoring endpoints
+  message: {
+    success: false,
+    message: 'Too many monitoring requests. Please wait a moment.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
 // Apply lenient rate limiting specifically to email check endpoint first
@@ -4209,8 +4225,8 @@ app.get('/api/admin/financial/payouts', authenticateToken, requireRole('admin'),
   }
 });
 
-// Admin Monitoring Endpoints
-app.get('/api/admin/monitoring', authenticateToken, async (req, res) => {
+// Admin Monitoring Endpoints (with lenient rate limiting)
+app.get('/api/admin/monitoring', authenticateToken, adminMonitoringLimiter, async (req, res) => {
   try {
     const { timeRange = '1h' } = req.query;
     const metrics = monitoringService.getMetrics(timeRange);
@@ -4237,7 +4253,7 @@ app.get('/api/admin/monitoring', authenticateToken, async (req, res) => {
 });
 
 // Get error logs
-app.get('/api/admin/monitoring/errors', authenticateToken, async (req, res) => {
+app.get('/api/admin/monitoring/errors', authenticateToken, adminMonitoringLimiter, async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const errors = monitoringService.getErrorLogs(parseInt(limit));
@@ -4256,7 +4272,7 @@ app.get('/api/admin/monitoring/errors', authenticateToken, async (req, res) => {
 });
 
 // Get activity logs
-app.get('/api/admin/monitoring/activity', authenticateToken, async (req, res) => {
+app.get('/api/admin/monitoring/activity', authenticateToken, adminMonitoringLimiter, async (req, res) => {
   try {
     const { limit = 100 } = req.query;
     const activities = monitoringService.getActivityLogs(parseInt(limit));
