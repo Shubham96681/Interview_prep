@@ -173,7 +173,7 @@ const limiter = rateLimit({
 // More lenient rate limiting for admin monitoring endpoints (real-time updates need frequent polling)
 const adminMonitoringLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 60, // Allow 60 requests per minute (1 per second) for monitoring endpoints
+  max: 120, // Allow 120 requests per minute (2 per second) for monitoring endpoints - increased for real-time updates
   message: {
     success: false,
     message: 'Too many monitoring requests. Please wait a moment.'

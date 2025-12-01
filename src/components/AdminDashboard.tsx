@@ -226,9 +226,20 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       loadData();
     };
 
-    const handleMonitoringUpdated = () => {
+    const handleMonitoringUpdated = (data: any) => {
       console.log('🔄 Admin: Monitoring data updated via real-time');
-      loadMonitoring();
+      // If SSE event includes metrics data, use it directly instead of making API call
+      if (data?.metrics) {
+        console.log('📊 Using metrics from SSE event');
+        setMonitoring(data.metrics);
+        setMonitoringLastUpdate(new Date());
+      } else {
+        // Otherwise, load from API (but debounced to avoid rate limits)
+        const timeoutId = setTimeout(() => {
+          loadMonitoring();
+        }, 2000); // Wait 2 seconds before loading to avoid rate limits
+        return () => clearTimeout(timeoutId);
+      }
     };
 
     // Register event listeners
@@ -1153,9 +1164,19 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Total Requests</p>
+                      <p className="text-sm text-muted-foreground">Total API Requests</p>
                       <p className="text-2xl font-bold">{monitoring.appMonitoring?.totalRequests || 0}</p>
-                      <p className="text-xs text-muted-foreground">{monitoring.appMonitoring?.failedRequests || 0} failed</p>
+                      <p className="text-xs text-muted-foreground">
+                        {monitoring.appMonitoring?.failedRequests || 0} failed
+                        {monitoring.appMonitoring?.totalRequests > 0 && (
+                          <span className="ml-1 text-muted-foreground">
+                            ({((monitoring.appMonitoring?.failedRequests || 0) / monitoring.appMonitoring.totalRequests * 100).toFixed(1)}% failure rate)
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 italic">
+                        All API requests since server start
+                      </p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Server CPU</p>
