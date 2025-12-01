@@ -317,9 +317,7 @@ export default function ExpertProfileEdit({ isOpen, onClose, user, onUpdate }: E
           </div>
           </TabsContent>
 
-          <TabsContent value="availability" className="space-y-6">
-            <AvailabilityManager expertId={user.id} />
-          </TabsContent>
+          {/* Availability management UI is disabled until it's fully backed by database APIs */}
         </Tabs>
       </DialogContent>
     </Dialog>

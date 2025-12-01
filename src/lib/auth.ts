@@ -38,44 +38,6 @@ export interface User {
   };
 }
 
-// Test users data
-export const testUsers = {
-  candidate: {
-    email: 'john@example.com',
-    password: 'password123',
-    name: 'John Doe',
-    userType: 'candidate' as const,
-    company: 'Tech Corp',
-    title: 'Software Engineer',
-    id: 'candidate-001',
-    profile: {
-      bio: 'Software engineer with 3 years of experience looking to improve interview skills',
-      experience: '3 years in full-stack development',
-      skills: ['JavaScript', 'React', 'Node.js', 'Python'],
-      rating: 0,
-      totalSessions: 0
-    }
-  },
-  expert: {
-    email: 'jane@example.com',
-    password: 'password123',
-    name: 'Jane Smith',
-    userType: 'expert' as const,
-    company: 'Google',
-    title: 'Senior Software Engineer',
-    id: 'expert-001',
-    profile: {
-      bio: 'Senior software engineer with 8 years of experience in tech interviews',
-      experience: '8 years in software engineering, 5 years conducting interviews',
-      skills: ['JavaScript', 'React', 'Node.js', 'Python', 'System Design', 'Algorithms'],
-      rating: 4.8,
-      totalSessions: 150,
-      hourlyRate: 75,
-      isVerified: true
-    }
-  }
-};
-
 export const authService = {
   login: (userData: User) => {
     localStorage.setItem('user', JSON.stringify(userData));

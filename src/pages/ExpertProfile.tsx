@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, Star, MapPin, Clock, Award, Video, Calendar, Edit } from 'lucide-react';
-import { mockExperts } from '@/lib/mockData';
 import { authService, User } from '@/lib/auth';
 import { apiService } from '@/lib/apiService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -112,15 +111,7 @@ export default function ExpertProfile() {
     if (!id) return;
     
     setLoading(true);
-    
-    // First try to find in mock data (for test users)
-    const mockExpert = mockExperts.find(e => e.id === id);
-    if (mockExpert) {
-      setExpert(mockExpert);
-      setLoading(false);
-      return;
-    }
-    
+
     // Validate ID - reject frontend-generated IDs
     if (id && id.startsWith('user-')) {
       console.error('❌ ExpertProfile: Frontend-generated ID detected:', id);

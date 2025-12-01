@@ -4,12 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, Video, FileText, Users, DollarSign, TrendingUp, MessageSquare } from 'lucide-react';
+import { Calendar, Clock, Video, FileText, Users, DollarSign, MessageSquare } from 'lucide-react';
 import { Session } from '@/lib/mockData';
 import { apiService } from '@/lib/apiService';
 import realtimeService from '@/lib/realtimeService';
-import AvailabilityManager from './AvailabilityManager';
-import ExpertAnalytics from './ExpertAnalytics';
 import { toast } from 'sonner';
 import { getAvatarUrl } from '@/lib/avatarUtils';
 
@@ -27,7 +25,7 @@ interface ExpertDashboardProps {
 export default function ExpertDashboard({ user }: ExpertDashboardProps) {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeView, setActiveView] = useState<'dashboard' | 'calendar' | 'analytics'>('dashboard');
+  // Single dashboard view only; calendar & analytics views using mock data are disabled for production
 
   // Fetch sessions from backend API
   const fetchSessions = useCallback(async () => {
@@ -127,61 +125,10 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
     });
   };
 
-  // Calculate earnings
+  // Calculate earnings from real sessions
   const totalEarnings = sessions
     .filter(session => session.status === 'completed')
     .reduce((sum, session) => sum + (session.paymentAmount || 0), 0);
-
-  // Render different views based on activeView state
-  if (activeView === 'calendar') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setActiveView('dashboard');
-              toast.success('Returned to dashboard');
-            }}
-            className="flex items-center gap-2"
-          >
-            ← Back to Dashboard
-          </Button>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-gray-900 font-medium">Calendar Management</span>
-          </div>
-        </div>
-        <AvailabilityManager expertId={user.id} sessions={sessions} />
-      </div>
-    );
-  }
-
-  if (activeView === 'analytics') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setActiveView('dashboard');
-              toast.success('Returned to dashboard');
-            }}
-            className="flex items-center gap-2"
-          >
-            ← Back to Dashboard
-          </Button>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-gray-900 font-medium">Analytics</span>
-          </div>
-        </div>
-        <ExpertAnalytics expertId={user.id} sessions={sessions} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-8">
@@ -251,49 +198,35 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer" onClick={() => {
-          setActiveView('calendar');
-          toast.success('Opening Calendar Management');
-        }}>
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-not-allowed opacity-60">
           <CardContent className="p-6">
             <div className="text-center">
               <Calendar className="h-12 w-12 text-green-600 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Set Availability</h3>
-              <p className="text-gray-600 mb-4">Manage your working hours and availability</p>
+              <p className="text-gray-600 mb-4">Availability management will be enabled soon.</p>
               <Button 
-                variant="outline" 
+                variant="outline"
                 className="w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveView('calendar');
-                  toast.success('Opening Calendar Management');
-                }}
+                disabled
               >
-                Manage Calendar
+                Coming Soon
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer" onClick={() => {
-          setActiveView('analytics');
-          toast.success('Opening Analytics Dashboard');
-        }}>
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-not-allowed opacity-60">
           <CardContent className="p-6">
             <div className="text-center">
-              <TrendingUp className="h-12 w-12 text-purple-600 mx-auto mb-4" />
+              <DollarSign className="h-12 w-12 text-purple-600 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h3>
-              <p className="text-gray-600 mb-4">View your performance and earnings</p>
+              <p className="text-gray-600 mb-4">Analytics will be enabled soon.</p>
               <Button 
-                variant="outline" 
+                variant="outline"
                 className="w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveView('analytics');
-                  toast.success('Opening Analytics Dashboard');
-                }}
+                disabled
               >
-                View Analytics
+                Coming Soon
               </Button>
             </div>
           </CardContent>
