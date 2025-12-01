@@ -541,6 +541,19 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 
     console.log(`✅ User registered successfully: ${user.email} (ID: ${user.id})`);
     console.log(`✅ User type: ${user.userType}, Active: ${user.isActive}`);
+    console.log(`✅ User saved to database successfully`);
+
+    // Verify user was saved by querying it back
+    const savedUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { id: true, email: true, name: true, userType: true, createdAt: true }
+    });
+    
+    if (savedUser) {
+      console.log(`✅ Verified: User exists in database - ${savedUser.email} (created at ${savedUser.createdAt})`);
+    } else {
+      console.error(`❌ WARNING: User was created but not found in database!`);
+    }
 
     res.status(201).json({
       success: true,
