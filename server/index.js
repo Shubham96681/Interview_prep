@@ -3276,6 +3276,15 @@ setInterval(() => {
   monitoringService.updateWebSocketConnections(connectionCount);
 }, 5000);
 
+// Broadcast monitoring updates to all admin users in real-time
+monitoringService.on('metrics_updated', (metrics) => {
+  // Broadcast to all connected users (admins will filter on frontend)
+  realtimeService.broadcast('monitoring_updated', {
+    metrics,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Admin API Endpoints
 // Get all sessions (admin only)
 app.get('/api/admin/sessions', authenticateToken, requireRole('admin'), async (req, res) => {

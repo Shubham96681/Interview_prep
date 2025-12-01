@@ -57,6 +57,8 @@ class MonitoringService extends EventEmitter {
     // Collect system metrics every 5 seconds
     setInterval(() => {
       this.collectSystemMetrics();
+      // Emit monitoring update event for real-time updates
+      this.emit('metrics_updated', this.getMetrics('1h'));
     }, 5000);
     
     // Clean old metrics every minute

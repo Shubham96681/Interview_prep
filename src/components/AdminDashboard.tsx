@@ -134,6 +134,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [monitoringTimeRange, setMonitoringTimeRange] = useState<'5m' | '15m' | '1h' | '24h'>('1h');
   const [monitoringErrors, setMonitoringErrors] = useState<any[]>([]);
   const [monitoringActivity, setMonitoringActivity] = useState<any[]>([]);
+  const [monitoringLastUpdate, setMonitoringLastUpdate] = useState<Date | null>(null);
+  const [monitoringLoading, setMonitoringLoading] = useState(false);
   const [financialSummary, setFinancialSummary] = useState<any>(null);
 
   useEffect(() => {
@@ -224,6 +226,11 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       loadData();
     };
 
+    const handleMonitoringUpdated = () => {
+      console.log('🔄 Admin: Monitoring data updated via real-time');
+      loadMonitoring();
+    };
+
     // Register event listeners
     realtimeService.on('session_created', handleSessionCreated);
     realtimeService.on('session_updated', handleSessionUpdated);
@@ -235,6 +242,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
     realtimeService.on('review_updated', handleReviewUpdated);
     realtimeService.on('analytics_updated', handleAnalyticsUpdated);
     realtimeService.on('availability_updated', handleAvailabilityUpdated);
+    realtimeService.on('monitoring_updated', handleMonitoringUpdated);
 
     // Cleanup on unmount
     return () => {
@@ -248,6 +256,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       realtimeService.off('review_updated', handleReviewUpdated);
       realtimeService.off('analytics_updated', handleAnalyticsUpdated);
       realtimeService.off('availability_updated', handleAvailabilityUpdated);
+      realtimeService.off('monitoring_updated', handleMonitoringUpdated);
     };
   }, [authUser?.id, analyticsPeriod]);
 
@@ -333,14 +342,16 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
   useEffect(() => {
     loadMonitoring();
+    // Refresh every 5 seconds for real-time updates
     const interval = setInterval(() => {
       loadMonitoring();
-    }, 10000); // Refresh every 10 seconds
+    }, 5000);
     return () => clearInterval(interval);
   }, [monitoringTimeRange]);
 
   const loadMonitoring = async () => {
     try {
+      setMonitoringLoading(true);
       const [monitoringRes, errorsRes, activityRes] = await Promise.all([
         apiService.getMonitoring(monitoringTimeRange),
         apiService.getMonitoringErrors(50),
@@ -349,15 +360,25 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
       if (monitoringRes.success) {
         setMonitoring(monitoringRes.data);
+        setMonitoringLastUpdate(new Date());
+      } else {
+        console.error('❌ Failed to load monitoring:', monitoringRes.error || monitoringRes.message);
       }
       if (errorsRes.success) {
         setMonitoringErrors(errorsRes.data?.errors || []);
+      } else {
+        console.error('❌ Failed to load monitoring errors:', errorsRes.error || errorsRes.message);
       }
       if (activityRes.success) {
         setMonitoringActivity(activityRes.data?.activities || []);
+      } else {
+        console.error('❌ Failed to load monitoring activity:', activityRes.error || activityRes.message);
       }
     } catch (error) {
-      console.error('Error loading monitoring data:', error);
+      console.error('❌ Error loading monitoring data:', error);
+      toast.error('Failed to load monitoring data');
+    } finally {
+      setMonitoringLoading(false);
     }
   };
 
@@ -1042,7 +1063,18 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
         <TabsContent value="monitoring" className="space-y-4">
           <div className="flex justify-between items-center mb-4">
-            <CardTitle>System Monitoring</CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle>System Monitoring</CardTitle>
+              <Badge variant="outline" className="flex items-center gap-1.5">
+                <div className={`h-2 w-2 rounded-full ${monitoringLoading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
+                <span className="text-xs">Live</span>
+              </Badge>
+              {monitoringLastUpdate && (
+                <span className="text-xs text-muted-foreground">
+                  Last updated: {monitoringLastUpdate.toLocaleTimeString()}
+                </span>
+              )}
+            </div>
             <Select value={monitoringTimeRange} onValueChange={(v: '5m' | '15m' | '1h' | '24h') => setMonitoringTimeRange(v)}>
               <SelectTrigger className="w-32">
                 <SelectValue />
