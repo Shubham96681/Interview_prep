@@ -26,6 +26,11 @@ if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }
 
+// Production: also use singleton to prevent multiple instances
+if (process.env.NODE_ENV === 'production') {
+  globalForPrisma.prisma = prisma;
+}
+
 // Add connection health check - don't exit in production
 prisma.$connect().catch((error) => {
   console.error('❌ Failed to connect to database:', error);
