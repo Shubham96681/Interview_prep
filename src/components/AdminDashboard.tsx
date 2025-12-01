@@ -524,7 +524,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   return (
     <div className="space-y-6">
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-9">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
@@ -533,7 +533,6 @@ export default function AdminDashboard({}: AdminDashboardProps) {
           <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
           <TabsTrigger value="recordings">Recordings</TabsTrigger>
-          <TabsTrigger value="participants">Participants</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -1460,6 +1459,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                     <TableHead>Candidate</TableHead>
                     <TableHead>Expert</TableHead>
                     <TableHead>Type</TableHead>
+                    <TableHead>Participants</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Payment</TableHead>
                     <TableHead>Actions</TableHead>
@@ -1476,6 +1476,35 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       <TableCell>{session.expertName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{session.sessionType}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 items-center">
+                          <Badge variant="outline" className="text-xs">{session.candidateName}</Badge>
+                          <Badge variant="outline" className="text-xs">{session.expertName}</Badge>
+                          {session.additionalParticipants && session.additionalParticipants.length > 0 && (
+                            <>
+                              {session.additionalParticipants.map((pid) => {
+                                const participant = users.find(u => u.id === pid);
+                                return participant ? (
+                                  <Badge key={pid} variant="secondary" className="text-xs">{participant.name}</Badge>
+                                ) : null;
+                              })}
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 ml-1"
+                            onClick={() => {
+                              setSelectedSession(session);
+                              setSelectedParticipants(session.additionalParticipants || []);
+                              setAddParticipantsOpen(true);
+                            }}
+                            title="Manage Participants"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge>{session.status}</Badge>
@@ -1835,70 +1864,6 @@ export default function AdminDashboard({}: AdminDashboardProps) {
           </Card>
         </TabsContent>
 
-        <TabsContent value="participants" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Add Participants to Sessions</CardTitle>
-              <CardDescription>Add additional participants to interview sessions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Date/Time</TableHead>
-                    <TableHead>Current Participants</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions.map((session) => (
-                    <TableRow key={session.id}>
-                      <TableCell>
-                        <div className="font-medium">{session.candidateName} & {session.expertName}</div>
-                        <div className="text-sm text-muted-foreground">{session.sessionType}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div>{session.date}</div>
-                        <div className="text-sm text-muted-foreground">{session.time}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          <Badge variant="outline">{session.candidateName}</Badge>
-                          <Badge variant="outline">{session.expertName}</Badge>
-                          {session.additionalParticipants && session.additionalParticipants.length > 0 && (
-                            <>
-                              {session.additionalParticipants.map((pid) => {
-                                const participant = users.find(u => u.id === pid);
-                                return participant ? (
-                                  <Badge key={pid} variant="secondary">{participant.name}</Badge>
-                                ) : null;
-                              })}
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedSession(session);
-                            setSelectedParticipants([]);
-                            setAddParticipantsOpen(true);
-                          }}
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="financial" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
@@ -2444,17 +2409,28 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Add Participants Dialog */}
+      {/* Manage Participants Dialog */}
       <Dialog open={addParticipantsOpen} onOpenChange={setAddParticipantsOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Participants</DialogTitle>
-            <DialogDescription>Select users to add to this session</DialogDescription>
+            <DialogTitle>Manage Participants</DialogTitle>
+            <DialogDescription>
+              {selectedSession && `Add or remove participants for: ${selectedSession.candidateName} & ${selectedSession.expertName}`}
+            </DialogDescription>
           </DialogHeader>
           {selectedSession && (
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Select Participants</Label>
+                <div className="text-xs text-muted-foreground mb-2">
+                  Current participants: {selectedSession.candidateName}, {selectedSession.expertName}
+                  {selectedSession.additionalParticipants && selectedSession.additionalParticipants.length > 0 && (
+                    <>, {selectedSession.additionalParticipants.map(pid => {
+                      const p = users.find(u => u.id === pid);
+                      return p?.name;
+                    }).filter(Boolean).join(', ')}</>
+                  )}
+                </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
                   {users
                     .filter(u => 
@@ -2484,11 +2460,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setAddParticipantsOpen(false)}>
+                <Button variant="outline" onClick={() => {
+                  setAddParticipantsOpen(false);
+                  setSelectedParticipants([]);
+                }}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddParticipants} disabled={selectedParticipants.length === 0}>
-                  Add Participants
+                <Button onClick={handleAddParticipants}>
+                  {selectedParticipants.length === 0 ? 'Remove All Additional Participants' : `Save ${selectedParticipants.length} Participant${selectedParticipants.length > 1 ? 's' : ''}`}
                 </Button>
               </DialogFooter>
             </div>
