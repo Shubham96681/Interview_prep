@@ -14,6 +14,8 @@ import { toast } from 'sonner';
 import { Trash2, Edit, Plus, Users, Calendar, Star, CalendarDays, Download, TrendingUp, DollarSign, Clock, Activity, ChevronLeft, ChevronRight, Video, Monitor, AlertTriangle, Wifi, Zap, BarChart3, Server, MessageSquare } from 'lucide-react';
 import AdminCalendarView from './AdminCalendarView';
 import AddUserForm from './AddUserForm';
+import realtimeService from '@/lib/realtimeService';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Session {
   id: string;
@@ -106,6 +108,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({}: AdminDashboardProps) {
   const navigate = useNavigate();
+  const { user: authUser } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -136,6 +139,117 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Setup real-time updates for admin dashboard
+  useEffect(() => {
+    const userId = authUser?.id;
+    
+    // Validate user ID before connecting
+    if (!userId) {
+      console.error('❌ AdminDashboard: Cannot connect to realtime - user ID missing');
+      return;
+    }
+    
+    // Reject frontend-generated IDs
+    if (userId.startsWith('user-')) {
+      console.error('❌ AdminDashboard: Cannot connect to realtime - frontend-generated ID detected:', userId);
+      console.error('❌ User must have a valid database ID. Please log out and log back in.');
+      return;
+    }
+    
+    // Connect to real-time service
+    realtimeService.connect(userId);
+    
+    // Event handlers for real-time updates
+    const handleSessionCreated = (session: any) => {
+      console.log('🔄 Admin: New session created via real-time:', session);
+      loadData(); // Reload all data to get updated analytics
+      toast.info('New session created');
+    };
+
+    const handleSessionUpdated = (session: any) => {
+      console.log('🔄 Admin: Session updated via real-time:', session);
+      loadData();
+      toast.info('Session updated');
+    };
+
+    const handleSessionDeleted = (data: any) => {
+      console.log('🔄 Admin: Session deleted via real-time:', data);
+      loadData();
+      toast.info('Session deleted');
+    };
+
+    const handleUserCreated = (user: any) => {
+      console.log('🔄 Admin: New user created via real-time:', user);
+      loadData();
+      toast.info('New user registered');
+    };
+
+    const handleUserUpdated = (user: any) => {
+      console.log('🔄 Admin: User updated via real-time:', user);
+      loadData();
+      toast.info('User updated');
+    };
+
+    const handleUserDeleted = (data: any) => {
+      console.log('🔄 Admin: User deleted via real-time:', data);
+      loadData();
+      toast.info('User deleted');
+    };
+
+    const handleReviewCreated = (review: any) => {
+      console.log('🔄 Admin: New review created via real-time:', review);
+      loadData();
+      toast.info('New review submitted');
+    };
+
+    const handleReviewUpdated = (review: any) => {
+      console.log('🔄 Admin: Review updated via real-time:', review);
+      loadData();
+    };
+
+    const handleAnalyticsUpdated = () => {
+      console.log('🔄 Admin: Analytics updated via real-time');
+      // Reload analytics
+      apiService.getAnalytics(analyticsPeriod).then((res) => {
+        if (res.success) {
+          setAnalytics(res.data?.analytics || null);
+        }
+      });
+    };
+
+    const handleAvailabilityUpdated = () => {
+      console.log('🔄 Admin: Availability updated via real-time');
+      // This might affect session availability, reload sessions
+      loadData();
+    };
+
+    // Register event listeners
+    realtimeService.on('session_created', handleSessionCreated);
+    realtimeService.on('session_updated', handleSessionUpdated);
+    realtimeService.on('session_deleted', handleSessionDeleted);
+    realtimeService.on('user_created', handleUserCreated);
+    realtimeService.on('user_updated', handleUserUpdated);
+    realtimeService.on('user_deleted', handleUserDeleted);
+    realtimeService.on('review_created', handleReviewCreated);
+    realtimeService.on('review_updated', handleReviewUpdated);
+    realtimeService.on('analytics_updated', handleAnalyticsUpdated);
+    realtimeService.on('availability_updated', handleAvailabilityUpdated);
+
+    // Cleanup on unmount
+    return () => {
+      realtimeService.off('session_created', handleSessionCreated);
+      realtimeService.off('session_updated', handleSessionUpdated);
+      realtimeService.off('session_deleted', handleSessionDeleted);
+      realtimeService.off('user_created', handleUserCreated);
+      realtimeService.off('user_updated', handleUserUpdated);
+      realtimeService.off('user_deleted', handleUserDeleted);
+      realtimeService.off('review_created', handleReviewCreated);
+      realtimeService.off('review_updated', handleReviewUpdated);
+      realtimeService.off('analytics_updated', handleAnalyticsUpdated);
+      realtimeService.off('availability_updated', handleAvailabilityUpdated);
+    };
+  }, [authUser?.id, analyticsPeriod]);
 
   const loadData = async () => {
     try {

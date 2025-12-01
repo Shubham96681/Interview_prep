@@ -555,6 +555,17 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       console.error(`❌ WARNING: User was created but not found in database!`);
     }
 
+    // Broadcast user creation to all admins
+    try {
+      realtimeService.broadcast('user_created', {
+        user: userWithoutPassword,
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted user_created event to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting user_created:', realtimeError);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Registration successful! Welcome to Interview Prep Platform.',
@@ -1064,6 +1075,17 @@ app.put('/api/users/profile', authenticateToken, upload.single('profilePhoto'), 
       }
     });
 
+    // Broadcast user update to admins
+    try {
+      realtimeService.broadcast('user_updated', {
+        user: user,
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted user_updated event to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting user_updated:', realtimeError);
+    }
+    
     res.json({ message: 'Profile updated successfully', user });
   } catch (error) {
     console.error('Update profile error:', error);
@@ -2524,6 +2546,28 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
     });
 
     console.log(`✅ Session ${sessionId} status updated to ${status}`);
+    
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
+    
     res.json({ 
       success: true,
       message: 'Session status updated', 
@@ -2608,6 +2652,27 @@ app.put('/api/sessions/:id/reschedule', authenticateToken, validateObjectId('id'
         }
       }
     });
+    
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event (reschedule) to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
 
     // Send reschedule email to candidate
     try {

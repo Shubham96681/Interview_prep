@@ -363,7 +363,7 @@ export default function ExpertProfile() {
         });
         // Navigate to dashboard after a short delay
         setTimeout(() => {
-          navigate('/dashboard?refresh=' + Date.now());
+        navigate('/dashboard?refresh=' + Date.now());
         }, 1500);
       } else {
         // Check if it's a scheduling conflict (409)

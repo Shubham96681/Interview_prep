@@ -71,7 +71,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       });
 
       const list: Slot[] = [];
-
+      
       for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() + i);
@@ -163,7 +163,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
   const selectedSlot = slots.find((s) => s.date === selectedDate);
 
   return (
-    <Card className="border-0 shadow-lg">
+      <Card className="border-0 shadow-lg">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Calendar className="h-6 w-6 text-blue-600" />
@@ -175,7 +175,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       </CardHeader>
       <CardContent className="space-y-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Date & Time</h3>
-
+        
         {/* Date Selection */}
         <div>
           <h4 className="font-medium mb-3 text-gray-700">Select Date</h4>
@@ -185,7 +185,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                 key={slot.date}
                 variant={selectedDate === slot.date ? "default" : "outline"}
                 className={`h-auto p-3 text-left relative transition-all duration-200 ${
-                  !slot.isAvailable
+                  !slot.isAvailable 
                     ? "opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400"
                     : "hover:bg-blue-50 hover:border-blue-300"
                 }`}
@@ -225,15 +225,15 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         {/* Availability Legend */}
         <div className="flex items-center gap-4 text-sm text-gray-600">
           <span className="font-medium">Availability Legend:</span>
-          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-blue-500 bg-blue-50 rounded"></div>
             <span>Available</span>
-          </div>
-          <div className="flex items-center gap-2">
+            </div>
+            <div className="flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-gray-300 bg-gray-100 rounded opacity-40"></div>
             <span>Not Available</span>
-          </div>
-          <div className="flex items-center gap-2">
+            </div>
+            <div className="flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-gray-300 bg-red-50 rounded opacity-40"></div>
             <span>Booked</span>
           </div>
@@ -246,7 +246,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
               {allSlots.map((time) => {
                 const slotStatus = getSlotStatus(selectedDate, time);
-
+                
                 // Check if this is a past time slot for today
                 const today = new Date();
                 const todayStr = normalizeDate(today);
@@ -254,11 +254,11 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                   selectedDate === todayStr &&
                   (() => {
                     const [hours, minutes] = time.split(":").map(Number);
-                    const slotDateTime = new Date(today);
-                    slotDateTime.setHours(hours, minutes, 0, 0);
-                    return slotDateTime < today;
-                  })();
-
+                  const slotDateTime = new Date(today);
+                  slotDateTime.setHours(hours, minutes, 0, 0);
+                  return slotDateTime < today;
+                })();
+                
                 // Determine final status (past times override other statuses)
                 const finalStatus = isPastTime ? "not_available" : slotStatus;
                 const isBooked = finalStatus === "booked";
@@ -312,30 +312,30 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         {/* Booking Button */}
         {selectedDate && selectedTime && (
           <div className="pt-4 border-t">
-            <Button
+        <Button 
               className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-6 text-lg"
               onClick={() => setShowPayment(true)}
-            >
+        >
               <CreditCard className="mr-2 h-5 w-5" />
-              Book Session & Pay ${hourlyRate}
-            </Button>
-          </div>
+          Book Session & Pay ${hourlyRate}
+        </Button>
+        </div>
         )}
 
         {showPayment && (
-          <PaymentModal
+    <PaymentModal
             isOpen={showPayment}
             onClose={() => setShowPayment(false)}
             onPaymentSuccess={() => handlePaySuccess()}
-            sessionData={{
-              expertName,
-              date: selectedDate,
-              time: selectedTime,
-              duration: 60,
-              amount: hourlyRate,
+      sessionData={{
+        expertName,
+        date: selectedDate,
+        time: selectedTime,
+        duration: 60,
+        amount: hourlyRate,
               sessionType: 'mock',
-            }}
-          />
+      }}
+    />
         )}
       </CardContent>
     </Card>
