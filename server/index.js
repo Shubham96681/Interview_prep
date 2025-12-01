@@ -3535,7 +3535,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       : 0;
     
     // Monthly earnings
-    const monthlyEarningsMap: { [key: string]: number } = {};
+    const monthlyEarningsMap = {};
     completedSessions
       .filter(s => s.paymentStatus === 'completed' && s.paymentAmount)
       .forEach(session => {
@@ -3551,7 +3551,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       });
     
     // Session types breakdown
-    const sessionTypesMap: { [key: string]: { count: number; revenue: number } } = {};
+    const sessionTypesMap = {};
     completedSessions
       .filter(s => s.paymentStatus === 'completed')
       .forEach(session => {
@@ -3594,7 +3594,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
     }
     
     // Top clients (candidates with most sessions)
-    const clientMap: { [key: string]: { name: string; sessions: number; revenue: number } } = {};
+    const clientMap = {};
     completedSessions
       .filter(s => s.paymentStatus === 'completed')
       .forEach(session => {
