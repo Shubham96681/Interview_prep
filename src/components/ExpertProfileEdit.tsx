@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DollarSign, Clock, Calendar, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiService } from '@/lib/apiService';
-import AvailabilityManager from './AvailabilityManager';
 
 interface ExpertUser {
   id: string;

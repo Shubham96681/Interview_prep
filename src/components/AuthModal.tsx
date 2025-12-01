@@ -74,53 +74,14 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
       setIsLoading(false);
       return;
     } else {
-      // If backend fails, try local auth service for test users
-      const localUser = authService.testLogin(email, password);
-      if (localUser) {
-        // Generate a token for local test users
-        const testToken = 'test-token-' + Date.now() + '-' + Math.random().toString(36).substring(7);
-        const localUserWithToken = { ...localUser, token: testToken };
-        
-        // Store token in localStorage
-        localStorage.setItem('token', testToken);
-        console.log('✅ Test user token saved to localStorage:', testToken.substring(0, 20) + '...');
-        
-        // Verify token was saved
-        const savedToken = localStorage.getItem('token');
-        if (!savedToken || savedToken !== testToken) {
-          console.error('❌ Test token not saved correctly!');
-          toast.error('Failed to save authentication token');
-          setIsLoading(false);
-          return;
-        }
-        
-        toast.success(`🎉 Welcome back, ${localUser.name}!`, {
-          description: 'You have successfully signed in to InterviewAce (Test Mode)',
-        });
-        // Store in authService for compatibility
-        authService.login(localUserWithToken);
-        onLogin(localUser.userType, localUserWithToken);
-        onClose();
-        setIsLoading(false);
-        return;
-      } else {
-        // Show backend error if available, otherwise generic error
-        const errorMessage = response.error || response.message || 'Invalid credentials';
-        console.error('Login failed:', {
-          error: response.error,
-          message: response.message,
-          status: response.status,
-          data: response.data
-        });
-        toast.error(errorMessage, {
-          description: response.status === 401 
-            ? 'Please check your email and password, or ensure the backend server is running.'
-            : 'Please try again or contact support if the issue persists.'
-        });
-      }
+      // Backend login failed - show error
+      const errorMessage = response.error || response.message || 'Invalid email or password';
+      toast.error('Login failed', {
+        description: errorMessage,
+      });
+      setIsLoading(false);
+      return;
     }
-    
-    setIsLoading(false);
   };
 
   // REMOVED: handleSignup function - Registration should always go through RegistrationForm

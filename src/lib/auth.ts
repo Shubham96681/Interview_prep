@@ -58,16 +58,7 @@ export const authService = {
     return localStorage.getItem('isAuthenticated') === 'true';
   },
 
-  // Test login function
-  testLogin: (email: string, password: string): User | null => {
-    if (email === testUsers.candidate.email && password === testUsers.candidate.password) {
-      return testUsers.candidate;
-    }
-    if (email === testUsers.expert.email && password === testUsers.expert.password) {
-      return testUsers.expert;
-    }
-    return null;
-  }
+  // Test login function removed - all users must exist in database
 };
 
 
