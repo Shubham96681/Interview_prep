@@ -664,25 +664,16 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    if (!user) {
-      console.log('❌ User not found:', email);
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
     console.log('✅ User found:', user.email);
 
-    // Check password (skip for newly created users since we just created them)
-    if (!isNewlyCreated) {
-      console.log('🔑 Checking password...');
-      const isPasswordValid = await bcrypt.compare(password || 'password123', user.password);
-      if (!isPasswordValid) {
-        console.log('❌ Invalid password for:', email);
-        return res.status(401).json({ message: 'Invalid credentials' });
-      }
-      console.log('✅ Password valid');
-    } else {
-      console.log('✅ Skipping password check for newly created user');
+    // Check password
+    console.log('🔑 Checking password...');
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
+    console.log('✅ Password valid');
 
     // Generate JWT token
     console.log('🎫 Generating JWT token...');
