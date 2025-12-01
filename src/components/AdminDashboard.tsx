@@ -254,6 +254,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('🔄 AdminDashboard: Loading data...');
+      
       const [sessionsRes, usersRes, reviewsRes, analyticsRes, transactionsRes, payoutsRes] = await Promise.all([
         apiService.getAllSessions(),
         apiService.getAllUsers(),
@@ -263,28 +265,62 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         apiService.getPayouts()
       ]);
 
+      console.log('📊 AdminDashboard: API Responses:', {
+        sessions: { success: sessionsRes.success, count: sessionsRes.data?.sessions?.length || 0 },
+        users: { success: usersRes.success, count: usersRes.data?.users?.length || 0 },
+        reviews: { success: reviewsRes.success, count: reviewsRes.data?.reviews?.length || 0 },
+        analytics: { success: analyticsRes.success },
+        transactions: { success: transactionsRes.success },
+        payouts: { success: payoutsRes.success }
+      });
+
       if (sessionsRes.success) {
-        setSessions(sessionsRes.data?.sessions || []);
+        const sessions = sessionsRes.data?.sessions || sessionsRes.data?.data?.sessions || [];
+        console.log(`✅ Loaded ${sessions.length} sessions`);
+        setSessions(sessions);
+      } else {
+        console.error('❌ Failed to load sessions:', sessionsRes.error || sessionsRes.message);
+        toast.error('Failed to load sessions: ' + (sessionsRes.error || sessionsRes.message));
       }
+      
       if (usersRes.success) {
-        setUsers(usersRes.data?.users || []);
+        const users = usersRes.data?.users || usersRes.data?.data?.users || [];
+        console.log(`✅ Loaded ${users.length} users`);
+        setUsers(users);
+      } else {
+        console.error('❌ Failed to load users:', usersRes.error || usersRes.message);
+        toast.error('Failed to load users: ' + (usersRes.error || usersRes.message));
       }
+      
       if (reviewsRes.success) {
-        setReviews(reviewsRes.data?.reviews || []);
+        const reviews = reviewsRes.data?.reviews || reviewsRes.data?.data?.reviews || [];
+        console.log(`✅ Loaded ${reviews.length} reviews`);
+        setReviews(reviews);
+      } else {
+        console.error('❌ Failed to load reviews:', reviewsRes.error || reviewsRes.message);
       }
+      
       if (analyticsRes.success) {
-        setAnalytics(analyticsRes.data?.analytics || null);
+        setAnalytics(analyticsRes.data?.analytics || analyticsRes.data?.data?.analytics || null);
+      } else {
+        console.error('❌ Failed to load analytics:', analyticsRes.error || analyticsRes.message);
       }
+      
       if (transactionsRes.success) {
-        setTransactions(transactionsRes.data?.transactions || []);
-        setFinancialSummary(transactionsRes.data?.summary || null);
+        setTransactions(transactionsRes.data?.transactions || transactionsRes.data?.data?.transactions || []);
+        setFinancialSummary(transactionsRes.data?.summary || transactionsRes.data?.data?.summary || null);
+      } else {
+        console.error('❌ Failed to load transactions:', transactionsRes.error || transactionsRes.message);
       }
+      
       if (payoutsRes.success) {
-        setPayouts(payoutsRes.data?.payouts || []);
+        setPayouts(payoutsRes.data?.payouts || payoutsRes.data?.data?.payouts || []);
+      } else {
+        console.error('❌ Failed to load payouts:', payoutsRes.error || payoutsRes.message);
       }
-    } catch (error) {
-      console.error('Error loading admin data:', error);
-      toast.error('Failed to load admin data');
+    } catch (error: any) {
+      console.error('❌ Error loading admin data:', error);
+      toast.error('Failed to load admin data: ' + (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
