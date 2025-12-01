@@ -1612,73 +1612,74 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                         return true;
                       })
                       .map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>{u.name}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{u.userType}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={u.isActive ? 'default' : 'secondary'}>
-                          {u.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {u.rating ? `${u.rating.toFixed(1)} ⭐` : '-'}
-                      </TableCell>
-                      <TableCell>{u.totalSessions || 0}</TableCell>
-                      <TableCell>
-                        {new Date(u.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              const response = await apiService.getUserDetails(u.id);
-                              if (response.success) {
-                                setSelectedUserDetail(response.data?.data || response.data);
-                                setUserDetailOpen(true);
-                              }
-                            }}
-                            title="View Details"
-                          >
-                            <Users className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(u);
-                              setEditUserOpen(true);
-                            }}
-                            title="Edit User"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {u.userType === 'expert' && !u.isVerified && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={async () => {
-                                if (confirm(`Approve expert ${u.name}?`)) {
-                                  const response = await apiService.approveExpert(u.id, true);
+                        <TableRow key={u.id}>
+                          <TableCell>{u.name}</TableCell>
+                          <TableCell>{u.email}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{u.userType}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={u.isActive ? 'default' : 'secondary'}>
+                              {u.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {u.rating ? `${u.rating.toFixed(1)} ⭐` : '-'}
+                          </TableCell>
+                          <TableCell>{u.totalSessions || 0}</TableCell>
+                          <TableCell>
+                            {new Date(u.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={async () => {
+                                  const response = await apiService.getUserDetails(u.id);
                                   if (response.success) {
-                                    toast.success('Expert approved');
-                                    loadData();
+                                    setSelectedUserDetail(response.data?.data || response.data);
+                                    setUserDetailOpen(true);
                                   }
-                                }
-                              }}
-                              title="Approve Expert"
-                            >
-                              <Star className="h-4 w-4 text-green-600" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                                }}
+                                title="View Details"
+                              >
+                                <Users className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedUser(u);
+                                  setEditUserOpen(true);
+                                }}
+                                title="Edit User"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {u.userType === 'expert' && !u.isVerified && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={async () => {
+                                    if (confirm(`Approve expert ${u.name}?`)) {
+                                      const response = await apiService.approveExpert(u.id, true);
+                                      if (response.success) {
+                                        toast.success('Expert approved');
+                                        loadData();
+                                      }
+                                    }
+                                  }}
+                                  title="Approve Expert"
+                                >
+                                  <Star className="h-4 w-4 text-green-600" />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
