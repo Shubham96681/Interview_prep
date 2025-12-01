@@ -1606,6 +1606,97 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
   }
 });
 
+// Availability Management Endpoints
+// Get expert availability slots
+app.get('/api/experts/:expertId/availability-slots', authenticateToken, async (req, res) => {
+  try {
+    const { expertId } = req.params;
+    
+    // Verify expert exists and user has access
+    const expert = await prisma.user.findFirst({
+      where: { 
+        id: expertId,
+        userType: 'expert'
+      }
+    });
+    
+    if (!expert) {
+      return res.status(404).json({ success: false, error: 'Expert not found' });
+    }
+    
+    // Check access: expert viewing own slots or admin
+    if (req.user.id !== expertId && req.user.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    // For now, availability is stored in User model (daysAvailable, workingHoursStart, workingHoursEnd)
+    // Return the expert's availability settings
+    const availability = {
+      daysAvailable: expert.daysAvailable ? JSON.parse(expert.daysAvailable) : [],
+      workingHoursStart: expert.workingHoursStart || '09:00',
+      workingHoursEnd: expert.workingHoursEnd || '17:00',
+      timezone: expert.timezone || 'UTC'
+    };
+    
+    res.json({
+      success: true,
+      data: availability
+    });
+  } catch (error) {
+    console.error('Error getting availability slots:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get availability slots'
+    });
+  }
+});
+
+// Update expert availability
+app.put('/api/experts/:expertId/availability', authenticateToken, async (req, res) => {
+  try {
+    const { expertId } = req.params;
+    const { daysAvailable, workingHoursStart, workingHoursEnd, timezone } = req.body;
+    
+    // Verify expert exists and user has access
+    if (req.user.id !== expertId && req.user.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    const expert = await prisma.user.findFirst({
+      where: { 
+        id: expertId,
+        userType: 'expert'
+      }
+    });
+    
+    if (!expert) {
+      return res.status(404).json({ success: false, error: 'Expert not found' });
+    }
+    
+    // Update availability
+    await prisma.user.update({
+      where: { id: expertId },
+      data: {
+        daysAvailable: daysAvailable ? JSON.stringify(daysAvailable) : null,
+        workingHoursStart: workingHoursStart || null,
+        workingHoursEnd: workingHoursEnd || null,
+        timezone: timezone || null
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: 'Availability updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating availability:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update availability'
+    });
+  }
+});
+
 // Get user sessions
 app.get('/api/sessions', async (req, res) => {
   try {
