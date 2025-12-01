@@ -12,13 +12,8 @@ const prisma = globalForPrisma.prisma || new PrismaClient({
   },
   // Connection pool configuration for high concurrency
   // These settings help handle 10,000+ concurrent users
-  __internal: {
-    engine: {
-      // Connection pool size (adjust based on your database)
-      // For PostgreSQL: connection_limit in connection string
-      // For SQLite: these are less relevant but kept for consistency
-    }
-  }
+  // MongoDB connection pooling is handled via connection string parameters:
+  // maxPoolSize, minPoolSize, maxIdleTimeMS in DATABASE_URL
 });
 
 // Handle Prisma connection errors gracefully

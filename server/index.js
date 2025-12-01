@@ -266,9 +266,16 @@ app.get('/api/health', async (req, res) => {
         prisma.$queryRaw`SELECT 1`,
         new Promise((_, reject) => setTimeout(() => reject(new Error('Database timeout')), 2000))
       ]);
-      healthStatus.database = process.env.DATABASE_URL?.includes('postgresql') 
-        ? 'PostgreSQL with Prisma (Connected)' 
-        : 'SQLite with Prisma (Connected)';
+      // Detect database type from connection string
+      let dbType = 'Unknown';
+      if (process.env.DATABASE_URL?.includes('mongodb')) {
+        dbType = 'MongoDB';
+      } else if (process.env.DATABASE_URL?.includes('postgresql')) {
+        dbType = 'PostgreSQL';
+      } else if (process.env.DATABASE_URL?.includes('sqlite') || process.env.DATABASE_URL?.includes('file:')) {
+        dbType = 'SQLite';
+      }
+      healthStatus.database = `${dbType} with Prisma (Connected)`;
       healthStatus.databaseStatus = 'connected';
     } catch (dbError) {
       // Database check failed, but still return OK for health check
@@ -436,7 +443,7 @@ app.post('/api/auth/register', upload.fields([
       }
     }
 
-    // Parse skills and proficiency - store as JSON strings for SQLite
+    // Parse skills and proficiency - store as JSON strings
     const skillsJson = skills ? JSON.stringify(skills.split(',').map(s => s.trim())) : null;
     const proficiencyJson = proficiency ? JSON.stringify(JSON.parse(proficiency)) : null;
 
@@ -802,7 +809,7 @@ app.get('/api/experts', validatePagination, async (req, res) => {
 
     if (skills) {
       const skillsArray = skills.split(',').map(s => s.trim());
-      // For SQLite, we need to use string contains since skills is stored as JSON
+      // For MongoDB, we can use array queries, but skills is stored as JSON string
       skillsArray.forEach(skill => {
         orConditions.push({
           skills: { contains: skill }
@@ -3936,7 +3943,7 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
         startDate.setMonth(now.getMonth() - 1);
     }
 
-    // Get all data (using findMany instead of groupBy for SQLite compatibility)
+    // Get all data (using findMany and group in JavaScript for compatibility)
     const [allUsers, allSessions, allReviews] = await Promise.all([
       prisma.user.findMany({
         select: { id: true, userType: true, isActive: true, createdAt: true }
@@ -3960,13 +3967,13 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
     const totalSessions = allSessions.length;
     const totalReviews = allReviews.length;
 
-    // Group sessions by status (JavaScript grouping for SQLite compatibility)
+    // Group sessions by status (JavaScript grouping for compatibility)
     const sessionsByStatus = {};
     allSessions.forEach(session => {
       sessionsByStatus[session.status] = (sessionsByStatus[session.status] || 0) + 1;
     });
 
-    // Group users by type (JavaScript grouping for SQLite compatibility)
+    // Group users by type (JavaScript grouping for compatibility)
     const usersByType = {};
     allUsers.forEach(user => {
       usersByType[user.userType] = (usersByType[user.userType] || 0) + 1;
@@ -4030,7 +4037,7 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
       amount
     })).sort((a, b) => a.date.localeCompare(b.date));
 
-    // Get popular session types (JavaScript grouping for SQLite compatibility)
+    // Get popular session types (JavaScript grouping for compatibility)
     const sessionTypesCount = {};
     allSessions.forEach(session => {
       sessionTypesCount[session.sessionType] = (sessionTypesCount[session.sessionType] || 0) + 1;
@@ -4041,7 +4048,7 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
       count
     })).sort((a, b) => b.count - a.count);
 
-    // Get average expert rating (filter in JavaScript for SQLite compatibility)
+    // Get average expert rating (filter in JavaScript for compatibility)
     const expertUserIds = allUsers.filter(u => u.userType === 'expert').map(u => u.id);
     const expertReviews = allReviews.filter(r => expertUserIds.includes(r.revieweeId));
 
@@ -4407,7 +4414,16 @@ const server = app.listen(PORT, () => {
   
   // Start reminder service for sending meeting reminders
   reminderService.start();
-  console.log(`📊 Database: ${process.env.DATABASE_URL?.includes('postgresql') ? 'PostgreSQL' : 'SQLite'} with Prisma`);
+  // Detect database type
+  let dbType = 'Unknown';
+  if (process.env.DATABASE_URL?.includes('mongodb')) {
+    dbType = 'MongoDB';
+  } else if (process.env.DATABASE_URL?.includes('postgresql')) {
+    dbType = 'PostgreSQL';
+  } else if (process.env.DATABASE_URL?.includes('sqlite') || process.env.DATABASE_URL?.includes('file:')) {
+    dbType = 'SQLite';
+  }
+  console.log(`📊 Database: ${dbType} with Prisma`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`👥 Process ID: ${process.pid}`);
   console.log(`💻 CPU Cores: ${require('os').cpus().length}`);
