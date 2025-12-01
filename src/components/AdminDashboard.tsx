@@ -1586,16 +1586,32 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users
-                    .filter(u => {
-                      if (userFilters.type !== 'all' && u.userType !== userFilters.type) return false;
-                      if (userFilters.status === 'active' && !u.isActive) return false;
-                      if (userFilters.status === 'inactive' && u.isActive) return false;
-                      if (userFilters.status === 'unverified' && u.userType === 'expert' && u.isVerified) return false;
-                      if (userFilters.search && !u.name.toLowerCase().includes(userFilters.search.toLowerCase()) && !u.email.toLowerCase().includes(userFilters.search.toLowerCase())) return false;
-                      return true;
-                    })
-                    .map((u) => (
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                          <span>Loading users...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : users.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No users found. {users.length === 0 && !loading && 'Check console for API errors.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    users
+                      .filter(u => {
+                        if (userFilters.type !== 'all' && u.userType !== userFilters.type) return false;
+                        if (userFilters.status === 'active' && !u.isActive) return false;
+                        if (userFilters.status === 'inactive' && u.isActive) return false;
+                        if (userFilters.status === 'unverified' && u.userType === 'expert' && u.isVerified) return false;
+                        if (userFilters.search && !u.name.toLowerCase().includes(userFilters.search.toLowerCase()) && !u.email.toLowerCase().includes(userFilters.search.toLowerCase())) return false;
+                        return true;
+                      })
+                      .map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>{u.name}</TableCell>
                       <TableCell>{u.email}</TableCell>
