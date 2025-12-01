@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiService } from '@/lib/apiService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -172,34 +173,30 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
         setError(null);
         console.log('Fetching analytics for expert:', expertId);
         
-        // For now, always use mock data to avoid API issues
-        console.log('Using mock analytics data');
-        const mockData = generateMockAnalyticsData();
-        console.log('Generated mock data:', mockData);
-        setAnalyticsData(mockData);
+        // Use real API
+        const response = await apiService.getExpertAnalytics(expertId, timeRange);
         
-        // TODO: Uncomment when API is working
-        // const response = await fetch(`http://localhost:5000/api/analytics/expert/${expertId}?timeRange=${timeRange}`);
-        // if (response.ok) {
-        //   const result = await response.json();
-        //   if (result.success) {
-        //     setAnalyticsData(result.data);
-        //   } else {
-        //     setAnalyticsData(generateMockAnalyticsData());
-        //   }
-        // } else {
-        //   setAnalyticsData(generateMockAnalyticsData());
-        // }
+        if (response.success && response.data) {
+          console.log('✅ Analytics data received:', response.data);
+          setAnalyticsData(response.data);
+        } else {
+          console.warn('⚠️ Analytics API returned no data, using fallback');
+          // Fallback to calculated data from sessions prop
+          setAnalyticsData(generateMockAnalyticsData());
+        }
       } catch (error) {
         console.error('Error fetching analytics:', error);
         setError('Failed to load analytics data');
+        // Fallback to calculated data from sessions prop
         setAnalyticsData(generateMockAnalyticsData());
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAnalyticsData();
+    if (expertId) {
+      fetchAnalyticsData();
+    }
   }, [expertId, timeRange, sessions]);
 
   if (loading) {

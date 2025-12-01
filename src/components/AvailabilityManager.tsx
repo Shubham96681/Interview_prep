@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import InteractiveCalendar from './InteractiveCalendar';
+import { apiService } from '@/lib/apiService';
 
 interface AvailabilitySlot {
   id: string;
@@ -71,47 +72,54 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
     { key: 'sunday', label: 'Sunday' }
   ];
 
-  // Generate mock availability data
+  // Fetch real availability data from API
   useEffect(() => {
-    const generateMockSlots = () => {
-      const today = new Date();
-      const mockSlots: AvailabilitySlot[] = [];
-
-      // Generate recurring weekly slots for the next 3 months
-      for (let i = 0; i < 90; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-        const dayOfWeek = date.getDay();
+    const fetchAvailability = async () => {
+      if (!expertId) return;
+      
+      setLoading(true);
+      try {
+        const response = await apiService.getAvailabilitySlots(expertId);
         
-        // Only add weekdays (Monday to Friday)
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-          const dateStr = date.toISOString().split('T')[0];
-          const dayName = daysOfWeek[dayOfWeek - 1].key;
+        if (response.success && response.data) {
+          const { daysAvailable, workingHoursStart, workingHoursEnd } = response.data;
           
-          mockSlots.push({
-            id: `slot-${i}`,
-            date: dateStr,
-            startTime: '09:00',
-            endTime: '17:00',
-            isRecurring: true,
-            isActive: true,
-            recurringPattern: 'weekly',
-            recurringDays: [dayName],
-            maxBookings: 8,
-            currentBookings: Math.floor(Math.random() * 5) // Random current bookings
-          });
+          // Convert expert's availability settings to slot format for display
+          // This is a simplified representation - in a full implementation,
+          // you'd have a separate AvailabilitySlot table
+          const availabilitySlots: AvailabilitySlot[] = [];
+          
+          if (daysAvailable && daysAvailable.length > 0) {
+            daysAvailable.forEach((day: string) => {
+              availabilitySlots.push({
+                id: `slot-${day}`,
+                date: '', // Recurring slots don't have specific dates
+                startTime: workingHoursStart || '09:00',
+                endTime: workingHoursEnd || '17:00',
+                isRecurring: true,
+                isActive: true,
+                recurringPattern: 'weekly',
+                recurringDays: [day],
+                maxBookings: 8,
+                currentBookings: 0
+              });
+            });
+          }
+          
+          setSlots(availabilitySlots);
+        } else {
+          setSlots([]);
         }
+      } catch (error) {
+        console.error('Error fetching availability:', error);
+        toast.error('Failed to load availability');
+        setSlots([]);
+      } finally {
+        setLoading(false);
       }
-
-      return mockSlots;
     };
 
-    setLoading(true);
-    setTimeout(() => {
-      const mockSlots = generateMockSlots();
-      setSlots(mockSlots);
-      setLoading(false);
-    }, 1000);
+    fetchAvailability();
   }, [expertId]);
 
   const handleDayToggle = (day: string) => {

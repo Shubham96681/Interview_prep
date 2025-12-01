@@ -3368,6 +3368,244 @@ app.get('/api/admin/reviews', authenticateToken, requireRole('admin'), async (re
   }
 });
 
+// Get expert analytics
+app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) => {
+  try {
+    const { expertId } = req.params;
+    const { timeRange = '3months' } = req.query;
+    
+    // Verify expert exists
+    const expert = await prisma.user.findFirst({
+      where: { 
+        id: expertId,
+        userType: 'expert'
+      },
+      select: { id: true }
+    });
+    
+    if (!expert) {
+      return res.status(404).json({ success: false, error: 'Expert not found' });
+    }
+    
+    // Verify user is the expert or admin
+    if (req.user.id !== expertId && req.user.userType !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Access denied' });
+    }
+    
+    // Calculate date range
+    const now = new Date();
+    let startDate = new Date();
+    
+    switch (timeRange) {
+      case 'week':
+        startDate.setDate(now.getDate() - 7);
+        break;
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1);
+        break;
+      case '3months':
+        startDate.setMonth(now.getMonth() - 3);
+        break;
+      case '6months':
+        startDate.setMonth(now.getMonth() - 6);
+        break;
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1);
+        break;
+      default:
+        startDate.setMonth(now.getMonth() - 3);
+    }
+    
+    // Get expert's sessions
+    const allSessions = await prisma.session.findMany({
+      where: {
+        expertId: expertId
+      },
+      include: {
+        candidate: { select: { id: true, name: true, email: true } },
+        reviews: { select: { rating: true, comment: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    const completedSessions = allSessions.filter(s => s.status === 'completed');
+    const totalEarnings = completedSessions
+      .filter(s => s.paymentStatus === 'completed')
+      .reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+    
+    // Calculate average rating from reviews
+    const allReviews = allSessions.flatMap(s => s.reviews);
+    const averageRating = allReviews.length > 0
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
+      : 0;
+    
+    const completionRate = allSessions.length > 0
+      ? (completedSessions.length / allSessions.length) * 100
+      : 0;
+    
+    // Monthly earnings
+    const monthlyEarningsMap: { [key: string]: number } = {};
+    completedSessions
+      .filter(s => s.paymentStatus === 'completed' && s.paymentAmount)
+      .forEach(session => {
+        const month = new Date(session.updatedAt).toLocaleDateString('en-US', { month: 'short' });
+        monthlyEarningsMap[month] = (monthlyEarningsMap[month] || 0) + (session.paymentAmount || 0);
+      });
+    
+    const monthlyEarnings = Object.entries(monthlyEarningsMap)
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return months.indexOf(a.month) - months.indexOf(b.month);
+      });
+    
+    // Session types breakdown
+    const sessionTypesMap: { [key: string]: { count: number; revenue: number } } = {};
+    completedSessions
+      .filter(s => s.paymentStatus === 'completed')
+      .forEach(session => {
+        const type = session.sessionType || 'other';
+        if (!sessionTypesMap[type]) {
+          sessionTypesMap[type] = { count: 0, revenue: 0 };
+        }
+        sessionTypesMap[type].count += 1;
+        sessionTypesMap[type].revenue += session.paymentAmount || 0;
+      });
+    
+    const sessionTypes = Object.entries(sessionTypesMap).map(([type, data]) => ({
+      type: type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' '),
+      count: data.count,
+      revenue: data.revenue
+    })).sort((a, b) => b.count - a.count);
+    
+    // Weekly stats (last 4 weeks)
+    const weeklyStats = [];
+    for (let i = 3; i >= 0; i--) {
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - (i * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+      
+      const weekSessions = completedSessions.filter(s => {
+        const sessionDate = new Date(s.updatedAt);
+        return sessionDate >= weekStart && sessionDate < weekEnd;
+      });
+      
+      const weekEarnings = weekSessions
+        .filter(s => s.paymentStatus === 'completed')
+        .reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
+      
+      weeklyStats.push({
+        week: `Week ${4 - i}`,
+        sessions: weekSessions.length,
+        earnings: weekEarnings
+      });
+    }
+    
+    // Top clients (candidates with most sessions)
+    const clientMap: { [key: string]: { name: string; sessions: number; revenue: number } } = {};
+    completedSessions
+      .filter(s => s.paymentStatus === 'completed')
+      .forEach(session => {
+        const candidateId = session.candidateId;
+        if (!clientMap[candidateId]) {
+          clientMap[candidateId] = {
+            name: session.candidate.name,
+            sessions: 0,
+            revenue: 0
+          };
+        }
+        clientMap[candidateId].sessions += 1;
+        clientMap[candidateId].revenue += session.paymentAmount || 0;
+      });
+    
+    const topClients = Object.values(clientMap)
+      .sort((a, b) => b.sessions - a.sessions)
+      .slice(0, 5);
+    
+    // Time tracking stats
+    const sessionsWithTracking = completedSessions.filter(s => s.actualDuration);
+    const totalActualTime = sessionsWithTracking.reduce((sum, s) => sum + (s.actualDuration || 0), 0);
+    const totalScheduledTime = completedSessions.reduce((sum, s) => sum + s.duration, 0);
+    const averageActualDuration = sessionsWithTracking.length > 0
+      ? totalActualTime / sessionsWithTracking.length
+      : 0;
+    const averageScheduledDuration = completedSessions.length > 0
+      ? totalScheduledTime / completedSessions.length
+      : 0;
+    
+    const timeTracking = {
+      totalActualTime,
+      totalScheduledTime,
+      averageActualDuration: Math.round(averageActualDuration),
+      averageScheduledDuration: Math.round(averageScheduledDuration),
+      timeEfficiency: totalScheduledTime > 0
+        ? Math.round(((totalScheduledTime - totalActualTime) / totalScheduledTime) * 100 * 10) / 10
+        : 0,
+      sessionsWithTimeTracking: sessionsWithTracking.length
+    };
+    
+    // Candidate time tracking
+    const candidateTrackingMap: { [key: string]: {
+      candidateId: string;
+      candidateName: string;
+      totalSessions: number;
+      totalActualTime: number;
+      totalScheduledTime: number;
+    } } = {};
+    
+    completedSessions.forEach(session => {
+      const candidateId = session.candidateId;
+      if (!candidateTrackingMap[candidateId]) {
+        candidateTrackingMap[candidateId] = {
+          candidateId,
+          candidateName: session.candidate.name,
+          totalSessions: 0,
+          totalActualTime: 0,
+          totalScheduledTime: 0
+        };
+      }
+      candidateTrackingMap[candidateId].totalSessions += 1;
+      candidateTrackingMap[candidateId].totalActualTime += session.actualDuration || 0;
+      candidateTrackingMap[candidateId].totalScheduledTime += session.duration;
+    });
+    
+    const candidateTimeTracking = Object.values(candidateTrackingMap).map(candidate => ({
+      ...candidate,
+      averageActualDuration: candidate.totalSessions > 0
+        ? Math.round(candidate.totalActualTime / candidate.totalSessions)
+        : 0,
+      averageScheduledDuration: candidate.totalSessions > 0
+        ? Math.round(candidate.totalScheduledTime / candidate.totalSessions)
+        : 0
+    })).sort((a, b) => b.totalSessions - a.totalSessions);
+    
+    const analytics = {
+      totalEarnings,
+      totalSessions: allSessions.length,
+      averageRating: Math.round(averageRating * 10) / 10,
+      completionRate: Math.round(completionRate * 10) / 10,
+      monthlyEarnings,
+      sessionTypes,
+      weeklyStats,
+      topClients,
+      timeTracking,
+      candidateTimeTracking
+    };
+    
+    res.json({
+      success: true,
+      data: analytics
+    });
+  } catch (error) {
+    console.error('Error getting expert analytics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get analytics'
+    });
+  }
+});
+
 // Get analytics (admin only)
 app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (req, res) => {
   try {

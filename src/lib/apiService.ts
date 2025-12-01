@@ -650,6 +650,28 @@ class ApiService {
     });
   }
 
+  async getExpertAnalytics(expertId: string, timeRange: string = '3months') {
+    return this.request<{ totalEarnings: number; totalSessions: number; averageRating: number; completionRate: number; monthlyEarnings: any[]; sessionTypes: any[]; weeklyStats: any[]; topClients: any[]; timeTracking: any; candidateTimeTracking: any[] }>(
+      `/api/analytics/expert/${expertId}?timeRange=${timeRange}`,
+      'GET'
+    );
+  }
+
+  async getAvailabilitySlots(expertId: string) {
+    return this.request<{ daysAvailable: string[]; workingHoursStart: string; workingHoursEnd: string; timezone: string }>(
+      `/api/experts/${expertId}/availability-slots`,
+      'GET'
+    );
+  }
+
+  async updateAvailability(expertId: string, data: { daysAvailable?: string[]; workingHoursStart?: string; workingHoursEnd?: string; timezone?: string }) {
+    return this.request(
+      `/api/experts/${expertId}/availability`,
+      'PUT',
+      data
+    );
+  }
+
   async getAnalytics(period: string = 'month') {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     return this.request(`/api/admin/analytics?email=${encodeURIComponent(user.email || '')}&period=${period}`);
