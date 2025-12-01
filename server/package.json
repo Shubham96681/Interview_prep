@@ -21,7 +21,8 @@
     "db:seed": "node scripts/seed.js",
     "db:check-experts": "node scripts/check-experts.js",
     "db:create-admin": "node scripts/create-admin.js",
-    "db:check-users": "node scripts/check-users.js"
+    "db:check-users": "node scripts/check-users.js",
+    "setup:mongodb": "node setup-mongodb.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.930.0",
