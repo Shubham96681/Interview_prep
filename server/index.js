@@ -3637,13 +3637,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
     };
     
     // Candidate time tracking
-    const candidateTrackingMap: { [key: string]: {
-      candidateId: string;
-      candidateName: string;
-      totalSessions: number;
-      totalActualTime: number;
-      totalScheduledTime: number;
-    } } = {};
+    const candidateTrackingMap = {};
     
     completedSessions.forEach(session => {
       const candidateId = session.candidateId;
