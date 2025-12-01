@@ -131,41 +131,63 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
     }));
   };
 
-  const handleSave = () => {
-    if (!formData.date && !formData.isRecurring) {
-      toast.error('Please select a date or enable recurring availability');
+  const handleSave = async () => {
+    if (!formData.isRecurring) {
+      toast.error('Recurring availability is required');
       return;
     }
 
-    if (formData.isRecurring && formData.recurringDays.length === 0) {
+    if (formData.recurringDays.length === 0) {
       toast.error('Please select at least one day for recurring availability');
       return;
     }
 
-    const newSlot: AvailabilitySlot = {
-      id: editingSlot?.id || `slot-${Date.now()}`,
-      date: formData.date,
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      isRecurring: formData.isRecurring,
-      isActive: formData.isActive,
-      recurringPattern: formData.recurringPattern,
-      recurringDays: formData.recurringDays,
-      maxBookings: formData.maxBookings,
-      currentBookings: 0
-    };
+    try {
+      // Update availability via API
+      const response = await apiService.updateAvailability(expertId, {
+        daysAvailable: formData.recurringDays,
+        workingHoursStart: formData.startTime,
+        workingHoursEnd: formData.endTime
+      });
 
-    if (editingSlot) {
-      setSlots(prev => prev.map(slot => slot.id === editingSlot.id ? newSlot : slot));
-      toast.success('Availability updated successfully!');
-    } else {
-      setSlots(prev => [...prev, newSlot]);
-      toast.success('Availability added successfully!');
+      if (response.success) {
+        // Refresh slots from API
+        const refreshResponse = await apiService.getAvailabilitySlots(expertId);
+        if (refreshResponse.success && refreshResponse.data) {
+          const { daysAvailable, workingHoursStart, workingHoursEnd } = refreshResponse.data;
+          const availabilitySlots: AvailabilitySlot[] = [];
+          
+          if (daysAvailable && daysAvailable.length > 0) {
+            daysAvailable.forEach((day: string) => {
+              availabilitySlots.push({
+                id: `slot-${day}`,
+                date: '',
+                startTime: workingHoursStart || '09:00',
+                endTime: workingHoursEnd || '17:00',
+                isRecurring: true,
+                isActive: true,
+                recurringPattern: 'weekly',
+                recurringDays: [day],
+                maxBookings: 8,
+                currentBookings: 0
+              });
+            });
+          }
+          
+          setSlots(availabilitySlots);
+          onAvailabilityChange?.(availabilitySlots);
+        }
+        
+        toast.success('Availability updated successfully!');
+        resetForm();
+        setIsDialogOpen(false);
+      } else {
+        toast.error('Failed to update availability');
+      }
+    } catch (error) {
+      console.error('Error saving availability:', error);
+      toast.error('Failed to update availability');
     }
-
-    onAvailabilityChange?.(slots);
-    resetForm();
-    setIsDialogOpen(false);
   };
 
   const handleEdit = (slot: AvailabilitySlot) => {
