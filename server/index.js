@@ -151,10 +151,11 @@ const emailCheckLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Rate limiting for other API endpoints (optimized for high traffic)
+// Rate limiting for other API endpoints (optimized for high traffic - 10,000+ concurrent users)
+// Increased limits for production to handle high concurrency
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 200 : 1000, // Higher limit for production
+  max: process.env.NODE_ENV === 'production' ? 1000 : 5000, // Increased for high concurrency
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.'
@@ -164,16 +165,18 @@ const limiter = rateLimit({
   // Skip rate limiting for email check and admin monitoring endpoints
   skip: (req) => {
     return req.path === '/api/auth/check-email' || 
-           req.path.startsWith('/api/admin/monitoring');
+           req.path.startsWith('/api/admin/monitoring') ||
+           req.path === '/api/realtime'; // Skip for SSE connections
   },
-  // Use Redis or memory store for distributed rate limiting in production
-  // For now, using default memory store (works per process)
+  // For 10,000+ users, consider using Redis store for distributed rate limiting
+  // For now, using memory store (works per process, use load balancer with sticky sessions)
+  // TODO: Implement Redis store for multi-instance deployments
 });
 
 // More lenient rate limiting for admin monitoring endpoints (real-time updates need frequent polling)
 const adminMonitoringLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
-  max: 120, // Allow 120 requests per minute (2 per second) for monitoring endpoints - increased for real-time updates
+  max: 300, // Allow 300 requests per minute (5 per second) - increased for high concurrency
   message: {
     success: false,
     message: 'Too many monitoring requests. Please wait a moment.'

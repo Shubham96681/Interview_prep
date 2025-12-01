@@ -5,17 +5,24 @@ class RealtimeService extends EventEmitter {
     super();
     this.connections = new Map(); // userId -> Set of connections
     this.heartbeatInterval = null;
-    this.maxConnectionsPerUser = 5; // Limit connections per user to prevent abuse
-    this.maxTotalConnections = 10000; // Maximum total connections
+    this.maxConnectionsPerUser = 10; // Increased for legitimate multi-tab usage
+    this.maxTotalConnections = 10000; // Maximum total connections (supports 10K concurrent users)
+    this.connectionCleanupInterval = null;
   }
 
   start() {
     console.log('🔄 Starting real-time service...');
+    console.log(`📊 Max connections: ${this.maxTotalConnections}, Max per user: ${this.maxConnectionsPerUser}`);
     
     // Start heartbeat to keep connections alive
     this.heartbeatInterval = setInterval(() => {
       this.broadcastHeartbeat();
     }, 30000); // 30 seconds
+
+    // Clean up stale connections every 5 minutes
+    this.connectionCleanupInterval = setInterval(() => {
+      this.cleanupStaleConnections();
+    }, 5 * 60 * 1000); // 5 minutes
 
     console.log('✅ Real-time service started');
   }
