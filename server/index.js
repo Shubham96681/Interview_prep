@@ -3633,24 +3633,22 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
     }
 
     // Get all data (using findMany instead of groupBy for SQLite compatibility)
-    const [allUsers, allSessions, allReviews, completedSessions] = await Promise.all([
+    const [allUsers, allSessions, allReviews] = await Promise.all([
       prisma.user.findMany({
-        select: { userType: true, isActive: true }
+        select: { id: true, userType: true, isActive: true, createdAt: true }
       }),
       prisma.session.findMany({
         select: { status: true, sessionType: true, paymentAmount: true, paymentStatus: true, createdAt: true, updatedAt: true }
       }),
       prisma.review.findMany({
         select: { rating: true, revieweeId: true }
-      }),
-      prisma.session.findMany({
-        where: {
-          status: 'completed',
-          paymentStatus: 'completed'
-        },
-        select: { paymentAmount: true }
       })
     ]);
+
+    // Filter completed sessions
+    const completedSessions = allSessions.filter(s => 
+      s.status === 'completed' && s.paymentStatus === 'completed'
+    );
 
     // Calculate counts
     const totalUsers = allUsers.length;
@@ -3675,24 +3673,13 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
     const completedRevenue = totalRevenue;
 
     // Calculate average rating
-    const reviews = await prisma.review.findMany({
-      select: { rating: true }
-    });
-    const averageRating = reviews.length > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+    const averageRating = allReviews.length > 0
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
       : 0;
 
-    // Format sessions by status
-    const sessionsByStatusObj = {};
-    sessionsByStatus.forEach(item => {
-      sessionsByStatusObj[item.status] = item._count.status;
-    });
-
-    // Format users by type
-    const usersByTypeObj = {};
-    usersByType.forEach(item => {
-      usersByTypeObj[item.userType] = item._count.userType;
-    });
+    // sessionsByStatus and usersByType are already objects from JavaScript grouping
+    const sessionsByStatusObj = sessionsByStatus;
+    const usersByTypeObj = usersByType;
 
     // Get new signups for the period (filter from allUsers)
     const newSignups = allUsers.filter(user => {
@@ -3703,12 +3690,10 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
     const newCandidates = newSignups.filter(u => u.userType === 'candidate').length;
     const newExperts = newSignups.filter(u => u.userType === 'expert').length;
 
-    // Get sessions over time
-    const sessionsOverTime = await prisma.session.findMany({
-      where: {
-        createdAt: { gte: startDate }
-      },
-      select: { createdAt: true }
+    // Get sessions over time (filter from allSessions)
+    const sessionsOverTime = allSessions.filter(session => {
+      const createdAt = new Date(session.createdAt);
+      return createdAt >= startDate;
     });
 
     const sessionsByDate = {};
@@ -3722,14 +3707,12 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
       count
     })).sort((a, b) => a.date.localeCompare(b.date));
 
-    // Get revenue over time
-    const revenueSessions = await prisma.session.findMany({
-      where: {
-        status: 'completed',
-        paymentStatus: 'completed',
-        updatedAt: { gte: startDate }
-      },
-      select: { paymentAmount: true, updatedAt: true }
+    // Get revenue over time (filter from allSessions)
+    const revenueSessions = allSessions.filter(session => {
+      const updatedAt = new Date(session.updatedAt);
+      return session.status === 'completed' && 
+             session.paymentStatus === 'completed' && 
+             updatedAt >= startDate;
     });
 
     const revenueByDate = {};
@@ -3743,29 +3726,20 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
       amount
     })).sort((a, b) => a.date.localeCompare(b.date));
 
-    // Get popular session types
-    const sessionTypes = await prisma.session.groupBy({
-      by: ['sessionType'],
-      _count: { sessionType: true }
+    // Get popular session types (JavaScript grouping for SQLite compatibility)
+    const sessionTypesCount = {};
+    allSessions.forEach(session => {
+      sessionTypesCount[session.sessionType] = (sessionTypesCount[session.sessionType] || 0) + 1;
     });
 
-    const popularExpertiseAreas = sessionTypes.map(item => ({
-      type: item.sessionType,
-      count: item._count.sessionType
+    const popularExpertiseAreas = Object.entries(sessionTypesCount).map(([type, count]) => ({
+      type,
+      count
     })).sort((a, b) => b.count - a.count);
 
-    // Get average expert rating
-    const expertReviews = await prisma.review.findMany({
-      where: {
-        reviewee: {
-          userType: 'expert'
-        }
-      },
-      include: {
-        reviewee: { select: { userType: true } }
-      },
-      select: { rating: true }
-    });
+    // Get average expert rating (filter in JavaScript for SQLite compatibility)
+    const expertUserIds = allUsers.filter(u => u.userType === 'expert').map(u => u.id);
+    const expertReviews = allReviews.filter(r => expertUserIds.includes(r.revieweeId));
 
     const averageExpertRating = expertReviews.length > 0
       ? expertReviews.reduce((sum, r) => sum + r.rating, 0) / expertReviews.length
