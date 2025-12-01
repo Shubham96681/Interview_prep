@@ -3394,6 +3394,201 @@ app.get('/api/admin/users', authenticateToken, requireRole('admin'), async (req,
   }
 });
 
+// Get single user details (admin only)
+app.get('/api/admin/users/:userId', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email } = req.query;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        userType: true,
+        isActive: true,
+        isVerified: true,
+        rating: true,
+        totalSessions: true,
+        hourlyRate: true,
+        company: true,
+        title: true,
+        phone: true,
+        bio: true,
+        experience: true,
+        skills: true,
+        yearsOfExperience: true,
+        proficiency: true,
+        timezone: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        daysAvailable: true,
+        resumePath: true,
+        profilePhotoPath: true,
+        certificationPaths: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    console.error('Error getting user details:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get user details'
+    });
+  }
+});
+
+// Update user (admin only)
+app.put('/api/admin/users/:userId', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email } = req.query;
+    const updateData = req.body;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Don't allow updating password through this endpoint
+    delete updateData.password;
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        userType: true,
+        isActive: true,
+        isVerified: true,
+        rating: true,
+        totalSessions: true,
+        hourlyRate: true,
+        company: true,
+        title: true,
+        phone: true,
+        bio: true,
+        experience: true,
+        skills: true,
+        yearsOfExperience: true,
+        proficiency: true,
+        timezone: true,
+        workingHoursStart: true,
+        workingHoursEnd: true,
+        daysAvailable: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: user
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update user'
+    });
+  }
+});
+
+// Approve expert (admin only)
+app.post('/api/admin/users/:userId/approve-expert', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { email } = req.query;
+    const { approved, reason } = req.body;
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Verify user is an expert
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { userType: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found'
+      });
+    }
+
+    if (user.userType !== 'expert') {
+      return res.status(400).json({
+        success: false,
+        error: 'User is not an expert'
+      });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { isVerified: approved === true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        userType: true,
+        isActive: true,
+        isVerified: true,
+        rating: true,
+        totalSessions: true,
+        hourlyRate: true,
+        company: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    res.json({
+      success: true,
+      data: updatedUser
+    });
+  } catch (error) {
+    console.error('Error approving expert:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to approve expert'
+    });
+  }
+});
+
 // Get all reviews (admin only)
 app.get('/api/admin/reviews', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
