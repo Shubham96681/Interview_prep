@@ -4215,12 +4215,20 @@ app.get('/api/admin/monitoring', authenticateToken, async (req, res) => {
     const { timeRange = '1h' } = req.query;
     const metrics = monitoringService.getMetrics(timeRange);
     
+    console.log('📊 Monitoring metrics requested:', {
+      timeRange,
+      hasMetrics: !!metrics,
+      cpuData: metrics?.appMonitoring?.serverCpu,
+      memoryData: metrics?.appMonitoring?.serverMemory,
+      totalRequests: metrics?.appMonitoring?.totalRequests
+    });
+    
     res.json({
       success: true,
       data: metrics
     });
   } catch (error) {
-    console.error('Error getting monitoring metrics:', error);
+    console.error('❌ Error getting monitoring metrics:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to get monitoring metrics'

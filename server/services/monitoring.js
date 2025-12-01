@@ -54,8 +54,14 @@ class MonitoringService extends EventEmitter {
   }
 
   startMonitoring() {
+    console.log('🔍 Starting monitoring service...');
+    
     // Collect initial metrics immediately
     this.collectSystemMetrics();
+    console.log('✅ Initial system metrics collected:', {
+      cpu: this.metrics.serverCpu.length > 0 ? this.metrics.serverCpu[this.metrics.serverCpu.length - 1] : 'none',
+      memory: this.metrics.serverMemory.length > 0 ? this.metrics.serverMemory[this.metrics.serverMemory.length - 1] : 'none'
+    });
     
     // Collect system metrics every 5 seconds
     setInterval(() => {
@@ -68,6 +74,8 @@ class MonitoringService extends EventEmitter {
     setInterval(() => {
       this.cleanOldMetrics();
     }, 60000);
+    
+    console.log('✅ Monitoring service started successfully');
   }
 
   collectSystemMetrics() {

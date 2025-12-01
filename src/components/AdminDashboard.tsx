@@ -359,10 +359,15 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       ]);
 
       if (monitoringRes.success) {
-        setMonitoring(monitoringRes.data);
+        console.log('📊 Monitoring data received:', monitoringRes);
+        console.log('📊 Monitoring metrics:', monitoringRes.data);
+        // Handle both nested and direct data structures
+        const metrics = monitoringRes.data?.data || monitoringRes.data;
+        setMonitoring(metrics);
         setMonitoringLastUpdate(new Date());
       } else {
         console.error('❌ Failed to load monitoring:', monitoringRes.error || monitoringRes.message);
+        console.error('❌ Full response:', monitoringRes);
       }
       if (errorsRes.success) {
         setMonitoringErrors(errorsRes.data?.errors || []);
