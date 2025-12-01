@@ -658,31 +658,10 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
       where: { email }
     });
 
-    let isNewlyCreated = false;
-    
-    // If user doesn't exist, create test users on-the-fly for common test emails
-    if (!user && (email === 'john@example.com' || email === 'jane@example.com')) {
-      console.log('⚠️ User not found, creating test user:', email);
-      try {
-        const hashedPassword = await bcrypt.hash(password || 'password123', 10);
-        const testUserData = {
-          email,
-          name: email === 'john@example.com' ? 'John Doe' : 'Jane Smith',
-          password: hashedPassword,
-          userType: email === 'john@example.com' ? 'candidate' : 'expert',
-          company: email === 'john@example.com' ? 'Tech Corp' : 'Google',
-          title: email === 'john@example.com' ? 'Software Engineer' : 'Senior Software Engineer',
-        };
-        
-        user = await prisma.user.create({
-          data: testUserData
-        });
-        isNewlyCreated = true;
-        console.log('✅ Test user created:', user.id);
-      } catch (createError) {
-        console.error('❌ Error creating test user:', createError);
-        return res.status(500).json({ message: 'Error creating user' });
-      }
+    // User must exist in database - no auto-creation
+    if (!user) {
+      console.log('❌ User not found:', email);
+      return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     if (!user) {
@@ -1132,32 +1111,12 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       }
     }
     
-    // Handle mock expert IDs (map to real database experts)
-    if (!expert && expertId === 'expert-001') {
-      expert = await prisma.user.findUnique({
-        where: { email: 'jane@example.com' }
-      });
-      if (expert && expert.userType !== 'expert') {
-        expert = null;
-      }
-    }
-    
-    // Verify candidate exists - handle mock IDs
+    // Verify candidate exists
     let candidate = null;
     if (candidateId) {
       candidate = await prisma.user.findFirst({
         where: { id: candidateId, userType: 'candidate' }
       });
-    }
-    
-    // Handle mock candidate IDs
-    if (!candidate && candidateId === 'candidate-001') {
-      candidate = await prisma.user.findUnique({
-        where: { email: 'john@example.com' }
-      });
-      if (candidate && candidate.userType !== 'candidate') {
-        candidate = null;
-      }
     }
 
     if (!expert || expert.userType !== 'expert') {
@@ -1359,43 +1318,23 @@ app.get('/api/experts/:expertId/availability', async (req, res) => {
       });
     }
     
-    // Map test expert IDs and find actual expert ID
-    let actualExpertId = expertId;
-    if (expertId === 'expert-001') {
-      const expert = await prisma.user.findUnique({
-        where: { email: 'jane@example.com' },
-        select: { id: true }
-      });
-      if (expert) actualExpertId = expert.id;
-    } else {
-      const expert = await prisma.user.findFirst({
-        where: { 
-          OR: [
-            { id: expertId },
-            { email: expertId }
-          ],
-          userType: 'expert'
-        },
-        select: { id: true }
-      });
-      if (expert) {
-        actualExpertId = expert.id;
-      } else {
-        console.log('⚠️ Expert not found:', expertId);
-        // Return all slots as available if expert not found
-        const allSlots = [];
-        for (let hour = 9; hour <= 21; hour++) {
-          allSlots.push({
-            time: `${String(hour).padStart(2, '0')}:00`,
-            status: 'available'
-          });
-        }
-        return res.json({
-          success: true,
-          data: { slots: allSlots }
-        });
-      }
+    // Find actual expert ID
+    const expert = await prisma.user.findFirst({
+      where: { 
+        OR: [
+          { id: expertId },
+          { email: expertId }
+        ],
+        userType: 'expert'
+      },
+      select: { id: true }
+    });
+    
+    if (!expert) {
+      return res.status(404).json({ success: false, error: 'Expert not found' });
     }
+    
+    const actualExpertId = expert.id;
     
     console.log('🔍 Using expert ID:', actualExpertId);
     
@@ -1479,36 +1418,23 @@ app.get('/api/experts/:expertId/booked-slots', async (req, res) => {
       endDate
     });
     
-    // Map test expert IDs and find actual expert ID
-    let actualExpertId = expertId;
-    if (expertId === 'expert-001') {
-      const expert = await prisma.user.findUnique({
-        where: { email: 'jane@example.com' },
-        select: { id: true }
-      });
-      if (expert) actualExpertId = expert.id;
-    } else {
-      // Verify expert exists and get actual ID
-      const expert = await prisma.user.findFirst({
-        where: { 
-          OR: [
-            { id: expertId },
-            { email: expertId }
-          ],
-          userType: 'expert'
-        },
-        select: { id: true }
-      });
-      if (expert) {
-        actualExpertId = expert.id;
-      } else {
-        console.log('⚠️ Expert not found:', expertId);
-        return res.json({
-          success: true,
-          data: { bookedSlots: [] }
-        });
-      }
+    // Verify expert exists and get actual ID
+    const expert = await prisma.user.findFirst({
+      where: { 
+        OR: [
+          { id: expertId },
+          { email: expertId }
+        ],
+        userType: 'expert'
+      },
+      select: { id: true }
+    });
+    
+    if (!expert) {
+      return res.status(404).json({ success: false, error: 'Expert not found' });
     }
+    
+    const actualExpertId = expert.id;
     
     console.log('🔍 Using expert ID:', actualExpertId);
     
@@ -1689,23 +1615,6 @@ app.get('/api/sessions', async (req, res) => {
     let userId = queryUserId;
     if (!userId && req.user) {
       userId = req.user.id || req.user.userId;
-    }
-    
-    // Handle mock IDs
-    if (userId === 'candidate-001') {
-      const candidate = await prisma.user.findUnique({
-        where: { email: 'john@example.com' }
-      });
-      if (candidate) {
-        userId = candidate.id;
-      }
-    } else if (userId === 'expert-001') {
-      const expert = await prisma.user.findUnique({
-        where: { email: 'jane@example.com' }
-      });
-      if (expert) {
-        userId = expert.id;
-      }
     }
     
     // If no userId, return empty
@@ -2254,60 +2163,13 @@ app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId(
         // For test tokens, we'll allow access and just return the reviews
         // The session lookup below will fail, so we'll skip the access check
       }
-    } else {
-      // Map test user IDs to database IDs
-      if (userId === 'candidate-001') {
-        const candidate = await prisma.user.findUnique({
-          where: { email: 'john@example.com' },
-          select: { id: true }
-        });
-        if (candidate) {
-          userId = candidate.id;
-          console.log('✅ Mapped candidate-001 to database ID for reviews:', userId);
-        }
-      } else if (userId === 'expert-001') {
-        const expert = await prisma.user.findUnique({
-          where: { email: 'jane@example.com' },
-          select: { id: true }
-        });
-        if (expert) {
-          userId = expert.id;
-          console.log('✅ Mapped expert-001 to database ID for reviews:', userId);
-        }
-      }
     }
 
     // Verify user has access to this session (skip if test token without userId)
     // For reviews endpoint, be more permissive - allow access if session exists
     let session = null;
     if (userId) {
-      // Map test user IDs to database IDs
-      let actualUserId = userId;
-      if (userId === 'candidate-001') {
-        try {
-          const candidate = await prisma.user.findUnique({
-            where: { email: 'john@example.com' },
-            select: { id: true }
-          });
-          if (candidate) {
-            actualUserId = candidate.id;
-          }
-        } catch (e) {
-          // Continue with original userId
-        }
-      } else if (userId === 'expert-001') {
-        try {
-          const expert = await prisma.user.findUnique({
-            where: { email: 'jane@example.com' },
-            select: { id: true }
-          });
-          if (expert) {
-            actualUserId = expert.id;
-          }
-        } catch (e) {
-          // Continue with original userId
-        }
-      }
+      const actualUserId = userId;
       
       session = await prisma.session.findFirst({
         where: {
@@ -2369,28 +2231,7 @@ app.get('/api/sessions/:sessionId/reviews', authenticateToken, validateObjectId(
 // Get session by ID (MUST come after more specific routes like /reviews)
 app.get('/api/sessions/:id', authenticateToken, validateObjectId('id'), async (req, res) => {
   try {
-    let userId = req.user?.id || req.user?.userId;
-    
-    // Map test user IDs to database IDs
-    if (userId === 'candidate-001') {
-      const candidate = await prisma.user.findUnique({
-        where: { email: 'john@example.com' },
-        select: { id: true }
-      });
-      if (candidate) {
-        userId = candidate.id;
-        console.log('✅ Mapped candidate-001 to database ID for session:', userId);
-      }
-    } else if (userId === 'expert-001') {
-      const expert = await prisma.user.findUnique({
-        where: { email: 'jane@example.com' },
-        select: { id: true }
-      });
-      if (expert) {
-        userId = expert.id;
-        console.log('✅ Mapped expert-001 to database ID for session:', userId);
-      }
-    }
+    const userId = req.user?.id || req.user?.userId;
 
     // Build where clause - if userId exists, check access; otherwise allow for test tokens
     let whereClause = { id: req.params.id };
@@ -2780,33 +2621,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
         const bodyUserId = req.body.userId;
         if (bodyUserId) {
           console.log('📝 Received userId in request body:', bodyUserId);
-          // Check if it's a test user ID that needs mapping
-          let actualUserId = bodyUserId;
-          
-          // Map test user IDs to database IDs
-          if (bodyUserId === 'candidate-001') {
-            const candidate = await prisma.user.findUnique({
-              where: { email: 'john@example.com' },
-              select: { id: true }
-            });
-            if (candidate) {
-              actualUserId = candidate.id;
-              console.log('✅ Mapped candidate-001 to database ID:', actualUserId);
-            } else {
-              console.error('❌ Could not find candidate with email john@example.com');
-            }
-          } else if (bodyUserId === 'expert-001') {
-            const expert = await prisma.user.findUnique({
-              where: { email: 'jane@example.com' },
-              select: { id: true }
-            });
-            if (expert) {
-              actualUserId = expert.id;
-              console.log('✅ Mapped expert-001 to database ID:', actualUserId);
-            } else {
-              console.error('❌ Could not find expert with email jane@example.com');
-            }
-          }
+          const actualUserId = bodyUserId;
           
           console.log('🔍 Checking session access:', {
             bodyUserId,
@@ -2820,7 +2635,7 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
           // Verify this userId is a participant in the session
           if (actualUserId === sessionForLookup.candidateId || actualUserId === sessionForLookup.expertId) {
             reviewerId = actualUserId;
-            console.log('✅ Using userId from request body (mapped):', reviewerId);
+            console.log('✅ Using userId from request body:', reviewerId);
           } else {
             console.error('❌ userId from request body does not match session participants:', {
               bodyUserId,
@@ -3303,55 +3118,7 @@ app.get('/api/realtime', (req, res) => {
   
   // Do database lookup asynchronously (non-blocking)
   // This allows the connection to be established even if DB lookup fails
-  (async () => {
-    try {
-      // Handle mock IDs - map to database IDs
-      if (userId === 'candidate-001') {
-        try {
-          const candidate = await Promise.race([
-            prisma.user.findUnique({
-              where: { email: 'john@example.com' },
-              select: { id: true }
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
-          ]);
-          if (candidate) {
-            actualUserId = candidate.id;
-            console.log('✅ Mapped candidate-001 to database ID for realtime:', actualUserId);
-            // Update connection with new userId
-            realtimeService.removeConnection(userId, res);
-  realtimeService.addConnection(actualUserId, res);
-          }
-        } catch (dbError) {
-          console.warn('⚠️ Could not map candidate-001 (using original):', dbError.message);
-          // Continue with original userId
-        }
-      } else if (userId === 'expert-001') {
-        try {
-          const expert = await Promise.race([
-            prisma.user.findUnique({
-              where: { email: 'jane@example.com' },
-              select: { id: true }
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000))
-          ]);
-          if (expert) {
-            actualUserId = expert.id;
-            console.log('✅ Mapped expert-001 to database ID for realtime:', actualUserId);
-            // Update connection with new userId
-            realtimeService.removeConnection(userId, res);
-            realtimeService.addConnection(actualUserId, res);
-          }
-        } catch (dbError) {
-          console.warn('⚠️ Could not map expert-001 (using original):', dbError.message);
-          // Continue with original userId
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error in async userId mapping:', error);
-      // Continue with original userId - connection already established
-    }
-  })();
+  // userId should already be a valid database ID from authentication
 
   // Add connection to real-time service (use original userId for now, will update if mapped)
   const connectionAdded = realtimeService.addConnection(userId, res);

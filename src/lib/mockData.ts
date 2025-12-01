@@ -66,9 +66,7 @@ export const mockExperts: Expert[] = [
 ];
 
 // Import session service to get sessions
-import { sessionService } from './sessionService';
-
-// Export sessions from service
-export const mockSessions = sessionService.getAllSessions();
+// Mock sessions removed - all data now comes from database via API
+export const mockSessions: any[] = [];
 
 
