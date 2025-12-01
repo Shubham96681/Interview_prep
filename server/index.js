@@ -3632,19 +3632,16 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
         startDate.setMonth(now.getMonth() - 1);
     }
 
-    // Get all data
-    const [totalUsers, activeUsers, totalSessions, totalReviews, sessionsByStatus, usersByType, completedSessions] = await Promise.all([
-      prisma.user.count(),
-      prisma.user.count({ where: { isActive: true } }),
-      prisma.session.count(),
-      prisma.review.count(),
-      prisma.session.groupBy({
-        by: ['status'],
-        _count: { status: true }
+    // Get all data (using findMany instead of groupBy for SQLite compatibility)
+    const [allUsers, allSessions, allReviews, completedSessions] = await Promise.all([
+      prisma.user.findMany({
+        select: { userType: true, isActive: true }
       }),
-      prisma.user.groupBy({
-        by: ['userType'],
-        _count: { userType: true }
+      prisma.session.findMany({
+        select: { status: true, sessionType: true, paymentAmount: true, paymentStatus: true, createdAt: true, updatedAt: true }
+      }),
+      prisma.review.findMany({
+        select: { rating: true, revieweeId: true }
       }),
       prisma.session.findMany({
         where: {
@@ -3654,6 +3651,24 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
         select: { paymentAmount: true }
       })
     ]);
+
+    // Calculate counts
+    const totalUsers = allUsers.length;
+    const activeUsers = allUsers.filter(u => u.isActive).length;
+    const totalSessions = allSessions.length;
+    const totalReviews = allReviews.length;
+
+    // Group sessions by status (JavaScript grouping for SQLite compatibility)
+    const sessionsByStatus = {};
+    allSessions.forEach(session => {
+      sessionsByStatus[session.status] = (sessionsByStatus[session.status] || 0) + 1;
+    });
+
+    // Group users by type (JavaScript grouping for SQLite compatibility)
+    const usersByType = {};
+    allUsers.forEach(user => {
+      usersByType[user.userType] = (usersByType[user.userType] || 0) + 1;
+    });
 
     // Calculate revenue
     const totalRevenue = completedSessions.reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
@@ -3679,12 +3694,10 @@ app.get('/api/admin/analytics', authenticateToken, requireRole('admin'), async (
       usersByTypeObj[item.userType] = item._count.userType;
     });
 
-    // Get new signups for the period
-    const newSignups = await prisma.user.findMany({
-      where: {
-        createdAt: { gte: startDate }
-      },
-      select: { userType: true }
+    // Get new signups for the period (filter from allUsers)
+    const newSignups = allUsers.filter(user => {
+      const createdAt = new Date(user.createdAt || new Date());
+      return createdAt >= startDate;
     });
     
     const newCandidates = newSignups.filter(u => u.userType === 'candidate').length;
