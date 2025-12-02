@@ -581,15 +581,21 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       console.error(`❌ WARNING: User was created but not found in database!`);
     }
 
-    // Broadcast user creation to all admins
+    // Broadcast user creation and analytics update to all admins
     try {
       realtimeService.broadcast('user_created', {
         user: userWithoutPassword,
         timestamp: new Date().toISOString()
       });
       console.log('📡 Broadcasted user_created event to admins');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting user_created:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
     }
 
     res.status(201).json({
@@ -1154,15 +1160,21 @@ app.put('/api/users/profile', authenticateToken, upload.single('profilePhoto'), 
       }
     });
 
-    // Broadcast user update to admins
+    // Broadcast user update and analytics update to admins
     try {
       realtimeService.broadcast('user_updated', {
         user: user,
         timestamp: new Date().toISOString()
       });
       console.log('📡 Broadcasted user_updated event to admins');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting user_updated:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
     }
     
     res.json({ message: 'Profile updated successfully', user });
@@ -1343,10 +1355,28 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
       }
     });
 
-    // Broadcast availability update via real-time service
+    // Broadcast session creation and availability update via real-time service
     try {
       const realtimeService = require('./services/realtime');
-      // Broadcast to all connected users that availability has changed for this expert
+      
+      // Broadcast session created event
+      realtimeService.broadcast('session_created', {
+        session: {
+          id: session.id,
+          expertId: session.expertId,
+          candidateId: session.candidateId,
+          expertName: session.expert.name,
+          candidateName: session.candidate.name,
+          scheduledDate: session.scheduledDate,
+          status: session.status,
+          sessionType: session.sessionType,
+          duration: session.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_created event to admins');
+      
+      // Broadcast availability update
       realtimeService.broadcast('availability_updated', {
         expertId: actualExpertId,
         date: date || (finalScheduledDate ? finalScheduledDate.toISOString().split('T')[0] : null),
@@ -1354,8 +1384,14 @@ app.post('/api/sessions', authenticateToken, async (req, res) => {
         sessionId: session.id
       });
       console.log('📡 Broadcasted availability update for expert:', actualExpertId);
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting availability update:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
       // Don't fail the booking if real-time broadcast fails
     }
 
@@ -2585,7 +2621,7 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
 
     console.log(`✅ Session ${sessionId} status updated to ${status}`);
     
-    // Broadcast session update to admins
+    // Broadcast session update and analytics update to admins
     try {
       realtimeService.broadcast('session_updated', {
         session: {
@@ -2602,8 +2638,14 @@ app.put('/api/sessions/:id/status', authenticateToken, validateObjectId('id'), a
         timestamp: new Date().toISOString()
       });
       console.log('📡 Broadcasted session_updated event to admins');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting session_updated:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
     }
     
     res.json({ 
@@ -2998,6 +3040,25 @@ app.post('/api/reviews', authenticateToken, validateReview, async (req, res) => 
     });
 
     console.log('✅ Review saved successfully:', { reviewId: review.id, isUpdate: !!existingReview });
+    
+    // Broadcast review creation/update and analytics update
+    try {
+      const realtimeService = require('./services/realtime');
+      realtimeService.broadcast('review_created', {
+        review: review,
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted review_created event');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
+    }
+    
     res.status(existingReview ? 200 : 201).json({ 
       success: true,
       message: existingReview ? 'Review updated successfully' : 'Review created successfully', 
@@ -3551,7 +3612,7 @@ app.put('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), vali
 
     console.log('✅ Session updated successfully:', id);
 
-    // Broadcast session update to admins
+    // Broadcast session update and analytics update to admins
     try {
       realtimeService.broadcast('session_updated', {
         session: {
@@ -3568,8 +3629,14 @@ app.put('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), vali
         timestamp: new Date().toISOString()
       });
       console.log('📡 Broadcasted session_updated event to admins');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting session_updated:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
     }
 
     // Broadcast availability update if date/time changed
@@ -3677,7 +3744,7 @@ app.delete('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), v
 
     console.log('✅ Session deleted successfully:', id);
 
-    // Broadcast session deletion to admins
+    // Broadcast session deletion and analytics update to admins
     try {
       realtimeService.broadcast('session_deleted', {
         sessionId: id,
@@ -3686,8 +3753,14 @@ app.delete('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), v
         timestamp: new Date().toISOString()
       });
       console.log('📡 Broadcasted session_deleted event to admins');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting session_deleted:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
     }
 
     // Broadcast availability update
@@ -4229,15 +4302,21 @@ app.post('/api/admin/users', authenticateToken, requireRole('admin'), async (req
 
     console.log('✅ User created successfully:', user.id);
 
-    // Broadcast user creation to admins
+    // Broadcast user creation and analytics update to admins
     try {
       realtimeService.broadcast('user_created', {
         user,
         timestamp: new Date().toISOString()
       });
       console.log('📡 Broadcasted user_created event to admins');
+      
+      // Broadcast analytics update (data changed)
+      realtimeService.broadcast('analytics_updated', {
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted analytics_updated event');
     } catch (realtimeError) {
-      console.error('❌ Error broadcasting user_created:', realtimeError);
+      console.error('❌ Error broadcasting real-time events:', realtimeError);
     }
 
     // Send password email with credentials (optional - don't fail if email fails)

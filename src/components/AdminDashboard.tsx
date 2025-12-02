@@ -214,12 +214,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
     const handleAnalyticsUpdated = () => {
       console.log('🔄 Admin: Analytics updated via real-time');
-      // Reload analytics
+      // Reload analytics immediately
       apiService.getAnalytics(analyticsPeriod).then((res) => {
         if (res.success) {
-          setAnalytics(res.data?.analytics || null);
+          setAnalytics(res.data?.analytics || res.data?.data?.analytics || null);
         }
       });
+      // Also reload all data to ensure consistency
+      loadData();
     };
 
     const handleAvailabilityUpdated = () => {
@@ -351,6 +353,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   useEffect(() => {
     loadData();
     loadMonitoring();
+    
+    // Periodic refresh for main data every 30 seconds to ensure real-time accuracy
+    const dataInterval = setInterval(() => {
+      console.log('🔄 Periodic data refresh (30s interval)');
+      loadData();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(dataInterval);
   }, [analyticsPeriod]);
 
   useEffect(() => {
