@@ -96,16 +96,16 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
                 date: '', // Recurring slots don't have specific dates
                 startTime: workingHoursStart || '09:00',
                 endTime: workingHoursEnd || '17:00',
-                isRecurring: true,
-                isActive: true,
-                recurringPattern: 'weekly',
+            isRecurring: true,
+            isActive: true,
+            recurringPattern: 'weekly',
                 recurringDays: [day],
-                maxBookings: 8,
+            maxBookings: 8,
                 currentBookings: 0
-              });
+          });
             });
-          }
-          
+      }
+
           setSlots(availabilitySlots);
         } else {
           setSlots([]);
@@ -115,7 +115,7 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
         toast.error('Failed to load availability');
         setSlots([]);
       } finally {
-        setLoading(false);
+      setLoading(false);
       }
     };
 
@@ -169,7 +169,7 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
                 recurringPattern: 'weekly',
                 recurringDays: [day],
                 maxBookings: 8,
-                currentBookings: 0
+      currentBookings: 0
               });
             });
           }
@@ -178,9 +178,9 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
           onAvailabilityChange?.(availabilitySlots);
         }
         
-        toast.success('Availability updated successfully!');
-        resetForm();
-        setIsDialogOpen(false);
+      toast.success('Availability updated successfully!');
+    resetForm();
+    setIsDialogOpen(false);
       } else {
         toast.error('Failed to update availability');
       }

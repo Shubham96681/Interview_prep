@@ -14,8 +14,8 @@ A comprehensive interview marketplace platform that connects candidates with exp
 ### Backend
 - **Node.js** - JavaScript runtime
 - **Express.js** - Web application framework
-- **MongoDB** - NoSQL database
-- **Mongoose** - MongoDB object modeling
+- **SQLite** - Lightweight relational database (development)
+- **Prisma** - Modern ORM for database access
 - **JWT** - JSON Web Tokens for authentication
 - **Multer** - File upload handling
 - **Express Validator** - Input validation
@@ -99,7 +99,7 @@ All Shadcn-UI components are pre-downloaded and available at `@/components/ui`:
 ### Prerequisites
 
 - Node.js (v16 or higher)
-- MongoDB (local or cloud instance)
+- SQLite (included with Node.js, no separate installation needed)
 - pnpm (recommended) or npm
 
 ### Installation
@@ -125,14 +125,14 @@ npm install
 cp env.example .env
 
 # Edit .env file with your configuration
-# Set MONGODB_URI, JWT_SECRET, etc.
+# Set DATABASE_URL, JWT_SECRET, etc.
 ```
 
 ### Database Setup
 
 ```bash
-# Start MongoDB (if running locally)
-mongod
+# SQLite database is automatically created on first run
+# No separate database server installation needed
 
 # Seed the database with sample data
 cd server
@@ -304,8 +304,11 @@ Create a `.env` file in the `server` directory with the following variables:
 PORT=5000
 NODE_ENV=development
 
-# Database
-MONGODB_URI=mongodb://localhost:27017/interview-marketplace
+# Database - SQLite (for development)
+DATABASE_URL="file:./dev.db"
+
+# Database - PostgreSQL (for production, optional)
+# DATABASE_URL="postgresql://username:password@localhost:5432/interview_marketplace"
 
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production

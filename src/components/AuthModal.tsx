@@ -79,8 +79,8 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
       toast.error('Login failed', {
         description: errorMessage,
       });
-      setIsLoading(false);
-      return;
+        setIsLoading(false);
+        return;
     }
   };
 

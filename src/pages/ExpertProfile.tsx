@@ -111,7 +111,7 @@ export default function ExpertProfile() {
     if (!id) return;
     
     setLoading(true);
-
+    
     // Validate ID - reject frontend-generated IDs
     if (id && id.startsWith('user-')) {
       console.error('❌ ExpertProfile: Frontend-generated ID detected:', id);

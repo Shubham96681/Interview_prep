@@ -56,19 +56,35 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
           response.data?.bookedSlots ||
           response.data ||
           [];
+        
+        console.log('📋 API Response - Booked slots received:', booked.length, booked);
+      } else {
+        console.warn('⚠️ Failed to fetch booked slots:', response);
       }
 
       const grouped: Record<string, string[]> = {};
 
       booked.forEach((b) => {
-        if (!b.date || !b.time || b.status === "cancelled") return;
-
+        // Skip cancelled sessions
+        if (b.status === "cancelled") return;
+        
+        // Extract date and time
         const date = normalizeDate(b.scheduledDate || b.date);
         const time = normalize(b.time);
 
+        // Validate we have both date and time
+        if (!date || !time) {
+          console.warn('Invalid booked slot data:', b);
+          return;
+        }
+
         grouped[date] = grouped[date] || [];
-        grouped[date].push(time);
+        if (!grouped[date].includes(time)) {
+          grouped[date].push(time);
+        }
       });
+
+      console.log('📅 Grouped booked slots:', grouped);
 
       const list: Slot[] = [];
       
@@ -140,9 +156,20 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
     const normalizedTime = normalize(time);
 
-    if (slot.booked.includes(normalizedTime)) return "booked";
-    if (slot.disabled.includes(normalizedTime)) return "not_available";
-    if (slot.available.includes(normalizedTime)) return "available";
+    // Check booked first (highest priority)
+    if (slot.booked.includes(normalizedTime)) {
+      return "booked";
+    }
+    
+    // Then check disabled
+    if (slot.disabled.includes(normalizedTime)) {
+      return "not_available";
+    }
+    
+    // Finally check available
+    if (slot.available.includes(normalizedTime)) {
+      return "available";
+    }
 
     return "not_available";
   };
@@ -267,7 +294,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
                 // Slot class mapping
                 const slotClasses = {
-                  booked: "opacity-40 cursor-not-allowed border-gray-300 bg-red-50",
+                  booked: "opacity-60 cursor-not-allowed border-red-300 bg-red-50",
                   not_available: "opacity-40 cursor-not-allowed border-gray-300",
                   available: "border-blue-500 text-blue-600 hover:bg-blue-50",
                 };
@@ -289,12 +316,30 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                   >
                     <Clock className="h-4 w-4" />
                     <span>{time}</span>
-                    {(isBooked || isUnavailable) && (
+                    {isBooked && (
+                      <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden rounded-lg">
+                        {/* Thick diagonal red line for booked slots */}
+                        <div
+                          className="absolute top-0 left-0 w-full h-full"
+                          style={{
+                            background: 'linear-gradient(to bottom right, transparent 42%, #dc2626 42%, #dc2626 58%, transparent 58%)',
+                            opacity: 1
+                          }}
+                        ></div>
+                        {/* Additional red overlay for better visibility */}
+                        <div
+                          className="absolute top-0 left-0 w-full h-full bg-red-500"
+                          style={{
+                            clipPath: 'polygon(0 0, 100% 100%, 0 100%)',
+                            opacity: 0.2
+                          }}
+                        ></div>
+                      </div>
+                    )}
+                    {isUnavailable && !isBooked && (
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
                         <div
-                          className={`w-full h-0.5 transform rotate-45 opacity-80 ${
-                            isBooked ? "bg-red-500" : "bg-gray-400"
-                          }`}
+                          className="w-full h-0.5 transform rotate-45 opacity-60 bg-gray-400"
                         ></div>
                       </div>
                     )}

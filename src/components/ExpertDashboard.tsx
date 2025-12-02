@@ -205,7 +205,7 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Set Availability</h3>
               <p className="text-gray-600 mb-4">Availability management will be enabled soon.</p>
               <Button 
-                variant="outline"
+                variant="outline" 
                 className="w-full"
                 disabled
               >
@@ -222,7 +222,7 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h3>
               <p className="text-gray-600 mb-4">Analytics will be enabled soon.</p>
               <Button 
-                variant="outline"
+                variant="outline" 
                 className="w-full"
                 disabled
               >
