@@ -145,18 +145,30 @@ echo "   Current directory: $(pwd)"
 echo "   Node version: $(node --version 2>/dev/null || echo 'not found')"
 echo "   NPM version: $(npm --version 2>/dev/null || echo 'not found')"
 
-# Increase Node.js memory limit for build (EC2 has limited memory)
-export NODE_OPTIONS="--max-old-space-size=512"
+# Optimize Node.js for low-memory environment
+# Use less memory to avoid OOM kills on small EC2 instances
+export NODE_OPTIONS="--max-old-space-size=384 --no-warnings"
+
+# Clear any existing build cache to avoid stale issues
+echo "   Clearing build cache..."
+rm -rf node_modules/.vite 2>/dev/null || true
+rm -rf dist 2>/dev/null || true
 
 # Run build with timeout - simple direct execution
-echo "   Running: npm run build"
-echo "   (This may take 5-15 minutes, please wait...)"
+echo "   Running: npm run build (optimized for low memory)"
+echo "   (This may take 3-10 minutes, please wait...)"
 
 # Run build directly with timeout - let output stream naturally
 set +e  # Temporarily disable exit on error to handle timeout
-timeout 1800 npm run build
+timeout 1800 npm run build 2>&1 | tee /tmp/build.log
 BUILD_EXIT_CODE=$?
 set -e  # Re-enable exit on error
+
+# Show last 20 lines of build output if it failed
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
+    echo "   Last 20 lines of build output:"
+    tail -20 /tmp/build.log || true
+fi
 
 if [ $BUILD_EXIT_CODE -eq 0 ]; then
     echo "✅ Build command completed at $(date)"
