@@ -4656,10 +4656,13 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
         startDate.setMonth(now.getMonth() - 3);
     }
     
-    // Get expert's sessions
+    // Get expert's sessions (filtered by timeRange)
     const allSessions = await prisma.session.findMany({
       where: {
-        expertId: expertId
+        expertId: expertId,
+        createdAt: {
+          gte: startDate
+        }
       },
       include: {
         candidate: { select: { id: true, name: true, email: true } },

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiService } from '@/lib/apiService';
+import realtimeService from '@/lib/realtimeService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -57,6 +58,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   console.log('ExpertAnalytics component rendering with:', { expertId, sessionsCount: sessions.length });
 
@@ -171,21 +173,46 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
       try {
         setLoading(true);
         setError(null);
-        console.log('Fetching analytics for expert:', expertId);
+        console.log('Fetching analytics for expert:', expertId, 'timeRange:', timeRange);
+        
+        // Map frontend timeRange to backend format
+        const backendTimeRange = timeRange === '1month' ? 'month' : 
+                                 timeRange === '1year' ? 'year' : 
+                                 timeRange;
         
         // Use real API
-        const response = await apiService.getExpertAnalytics(expertId, timeRange);
+        const response = await apiService.getExpertAnalytics(expertId, backendTimeRange);
+        
+        console.log('📊 Analytics API response:', response);
         
         if (response.success && response.data) {
-          console.log('✅ Analytics data received:', response.data);
-          setAnalyticsData(response.data);
+          const data = response.data;
+          console.log('✅ Analytics data received:', data);
+          
+          // Ensure all required fields have default values
+          const analyticsData: AnalyticsData = {
+            totalEarnings: data.totalEarnings || 0,
+            totalSessions: data.totalSessions || 0,
+            averageRating: data.averageRating || 0,
+            completionRate: data.completionRate || 0,
+            monthlyEarnings: data.monthlyEarnings || [],
+            sessionTypes: data.sessionTypes || [],
+            weeklyStats: data.weeklyStats || [],
+            topClients: data.topClients || [],
+            timeTracking: data.timeTracking,
+            candidateTimeTracking: data.candidateTimeTracking || []
+          };
+          
+          console.log('✅ Processed analytics data:', analyticsData);
+          setAnalyticsData(analyticsData);
+          setLastUpdate(new Date());
         } else {
           console.warn('⚠️ Analytics API returned no data, using fallback');
           // Fallback to calculated data from sessions prop
           setAnalyticsData(generateMockAnalyticsData());
         }
       } catch (error) {
-        console.error('Error fetching analytics:', error);
+        console.error('❌ Error fetching analytics:', error);
         setError('Failed to load analytics data');
         // Fallback to calculated data from sessions prop
         setAnalyticsData(generateMockAnalyticsData());
@@ -197,7 +224,41 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
     if (expertId) {
       fetchAnalyticsData();
     }
-  }, [expertId, timeRange, sessions]);
+
+    // Set up real-time updates
+    const handleAnalyticsUpdated = () => {
+      console.log('🔄 Expert Analytics: Analytics updated via real-time');
+      if (expertId) {
+        fetchAnalyticsData();
+      }
+    };
+
+    const handleSessionUpdated = () => {
+      console.log('🔄 Expert Analytics: Session updated, refreshing analytics');
+      if (expertId) {
+        fetchAnalyticsData();
+      }
+    };
+
+    realtimeService.on('analytics_updated', handleAnalyticsUpdated);
+    realtimeService.on('session_updated', handleSessionUpdated);
+    realtimeService.on('session_created', handleSessionUpdated);
+
+    // Periodic refresh every 30 seconds for real-time data
+    const interval = setInterval(() => {
+      if (expertId) {
+        console.log('🔄 Periodic analytics refresh (30s interval)');
+        fetchAnalyticsData();
+      }
+    }, 30000);
+
+    return () => {
+      realtimeService.off('analytics_updated', handleAnalyticsUpdated);
+      realtimeService.off('session_updated', handleSessionUpdated);
+      realtimeService.off('session_created', handleSessionUpdated);
+      clearInterval(interval);
+    };
+  }, [expertId, timeRange]);
 
   if (loading) {
     return (
@@ -235,7 +296,14 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Analytics Dashboard</h2>
-          <p className="text-gray-600">Track your performance and earnings</p>
+          <div className="flex items-center gap-3">
+            <p className="text-gray-600">Track your performance and earnings</p>
+            {lastUpdate && (
+              <span className="text-xs text-gray-500">
+                Last updated: {lastUpdate.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <Select value={timeRange} onValueChange={setTimeRange}>
@@ -263,7 +331,9 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Earnings</p>
-                <p className="text-2xl font-bold text-green-600">${analyticsData.totalEarnings}</p>
+                <p className="text-2xl font-bold text-green-600">
+                  ${(analyticsData.totalEarnings || 0).toFixed(2)}
+                </p>
                 <div className="flex items-center mt-1">
                   <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
                   <span className="text-sm text-green-600">+12.5%</span>
@@ -295,10 +365,14 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Average Rating</p>
-                <p className="text-2xl font-bold text-yellow-600">{analyticsData.averageRating}</p>
+                <p className="text-2xl font-bold text-yellow-600">
+                  {(analyticsData.averageRating || 0).toFixed(1)}
+                </p>
                 <div className="flex items-center mt-1">
                   <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                  <span className="text-sm text-gray-600">4.7/5.0</span>
+                  <span className="text-sm text-gray-600">
+                    {(analyticsData.averageRating || 0).toFixed(1)}/5.0
+                  </span>
                 </div>
               </div>
               <Star className="h-8 w-8 text-yellow-600" />
@@ -311,7 +385,11 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Completion Rate</p>
-                <p className="text-2xl font-bold text-purple-600">{Math.round(analyticsData.completionRate)}%</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {isNaN(analyticsData.completionRate) || !analyticsData.completionRate 
+                    ? '0' 
+                    : Math.round(analyticsData.completionRate)}%
+                </p>
                 <div className="flex items-center mt-1">
                   <Target className="h-4 w-4 text-purple-500 mr-1" />
                   <span className="text-sm text-gray-600">Excellent</span>
@@ -444,7 +522,9 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
                           style={{ width: `${(month.amount / 2500) * 100}%` }}
                         ></div>
                       </div>
-                      <span className="text-sm font-semibold text-gray-900">${month.amount}</span>
+                      <span className="text-sm font-semibold text-gray-900">
+                        ${(month.amount || 0).toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 ))
@@ -479,7 +559,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold text-gray-900">{type.count} sessions</p>
-                      <p className="text-xs text-gray-500">${type.revenue}</p>
+                      <p className="text-xs text-gray-500">${(type.revenue || 0).toFixed(2)}</p>
                     </div>
                   </div>
                 ))
@@ -511,7 +591,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
                       <p className="text-sm text-gray-600">{week.sessions} sessions</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-green-600">${week.earnings}</p>
+                      <p className="font-semibold text-green-600">${(week.earnings || 0).toFixed(2)}</p>
                       <div className="flex items-center">
                         <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
                         <span className="text-xs text-green-600">+5%</span>
@@ -549,7 +629,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-900">${client.revenue}</p>
+                      <p className="font-semibold text-gray-900">${(client.revenue || 0).toFixed(2)}</p>
                       <div className="flex items-center">
                         <Star className="h-3 w-3 text-yellow-500 mr-1" />
                         <span className="text-xs text-gray-600">4.8</span>
