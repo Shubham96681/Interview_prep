@@ -3301,9 +3301,10 @@ app.options('/api/realtime', (req, res) => {
 app.get('/api/realtime', (req, res) => {
   const userId = req.query.userId || 'anonymous';
   
-  console.log(`🔄 SSE connection request from user: ${userId}, origin: ${req.headers.origin}`);
+  console.log(`🔄 SSE connection request from user: ${userId}, origin: ${req.headers.origin}, protocol: ${req.protocol}`);
   
   // Determine CORS origin - be more permissive for production
+  // EventSource doesn't support credentials with wildcard, so we need to set specific origin
   const origin = req.headers.origin;
   let corsOrigin = '*';
   
@@ -3314,7 +3315,9 @@ app.get('/api/realtime', (req, res) => {
       'http://localhost:5173',
       'http://localhost:3000',
       'https://54.91.53.228',
-      'http://54.91.53.228'
+      'http://54.91.53.228',
+      'https://' + req.headers.host,
+      'http://' + req.headers.host
     ].filter(Boolean);
     
     // Check if origin matches any allowed origin
@@ -3325,6 +3328,7 @@ app.get('/api/realtime', (req, res) => {
       return originHost === allowedHost || origin === allowed;
     });
     
+    // Use specific origin if allowed, otherwise use wildcard (but without credentials)
     corsOrigin = isAllowed ? origin : '*';
   } else if (process.env.FRONTEND_URL) {
     corsOrigin = process.env.FRONTEND_URL;
@@ -3334,17 +3338,24 @@ app.get('/api/realtime', (req, res) => {
   
   // CRITICAL: Send headers IMMEDIATELY (before any async operations)
   // This prevents timeouts and 502 errors
+  // EventSource doesn't support credentials with wildcard, so only set credentials if origin is specific
   try {
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
+    const headers = {
+      'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
+      'Connection': 'keep-alive',
       'Access-Control-Allow-Origin': corsOrigin,
-      'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Allow-Headers': 'Cache-Control',
       'X-Accel-Buffering': 'no', // Disable buffering in nginx
       'X-Content-Type-Options': 'nosniff'
-    });
+    };
+    
+    // Only set credentials if we have a specific origin (not wildcard)
+    if (corsOrigin !== '*') {
+      headers['Access-Control-Allow-Credentials'] = 'true';
+    }
+    
+    res.writeHead(200, headers);
   } catch (headerError) {
     console.error('❌ Error setting SSE headers:', headerError);
     if (!res.headersSent) {

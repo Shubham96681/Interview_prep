@@ -52,12 +52,17 @@ class RealtimeService {
         url = `http://localhost:${port}/api/realtime?userId=${userId}`;
       } else {
         // Production: use relative URL (nginx will proxy /api/realtime to backend)
-        url = `/api/realtime?userId=${userId}`;
+        // Use the same protocol as the current page
+        const protocol = window.location.protocol;
+        const host = window.location.host;
+        url = `${protocol}//${host}/api/realtime?userId=${userId}`;
       }
       
       console.log('🔄 Connecting to real-time service...', url);
       
-      this.eventSource = new EventSource(url);
+      // EventSource doesn't support custom headers, so we can't send auth token
+      // The backend endpoint should handle authentication via userId query param
+      this.eventSource = new EventSource(url, { withCredentials: false });
       
       this.eventSource.onopen = () => {
         console.log('✅ Real-time connection established');
