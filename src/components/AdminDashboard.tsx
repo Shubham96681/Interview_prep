@@ -128,6 +128,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'week' | 'month' | 'quarter'>('month');
   const [userFilters, setUserFilters] = useState({ type: 'all', status: 'all', search: '' });
   const [sessionFilters, setSessionFilters] = useState({ status: 'all', expert: 'all', candidate: 'all' });
+  const [activeTab, setActiveTab] = useState<string>('overview');
   const [selectedUserDetail, setSelectedUserDetail] = useState<any>(null);
   const [userDetailOpen, setUserDetailOpen] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -593,7 +594,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="overview" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
