@@ -2177,17 +2177,23 @@ app.get('/api/sessions/:id/recording', authenticateToken, async (req, res) => {
     
     // Allow access if:
     // 1. User is authenticated and matches session participant, OR
-    // 2. It's a test token (for development/testing), OR
-    // 3. It's development mode
-    if (userId && (session.candidateId === userId || session.expertId === userId)) {
+    // 2. User is an admin, OR
+    // 3. It's a test token (for development/testing), OR
+    // 4. It's development mode
+    if (userId && (session.candidateId === userId || session.expertId === userId || req.user.userType === 'admin')) {
       // User is authenticated and has access - allow
-      console.log('✅ User authenticated and has access to session');
+      console.log('✅ User authenticated and has access to session', {
+        userId,
+        userType: req.user.userType,
+        isParticipant: session.candidateId === userId || session.expertId === userId,
+        isAdmin: req.user.userType === 'admin'
+      });
     } else if (isTestToken || isDevelopment) {
       // Test token or development mode - allow access
       console.warn('⚠️ Test token or development mode - allowing access to recording');
     } else {
       // No access - deny
-      console.warn('⚠️ Access denied - userId:', userId, 'session candidateId:', session.candidateId, 'session expertId:', session.expertId);
+      console.warn('⚠️ Access denied - userId:', userId, 'userType:', req.user?.userType, 'session candidateId:', session.candidateId, 'session expertId:', session.expertId);
       return res.status(403).json({
         success: false,
         message: 'Access denied. Please ensure you are logged in with the correct account.'
