@@ -137,19 +137,31 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Availability Management</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Availability Management</h2>
+            <p className="text-sm text-gray-600 mt-1">Set your available time slots for interviews</p>
+          </div>
           <Button variant="outline" onClick={() => setActiveView('dashboard')}>
             Back to Dashboard
           </Button>
         </div>
-        <AvailabilityManager 
-          expertId={user.id} 
-          onAvailabilityChange={() => {
-            toast.success('Availability updated successfully');
-            fetchSessions();
-          }}
-          sessions={sessions}
-        />
+        {user?.id ? (
+          <AvailabilityManager 
+            expertId={user.id} 
+            onAvailabilityChange={() => {
+              toast.success('Availability updated successfully');
+              fetchSessions();
+            }}
+            sessions={sessions}
+          />
+        ) : (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <div className="text-red-600 mb-2">⚠️ Error</div>
+              <div className="text-gray-600">User ID is missing. Please refresh the page.</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
@@ -158,12 +170,24 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Analytics</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Analytics</h2>
+            <p className="text-sm text-gray-600 mt-1">Track your performance metrics and earnings</p>
+          </div>
           <Button variant="outline" onClick={() => setActiveView('dashboard')}>
             Back to Dashboard
           </Button>
         </div>
-        <ExpertAnalytics expertId={user.id} sessions={sessions} />
+        {user?.id ? (
+          <ExpertAnalytics expertId={user.id} sessions={sessions} />
+        ) : (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <div className="text-red-600 mb-2">⚠️ Error</div>
+              <div className="text-gray-600">User ID is missing. Please refresh the page.</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
