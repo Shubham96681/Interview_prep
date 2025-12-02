@@ -176,11 +176,25 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
   if (loading) {
     return (
-      <Card className="border-0 shadow-lg">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-2 text-gray-600">Loading availability...</span>
+      <Card className="border-0 shadow-xl bg-white">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 pb-6">
+          <CardTitle className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <div className="p-2 bg-white rounded-lg shadow-sm">
+              <Calendar className="h-6 w-6 text-blue-600" />
+            </div>
+            <span>Book Session with {expertName}</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-8">
+          <div className="flex flex-col items-center justify-center h-64">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-t-blue-600"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
+              </div>
+            </div>
+            <p className="mt-4 text-gray-600 font-medium">Loading availability...</p>
+            <p className="mt-1 text-sm text-gray-500">Please wait a moment</p>
           </div>
         </CardContent>
       </Card>
@@ -190,32 +204,29 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
   const selectedSlot = slots.find((s) => s.date === selectedDate);
 
   return (
-      <Card className="border-0 shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Calendar className="h-6 w-6 text-blue-600" />
-          Book Session with {expertName}
+    <Card className="border-0 shadow-xl bg-white">
+      <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 pb-6">
+        <CardTitle className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+          <div className="p-2 bg-white rounded-lg shadow-sm">
+            <Calendar className="h-6 w-6 text-blue-600" />
+          </div>
+          <span>Book Session with {expertName}</span>
         </CardTitle>
-        <p className="text-sm text-gray-600 mt-1">
-          Select a date and time slot to book your session
+        <p className="text-sm text-gray-600 mt-2 ml-11">
+          Choose your preferred date and time slot for your interview session
         </p>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Date & Time</h3>
-        
+      <CardContent className="p-8 space-y-8">
         {/* Date Selection */}
         <div>
-          <h4 className="font-medium mb-3 text-gray-700">Select Date</h4>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-900">Select Date</h4>
+            <span className="text-xs text-gray-500 font-medium">Next 7 days</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {slots.map((slot) => (
-              <Button
+              <button
                 key={slot.date}
-                variant={selectedDate === slot.date ? "default" : "outline"}
-                className={`h-auto p-3 text-left relative transition-all duration-200 ${
-                  !slot.isAvailable 
-                    ? "opacity-40 cursor-not-allowed bg-gray-50 border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-400"
-                    : "hover:bg-blue-50 hover:border-blue-300"
-                }`}
                 onClick={() => {
                   if (slot.isAvailable) {
                     setSelectedDate(slot.date);
@@ -223,54 +234,83 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                   }
                 }}
                 disabled={!slot.isAvailable}
+                className={`
+                  relative p-4 rounded-xl border-2 transition-all duration-300 text-left
+                  ${selectedDate === slot.date 
+                    ? "border-blue-600 bg-blue-50 shadow-md scale-105" 
+                    : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-sm"
+                  }
+                  ${!slot.isAvailable 
+                    ? "opacity-50 cursor-not-allowed bg-gray-50 border-gray-200 hover:border-gray-200 hover:shadow-none" 
+                    : "cursor-pointer"
+                  }
+                `}
               >
-                <div>
-                  <div className="font-medium">{formatDate(slot.date)}</div>
-                  <div
-                    className={`text-xs flex items-center gap-1 ${
-                      slot.isAvailable ? "text-green-600" : "text-red-500"
-                    }`}
-                  >
-                    {slot.isAvailable ? (
-                      <>
-                        <CheckCircle className="h-3 w-3 text-green-600" />
-                        <span className="font-medium">{slot.count} slots</span>
-                      </>
-                    ) : (
-                      <>
-                        <X className="h-3 w-3 text-red-500" />
-                        <span className="font-medium">Fully booked</span>
-                      </>
-                    )}
-                  </div>
+                <div className="font-semibold text-gray-900 text-base mb-2">
+                  {formatDate(slot.date)}
                 </div>
-              </Button>
+                <div className={`flex items-center gap-1.5 text-xs font-medium ${
+                  slot.isAvailable ? "text-green-700" : "text-red-600"
+                }`}>
+                  {slot.isAvailable ? (
+                    <>
+                      <CheckCircle className="h-3.5 w-3.5" />
+                      <span>{slot.count} {slot.count === 1 ? 'slot' : 'slots'} available</span>
+                    </>
+                  ) : (
+                    <>
+                      <X className="h-3.5 w-3.5" />
+                      <span>Fully booked</span>
+                    </>
+                  )}
+                </div>
+                {selectedDate === slot.date && (
+                  <div className="absolute top-2 right-2">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                  </div>
+                )}
+              </button>
             ))}
-          </div>
-        </div>
-
-        {/* Availability Legend */}
-        <div className="flex items-center gap-4 text-sm text-gray-600">
-          <span className="font-medium">Availability Legend:</span>
-            <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-blue-500 bg-blue-50 rounded"></div>
-            <span>Available</span>
-            </div>
-            <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-gray-300 bg-gray-100 rounded opacity-40"></div>
-            <span>Not Available</span>
-            </div>
-            <div className="flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-gray-300 bg-red-50 rounded opacity-40"></div>
-            <span>Booked</span>
           </div>
         </div>
 
         {/* Time Selection */}
         {selectedDate && selectedSlot && (
-          <div>
-            <h4 className="font-medium mb-3 text-gray-700">Select Time</h4>
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold text-gray-900">Select Time</h4>
+              {selectedTime && (
+                <span className="text-sm text-blue-600 font-medium">
+                  Selected: {selectedTime}
+                </span>
+              )}
+            </div>
+            
+            {/* Availability Legend */}
+            <div className="flex items-center gap-6 mb-4 pb-4 border-b border-gray-100">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Legend:</span>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-blue-500 bg-blue-50 rounded-md shadow-sm"></div>
+                <span className="text-xs text-gray-700 font-medium">Available</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-gray-300 bg-gray-100 rounded-md opacity-50 relative">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-full h-0.5 bg-gray-400 transform rotate-45"></div>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-700 font-medium">Past/Unavailable</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 border-2 border-red-300 bg-red-50 rounded-md relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-transparent via-red-500 to-transparent" 
+                       style={{ transform: 'rotate(45deg)', width: '200%', height: '2px', top: '50%', left: '-50%' }}></div>
+                </div>
+                <span className="text-xs text-gray-700 font-medium">Booked</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
               {allSlots.map((time) => {
                 const slotStatus = getSlotStatus(selectedDate, time);
                 
@@ -281,66 +321,93 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                   selectedDate === todayStr &&
                   (() => {
                     const [hours, minutes] = time.split(":").map(Number);
-                  const slotDateTime = new Date(today);
-                  slotDateTime.setHours(hours, minutes, 0, 0);
-                  return slotDateTime < today;
-                })();
+                    const slotDateTime = new Date(today);
+                    slotDateTime.setHours(hours, minutes, 0, 0);
+                    return slotDateTime < today;
+                  })();
                 
                 // Determine final status (past times override other statuses)
                 const finalStatus = isPastTime ? "not_available" : slotStatus;
                 const isBooked = finalStatus === "booked";
                 const isAvailable = finalStatus === "available";
                 const isUnavailable = finalStatus === "not_available";
-
-                // Slot class mapping
-                const slotClasses = {
-                  booked: "opacity-60 cursor-not-allowed border-red-300 bg-red-50",
-                  not_available: "opacity-40 cursor-not-allowed border-gray-300",
-                  available: "border-blue-500 text-blue-600 hover:bg-blue-50",
-                };
+                const isSelected = selectedTime === time && isAvailable;
 
                 return (
                   <button
                     key={time}
-                    className={`
-                      flex items-center gap-2 w-24 justify-center py-2 rounded-lg border transition-all duration-200 relative
-                      ${slotClasses[finalStatus]}
-                      ${selectedTime === time && isAvailable ? "bg-blue-100 border-blue-600" : ""}
-                    `}
                     disabled={isBooked || isUnavailable}
                     onClick={() => {
                       if (isAvailable) {
                         setSelectedTime(time);
                       }
                     }}
+                    className={`
+                      relative group flex flex-col items-center justify-center gap-1.5
+                      h-20 rounded-xl border-2 transition-all duration-200
+                      ${isSelected 
+                        ? "border-blue-600 bg-blue-100 shadow-lg scale-105 ring-2 ring-blue-200" 
+                        : ""
+                      }
+                      ${isAvailable && !isSelected
+                        ? "border-blue-400 bg-blue-50 hover:border-blue-500 hover:bg-blue-100 hover:shadow-md cursor-pointer"
+                        : ""
+                      }
+                      ${isBooked
+                        ? "border-red-300 bg-red-50 cursor-not-allowed opacity-70"
+                        : ""
+                      }
+                      ${isUnavailable && !isBooked
+                        ? "border-gray-300 bg-gray-50 cursor-not-allowed opacity-50"
+                        : ""
+                      }
+                    `}
                   >
-                    <Clock className="h-4 w-4" />
-                    <span>{time}</span>
+                    <Clock className={`h-4 w-4 ${
+                      isSelected ? "text-blue-700" :
+                      isAvailable ? "text-blue-600" :
+                      isBooked ? "text-red-600" :
+                      "text-gray-400"
+                    }`} />
+                    <span className={`text-sm font-semibold ${
+                      isSelected ? "text-blue-900" :
+                      isAvailable ? "text-blue-700" :
+                      isBooked ? "text-red-700" :
+                      "text-gray-500"
+                    }`}>
+                      {time}
+                    </span>
+                    
+                    {/* Booked slot diagonal red line */}
                     {isBooked && (
-                      <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden rounded-lg">
-                        {/* Thick diagonal red line for booked slots */}
+                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
                         <div
                           className="absolute top-0 left-0 w-full h-full"
                           style={{
-                            background: 'linear-gradient(to bottom right, transparent 42%, #dc2626 42%, #dc2626 58%, transparent 58%)',
-                            opacity: 1
+                            background: 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
                           }}
                         ></div>
-                        {/* Additional red overlay for better visibility */}
                         <div
-                          className="absolute top-0 left-0 w-full h-full bg-red-500"
+                          className="absolute top-0 left-0 w-full h-full"
                           style={{
+                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%)',
                             clipPath: 'polygon(0 0, 100% 100%, 0 100%)',
-                            opacity: 0.2
                           }}
                         ></div>
                       </div>
                     )}
+                    
+                    {/* Unavailable slot diagonal gray line */}
                     {isUnavailable && !isBooked && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                        <div
-                          className="w-full h-0.5 transform rotate-45 opacity-60 bg-gray-400"
-                        ></div>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-full h-0.5 bg-gray-400 transform rotate-45 opacity-60"></div>
+                      </div>
+                    )}
+                    
+                    {/* Selected indicator */}
+                    {isSelected && (
+                      <div className="absolute -top-1 -right-1">
+                        <div className="w-3 h-3 bg-blue-600 rounded-full border-2 border-white shadow-sm"></div>
                       </div>
                     )}
                   </button>
@@ -351,36 +418,43 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         )}
 
         {selectedDate && selectedSlot && selectedSlot.available.length === 0 && (
-          <p className="text-sm text-gray-500 text-center py-4">No available slots for this date</p>
+          <div className="text-center py-8 border border-gray-200 rounded-xl bg-gray-50">
+            <X className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-600 font-medium">No available slots for this date</p>
+            <p className="text-xs text-gray-500 mt-1">Please select another date</p>
+          </div>
         )}
 
         {/* Booking Button */}
         {selectedDate && selectedTime && (
-          <div className="pt-4 border-t">
-        <Button 
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold py-6 text-lg"
+          <div className="pt-6 border-t border-gray-200">
+            <Button 
+              className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-6 text-lg shadow-lg hover:shadow-xl transition-all duration-300"
               onClick={() => setShowPayment(true)}
-        >
+            >
               <CreditCard className="mr-2 h-5 w-5" />
-          Book Session & Pay ${hourlyRate}
-        </Button>
-        </div>
+              Book Session & Pay ${hourlyRate}
+            </Button>
+            <p className="text-xs text-center text-gray-500 mt-3">
+              Secure payment • 60-minute session • Cancel anytime
+            </p>
+          </div>
         )}
 
         {showPayment && (
-    <PaymentModal
+          <PaymentModal
             isOpen={showPayment}
             onClose={() => setShowPayment(false)}
             onPaymentSuccess={() => handlePaySuccess()}
-      sessionData={{
-        expertName,
-        date: selectedDate,
-        time: selectedTime,
-        duration: 60,
-        amount: hourlyRate,
+            sessionData={{
+              expertName,
+              date: selectedDate,
+              time: selectedTime,
+              duration: 60,
+              amount: hourlyRate,
               sessionType: 'mock',
-      }}
-    />
+            }}
+          />
         )}
       </CardContent>
     </Card>
