@@ -3384,6 +3384,256 @@ app.get('/api/admin/sessions', authenticateToken, requireRole('admin'), async (r
   }
 });
 
+// Update session (admin only)
+app.put('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), validateObjectId('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.query;
+    const { date, time, scheduledDate, duration, sessionType, status, title, description, paymentStatus, paymentAmount } = req.body;
+    
+    console.log('🔄 PUT /api/admin/sessions/:id - Request received:', {
+      id,
+      email,
+      body: req.body
+    });
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Find the session
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true, hourlyRate: true }
+        }
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Prepare update data
+    const updateData = {};
+
+    // Handle date and time updates
+    if (date && time) {
+      const [year, month, day] = date.split('-').map(Number);
+      const [hours, minutes] = time.split(':').map(Number);
+      updateData.scheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    } else if (scheduledDate) {
+      updateData.scheduledDate = new Date(scheduledDate);
+    }
+
+    // Update other fields if provided
+    if (duration !== undefined) updateData.duration = parseInt(duration);
+    if (sessionType !== undefined) updateData.sessionType = sessionType;
+    if (status !== undefined) updateData.status = status;
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
+    if (paymentAmount !== undefined) updateData.paymentAmount = parseFloat(paymentAmount);
+
+    // Update the session
+    const updatedSession = await prisma.session.update({
+      where: { id },
+      data: updateData,
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true, hourlyRate: true }
+        }
+      }
+    });
+
+    console.log('✅ Session updated successfully:', id);
+
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
+
+    // Broadcast availability update if date/time changed
+    if (updateData.scheduledDate) {
+      try {
+        const localDate = new Date(updatedSession.scheduledDate);
+        const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+        const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+        
+        realtimeService.broadcast('availability_updated', {
+          expertId: updatedSession.expertId,
+          date: dateStr,
+          time: timeStr,
+          sessionId: updatedSession.id
+        });
+        console.log('📡 Broadcasted availability update for expert:', updatedSession.expertId);
+      } catch (realtimeError) {
+        console.error('❌ Error broadcasting availability update:', realtimeError);
+      }
+    }
+
+    // Format response
+    const localDate = new Date(updatedSession.scheduledDate);
+    const dateStr = `${String(localDate.getFullYear())}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+
+    res.json({
+      success: true,
+      message: 'Session updated successfully',
+      data: {
+        id: updatedSession.id,
+        expertId: updatedSession.expertId,
+        candidateId: updatedSession.candidateId,
+        expertName: updatedSession.expert?.name || 'Unknown',
+        candidateName: updatedSession.candidate?.name || 'Unknown',
+        date: dateStr,
+        time: timeStr,
+        scheduledDate: updatedSession.scheduledDate.toISOString(),
+        duration: updatedSession.duration,
+        sessionType: updatedSession.sessionType,
+        status: updatedSession.status,
+        paymentAmount: updatedSession.paymentAmount,
+        paymentStatus: updatedSession.paymentStatus,
+        meetingLink: updatedSession.meetingLink,
+        meetingId: updatedSession.meetingId,
+        recordingUrl: updatedSession.recordingUrl,
+        isRecordingEnabled: updatedSession.isRecordingEnabled,
+        createdAt: updatedSession.createdAt.toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error updating session:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update session',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Delete session (admin only)
+app.delete('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), validateObjectId('id'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { email } = req.query;
+    
+    console.log('🗑️ DELETE /api/admin/sessions/:id - Request received:', {
+      id,
+      email
+    });
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Find the session
+    const session = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Delete the session
+    await prisma.session.delete({
+      where: { id }
+    });
+
+    console.log('✅ Session deleted successfully:', id);
+
+    // Broadcast session deletion to admins
+    try {
+      realtimeService.broadcast('session_deleted', {
+        sessionId: id,
+        expertId: session.expertId,
+        candidateId: session.candidateId,
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_deleted event to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_deleted:', realtimeError);
+    }
+
+    // Broadcast availability update
+    try {
+      const localDate = new Date(session.scheduledDate);
+      const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+      
+      realtimeService.broadcast('availability_updated', {
+        expertId: session.expertId,
+        date: dateStr,
+        time: timeStr,
+        sessionId: id,
+        deleted: true
+      });
+      console.log('📡 Broadcasted availability update for expert:', session.expertId);
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting availability update:', realtimeError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Session deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error deleting session:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete session',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Get all users (admin only)
 app.get('/api/admin/users', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
