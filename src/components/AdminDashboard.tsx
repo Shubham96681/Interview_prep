@@ -138,6 +138,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [monitoringActivity, setMonitoringActivity] = useState<any[]>([]);
   const [monitoringLastUpdate, setMonitoringLastUpdate] = useState<Date | null>(null);
   const [monitoringLoading, setMonitoringLoading] = useState(false);
+  const [analyticsLastUpdate, setAnalyticsLastUpdate] = useState<Date | null>(null);
   const [financialSummary, setFinancialSummary] = useState<any>(null);
 
   useEffect(() => {
@@ -217,8 +218,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       // Reload analytics immediately
       apiService.getAnalytics(analyticsPeriod).then((res) => {
         if (res.success) {
-          setAnalytics(res.data?.analytics || res.data?.data?.analytics || null);
+          const analyticsData = res.data?.analytics || res.data?.data?.analytics || null;
+          setAnalytics(analyticsData);
+          if (analyticsData) {
+            setAnalyticsLastUpdate(new Date());
+          }
         }
+      }).catch((error) => {
+        console.error('Error reloading analytics:', error);
       });
       // Also reload all data to ensure consistency
       loadData();
@@ -325,7 +332,11 @@ export default function AdminDashboard({}: AdminDashboardProps) {
       }
       
       if (analyticsRes.success) {
-        setAnalytics(analyticsRes.data?.analytics || analyticsRes.data?.data?.analytics || null);
+        const analyticsData = analyticsRes.data?.analytics || analyticsRes.data?.data?.analytics || null;
+        setAnalytics(analyticsData);
+        if (analyticsData) {
+          setAnalyticsLastUpdate(new Date());
+        }
       } else {
         console.error('❌ Failed to load analytics:', analyticsRes.error || analyticsRes.message);
       }
@@ -599,7 +610,18 @@ export default function AdminDashboard({}: AdminDashboardProps) {
             <>
               {/* Period Selector */}
               <div className="flex justify-between items-center">
-                <CardTitle>Platform Overview</CardTitle>
+                <div className="flex items-center gap-3">
+                  <CardTitle>Platform Overview</CardTitle>
+                  <Badge variant="outline" className="flex items-center gap-1.5">
+                    <div className={`h-2 w-2 rounded-full ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`}></div>
+                    <span className="text-xs">Live</span>
+                  </Badge>
+                  {analyticsLastUpdate && (
+                    <span className="text-xs text-muted-foreground">
+                      Last updated: {analyticsLastUpdate.toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
                 <Select value={analyticsPeriod} onValueChange={(v: 'week' | 'month' | 'quarter') => setAnalyticsPeriod(v)}>
                   <SelectTrigger className="w-32">
                     <SelectValue />
