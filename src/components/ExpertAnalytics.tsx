@@ -184,23 +184,57 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
         const response = await apiService.getExpertAnalytics(expertId, backendTimeRange);
         
         console.log('📊 Analytics API response:', response);
+        console.log('📊 Response structure:', {
+          success: response.success,
+          hasData: !!response.data,
+          dataKeys: response.data ? Object.keys(response.data) : [],
+          nestedData: response.data?.data ? Object.keys(response.data.data) : []
+        });
         
         if (response.success && response.data) {
-          const data = response.data;
+          // Handle nested response structure: {success: true, data: {success: true, data: {...}}}
+          // Backend returns: {success: true, data: analytics}
+          // apiService wraps it: {success: true, data: {success: true, data: analytics}}
+          // So we need to check if response.data has a nested 'data' property
+          let data = response.data;
+          
+          // If response.data is an object with a 'data' property and 'success' property, it's nested
+          if (data && typeof data === 'object' && 'data' in data && 'success' in data) {
+            console.log('📦 Detected nested response structure, unwrapping...');
+            data = (data as any).data;
+          }
+          
+          // If data is still wrapped (has 'success' and 'data'), unwrap again
+          if (data && typeof data === 'object' && 'data' in data && 'success' in data) {
+            console.log('📦 Detected double-nested response structure, unwrapping again...');
+            data = (data as any).data;
+          }
+          
           console.log('✅ Analytics data received:', data);
+          console.log('✅ Data keys:', data ? Object.keys(data) : 'null');
+          console.log('✅ Data values:', {
+            totalEarnings: data?.totalEarnings,
+            totalSessions: data?.totalSessions,
+            averageRating: data?.averageRating,
+            completionRate: data?.completionRate,
+            monthlyEarningsLength: data?.monthlyEarnings?.length,
+            sessionTypesLength: data?.sessionTypes?.length,
+            weeklyStatsLength: data?.weeklyStats?.length,
+            topClientsLength: data?.topClients?.length
+          });
           
           // Ensure all required fields have default values
           const analyticsData: AnalyticsData = {
-            totalEarnings: data.totalEarnings || 0,
-            totalSessions: data.totalSessions || 0,
-            averageRating: data.averageRating || 0,
-            completionRate: data.completionRate || 0,
-            monthlyEarnings: data.monthlyEarnings || [],
-            sessionTypes: data.sessionTypes || [],
-            weeklyStats: data.weeklyStats || [],
-            topClients: data.topClients || [],
-            timeTracking: data.timeTracking,
-            candidateTimeTracking: data.candidateTimeTracking || []
+            totalEarnings: data.totalEarnings ?? 0,
+            totalSessions: data.totalSessions ?? 0,
+            averageRating: data.averageRating ?? 0,
+            completionRate: data.completionRate ?? 0,
+            monthlyEarnings: Array.isArray(data.monthlyEarnings) ? data.monthlyEarnings : [],
+            sessionTypes: Array.isArray(data.sessionTypes) ? data.sessionTypes : [],
+            weeklyStats: Array.isArray(data.weeklyStats) ? data.weeklyStats : [],
+            topClients: Array.isArray(data.topClients) ? data.topClients : [],
+            timeTracking: data.timeTracking || null,
+            candidateTimeTracking: Array.isArray(data.candidateTimeTracking) ? data.candidateTimeTracking : []
           };
           
           console.log('✅ Processed analytics data:', analyticsData);
@@ -208,6 +242,7 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           setLastUpdate(new Date());
         } else {
           console.warn('⚠️ Analytics API returned no data, using fallback');
+          console.warn('⚠️ Response:', response);
           // Fallback to calculated data from sessions prop
           setAnalyticsData(generateMockAnalyticsData());
         }
