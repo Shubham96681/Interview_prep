@@ -4240,13 +4240,12 @@ app.post('/api/admin/users', authenticateToken, requireRole('admin'), async (req
       console.error('❌ Error broadcasting user_created:', realtimeError);
     }
 
-    // Send welcome email (optional - don't fail if email fails)
+    // Send password email with credentials (optional - don't fail if email fails)
     try {
-      const emailService = require('./services/email');
-      await emailService.sendRegistrationSuccessEmail(user.email, user.name, user.userType);
-      console.log(`✅ Welcome email sent to ${user.email}`);
+      await emailService.sendPasswordEmail(user.email, user.name, finalPassword, user.userType);
+      console.log(`✅ Password email sent to ${user.email}`);
     } catch (emailError) {
-      console.error('❌ Error sending welcome email:', emailError);
+      console.error('❌ Error sending password email:', emailError);
       // Don't fail the request if email fails
     }
 
