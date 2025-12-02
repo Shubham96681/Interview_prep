@@ -3685,6 +3685,138 @@ app.get('/api/admin/users', authenticateToken, requireRole('admin'), async (req,
   }
 });
 
+// Create user (admin only)
+app.post('/api/admin/users', authenticateToken, requireRole('admin'), async (req, res) => {
+  try {
+    const { email: queryEmail } = req.query;
+    const { name, email, userType, password, bio, experience, skills, hourlyRate, isVerified, isActive, phone, company, title } = req.body;
+    
+    console.log('👤 POST /api/admin/users - Request received:', {
+      queryEmail,
+      body: { name, email, userType, hasPassword: !!password }
+    });
+    
+    // Verify admin access
+    if (queryEmail && req.user.email !== queryEmail) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Validate required fields
+    if (!name || !email || !userType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and userType are required'
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email already exists'
+      });
+    }
+
+    // Generate password if not provided
+    let finalPassword = password;
+    if (!finalPassword) {
+      // Generate a random password (8 characters)
+      finalPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+    }
+
+    // Hash password
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(finalPassword, 10);
+
+    // Prepare user data
+    const userData = {
+      email,
+      password: hashedPassword,
+      name,
+      userType,
+      isActive: isActive !== undefined ? isActive : true,
+      isVerified: isVerified !== undefined ? isVerified : (userType === 'admin' ? true : false),
+      phone: phone || null,
+      company: company || null,
+      title: title || null,
+      bio: bio || null,
+      experience: experience || null,
+      skills: skills ? (Array.isArray(skills) ? JSON.stringify(skills) : skills) : null,
+      hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null
+    };
+
+    // Create user
+    const user = await prisma.user.create({
+      data: userData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        userType: true,
+        isActive: true,
+        isVerified: true,
+        rating: true,
+        totalSessions: true,
+        hourlyRate: true,
+        company: true,
+        title: true,
+        phone: true,
+        bio: true,
+        experience: true,
+        skills: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    console.log('✅ User created successfully:', user.id);
+
+    // Broadcast user creation to admins
+    try {
+      realtimeService.broadcast('user_created', {
+        user,
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted user_created event to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting user_created:', realtimeError);
+    }
+
+    // Send welcome email (optional - don't fail if email fails)
+    try {
+      const emailService = require('./services/email');
+      await emailService.sendRegistrationSuccessEmail(user.email, user.name, user.userType);
+      console.log(`✅ Welcome email sent to ${user.email}`);
+    } catch (emailError) {
+      console.error('❌ Error sending welcome email:', emailError);
+      // Don't fail the request if email fails
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: user,
+      // Include generated password only if it was auto-generated (for admin reference)
+      ...(password ? {} : { generatedPassword: finalPassword })
+    });
+  } catch (error) {
+    console.error('❌ Error creating user:', error);
+    console.error('❌ Error stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create user',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Get single user details (admin only)
 app.get('/api/admin/users/:userId', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
