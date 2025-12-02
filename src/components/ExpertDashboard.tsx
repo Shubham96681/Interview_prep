@@ -10,6 +10,8 @@ import { apiService } from '@/lib/apiService';
 import realtimeService from '@/lib/realtimeService';
 import { toast } from 'sonner';
 import { getAvatarUrl } from '@/lib/avatarUtils';
+import AvailabilityManager from './AvailabilityManager';
+import ExpertAnalytics from './ExpertAnalytics';
 
 interface ExpertDashboardProps {
   user: {
@@ -25,7 +27,7 @@ interface ExpertDashboardProps {
 export default function ExpertDashboard({ user }: ExpertDashboardProps) {
   const navigate = useNavigate();
   const [sessions, setSessions] = useState<Session[]>([]);
-  // Single dashboard view only; calendar & analytics views using mock data are disabled for production
+  const [activeView, setActiveView] = useState<'dashboard' | 'availability' | 'analytics'>('dashboard');
 
   // Fetch sessions from backend API
   const fetchSessions = useCallback(async () => {
@@ -130,6 +132,42 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
     .filter(session => session.status === 'completed')
     .reduce((sum, session) => sum + (session.paymentAmount || 0), 0);
 
+  // Render different views based on activeView
+  if (activeView === 'availability') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900">Availability Management</h2>
+          <Button variant="outline" onClick={() => setActiveView('dashboard')}>
+            Back to Dashboard
+          </Button>
+        </div>
+        <AvailabilityManager 
+          expertId={user.id} 
+          onAvailabilityChange={() => {
+            toast.success('Availability updated successfully');
+            fetchSessions();
+          }}
+          sessions={sessions}
+        />
+      </div>
+    );
+  }
+
+  if (activeView === 'analytics') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-gray-900">Analytics</h2>
+          <Button variant="outline" onClick={() => setActiveView('dashboard')}>
+            Back to Dashboard
+          </Button>
+        </div>
+        <ExpertAnalytics expertId={user.id} sessions={sessions} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Stats Cards */}
@@ -198,35 +236,27 @@ export default function ExpertDashboard({ user }: ExpertDashboardProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-not-allowed opacity-60">
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setActiveView('availability')}>
           <CardContent className="p-6">
             <div className="text-center">
               <Calendar className="h-12 w-12 text-green-600 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Set Availability</h3>
-              <p className="text-gray-600 mb-4">Availability management will be enabled soon.</p>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                disabled
-              >
-                Coming Soon
+              <p className="text-gray-600 mb-4">Manage your available time slots for interviews</p>
+              <Button className="w-full bg-green-600 hover:bg-green-700">
+                Manage Availability
               </Button>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-not-allowed opacity-60">
+        <Card className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setActiveView('analytics')}>
           <CardContent className="p-6">
             <div className="text-center">
               <DollarSign className="h-12 w-12 text-purple-600 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Analytics</h3>
-              <p className="text-gray-600 mb-4">Analytics will be enabled soon.</p>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                disabled
-              >
-                Coming Soon
+              <p className="text-gray-600 mb-4">View your performance metrics and earnings</p>
+              <Button className="w-full bg-purple-600 hover:bg-purple-700">
+                View Analytics
               </Button>
             </div>
           </CardContent>
