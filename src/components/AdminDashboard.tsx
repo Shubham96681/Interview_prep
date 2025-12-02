@@ -123,6 +123,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<'month' | 'week'>('month');
+  const [deleteSessionOpen, setDeleteSessionOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<Session | null>(null);
   const [analyticsPeriod, setAnalyticsPeriod] = useState<'week' | 'month' | 'quarter'>('month');
   const [userFilters, setUserFilters] = useState({ type: 'all', status: 'all', search: '' });
   const [sessionFilters, setSessionFilters] = useState({ status: 'all', expert: 'all', candidate: 'all' });
@@ -414,13 +416,23 @@ export default function AdminDashboard({}: AdminDashboardProps) {
   };
 
   const handleDeleteSession = async (sessionId: string) => {
-    if (!confirm('Are you sure you want to delete this session?')) return;
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      setSessionToDelete(session);
+      setDeleteSessionOpen(true);
+    }
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!sessionToDelete) return;
 
     try {
-      const response = await apiService.deleteSession(sessionId);
+      const response = await apiService.deleteSession(sessionToDelete.id);
       if (response.success) {
         toast.success('Session deleted successfully');
-        loadData();
+        setDeleteSessionOpen(false);
+        setSessionToDelete(null);
+        loadData(); // This will refresh both the sessions table and calendar
       } else {
         throw new Error(response.error || 'Failed to delete session');
       }
@@ -2482,6 +2494,71 @@ export default function AdminDashboard({}: AdminDashboardProps) {
             }}
             onCancel={() => setAddUserOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Session Confirmation Dialog */}
+      <Dialog open={deleteSessionOpen} onOpenChange={setDeleteSessionOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Session
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this session? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {sessionToDelete && (
+            <div className="space-y-4 py-4">
+              <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                <div className="flex justify-between items-start">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Session Details</p>
+                    <p className="text-xs text-muted-foreground">
+                      {sessionToDelete.date} at {sessionToDelete.time}
+                    </p>
+                  </div>
+                  <Badge variant="outline">{sessionToDelete.status}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Candidate:</span>
+                    <p className="font-medium">{sessionToDelete.candidateName}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Expert:</span>
+                    <p className="font-medium">{sessionToDelete.expertName}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Type:</span>
+                    <p className="font-medium capitalize">{sessionToDelete.sessionType.replace('_', ' ')}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Duration:</span>
+                    <p className="font-medium">{sessionToDelete.duration} min</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-lg border-l-4 border-destructive bg-destructive/10 p-3">
+                <p className="text-sm text-destructive font-medium">
+                  ⚠️ Warning: This will permanently remove the session from the system.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setDeleteSessionOpen(false);
+              setSessionToDelete(null);
+            }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSession}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Session
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
