@@ -4632,7 +4632,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       return res.status(403).json({ success: false, error: 'Access denied' });
     }
     
-    // Calculate date range
+    // Calculate date range for time-series data (charts)
     const now = new Date();
     let startDate = new Date();
     
@@ -4656,13 +4656,12 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
         startDate.setMonth(now.getMonth() - 3);
     }
     
-    // Get expert's sessions (filtered by timeRange)
+    console.log(`📊 Expert Analytics: Fetching data for expert ${expertId}, timeRange: ${timeRange}, startDate: ${startDate.toISOString()}`);
+    
+    // Get ALL expert's sessions (for total counts - not filtered by timeRange)
     const allSessions = await prisma.session.findMany({
       where: {
-        expertId: expertId,
-        createdAt: {
-          gte: startDate
-        }
+        expertId: expertId
       },
       include: {
         candidate: { select: { id: true, name: true, email: true } },
@@ -4671,12 +4670,27 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       orderBy: { createdAt: 'desc' }
     });
     
+    console.log(`📊 Found ${allSessions.length} total sessions for expert`);
+    
+    // Get sessions within timeRange for time-series charts
+    const sessionsInRange = allSessions.filter(s => {
+      const sessionDate = s.scheduledDate || s.createdAt || s.updatedAt;
+      return new Date(sessionDate) >= startDate;
+    });
+    
+    console.log(`📊 Found ${sessionsInRange.length} sessions within timeRange`);
+    
     const completedSessions = allSessions.filter(s => s.status === 'completed');
+    const completedSessionsInRange = sessionsInRange.filter(s => s.status === 'completed');
+    
+    // Total earnings from ALL completed sessions (all-time)
     const totalEarnings = completedSessions
       .filter(s => s.paymentStatus === 'completed')
       .reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
     
-    // Calculate average rating from reviews
+    console.log(`💰 Total earnings (all-time): $${totalEarnings}`);
+    
+    // Calculate average rating from reviews (all-time)
     const allReviews = allSessions.flatMap(s => s.reviews);
     const averageRating = allReviews.length > 0
       ? allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length
@@ -4686,12 +4700,13 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       ? (completedSessions.length / allSessions.length) * 100
       : 0;
     
-    // Monthly earnings
+    // Monthly earnings (filtered by timeRange)
     const monthlyEarningsMap = {};
-    completedSessions
+    completedSessionsInRange
       .filter(s => s.paymentStatus === 'completed' && s.paymentAmount)
       .forEach(session => {
-        const month = new Date(session.updatedAt).toLocaleDateString('en-US', { month: 'short' });
+        const sessionDate = session.scheduledDate || session.updatedAt || session.createdAt;
+        const month = new Date(sessionDate).toLocaleDateString('en-US', { month: 'short' });
         monthlyEarningsMap[month] = (monthlyEarningsMap[month] || 0) + (session.paymentAmount || 0);
       });
     
@@ -4702,7 +4717,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
         return months.indexOf(a.month) - months.indexOf(b.month);
       });
     
-    // Session types breakdown
+    // Session types breakdown (all-time, but can be filtered by timeRange if needed)
     const sessionTypesMap = {};
     completedSessions
       .filter(s => s.paymentStatus === 'completed')
@@ -4721,17 +4736,21 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       revenue: data.revenue
     })).sort((a, b) => b.count - a.count);
     
-    // Weekly stats (last 4 weeks)
+    // Weekly stats (last 4 weeks from timeRange start)
     const weeklyStats = [];
-    for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date(now);
-      weekStart.setDate(now.getDate() - (i * 7));
+    const weeksToShow = timeRange === 'week' ? 1 : timeRange === 'month' ? 4 : timeRange === '3months' ? 12 : timeRange === '6months' ? 24 : 52;
+    const actualWeeks = Math.min(weeksToShow, 4); // Show max 4 weeks
+    
+    for (let i = actualWeeks - 1; i >= 0; i--) {
+      const weekStart = new Date(startDate);
+      weekStart.setDate(startDate.getDate() + (i * 7));
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 7);
       
-      const weekSessions = completedSessions.filter(s => {
-        const sessionDate = new Date(s.updatedAt);
-        return sessionDate >= weekStart && sessionDate < weekEnd;
+      const weekSessions = completedSessionsInRange.filter(s => {
+        const sessionDate = s.scheduledDate || s.updatedAt || s.createdAt;
+        const sessionDateObj = new Date(sessionDate);
+        return sessionDateObj >= weekStart && sessionDateObj < weekEnd;
       });
       
       const weekEarnings = weekSessions
@@ -4739,13 +4758,13 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
         .reduce((sum, s) => sum + (s.paymentAmount || 0), 0);
       
       weeklyStats.push({
-        week: `Week ${4 - i}`,
+        week: `Week ${actualWeeks - i}`,
         sessions: weekSessions.length,
         earnings: weekEarnings
       });
     }
     
-    // Top clients (candidates with most sessions)
+    // Top clients (candidates with most sessions - all-time)
     const clientMap = {};
     completedSessions
       .filter(s => s.paymentStatus === 'completed')
@@ -4766,10 +4785,10 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       .sort((a, b) => b.sessions - a.sessions)
       .slice(0, 5);
     
-    // Time tracking stats
+    // Time tracking stats (all-time)
     const sessionsWithTracking = completedSessions.filter(s => s.actualDuration);
     const totalActualTime = sessionsWithTracking.reduce((sum, s) => sum + (s.actualDuration || 0), 0);
-    const totalScheduledTime = completedSessions.reduce((sum, s) => sum + s.duration, 0);
+    const totalScheduledTime = completedSessions.reduce((sum, s) => sum + (s.duration || 0), 0);
     const averageActualDuration = sessionsWithTracking.length > 0
       ? totalActualTime / sessionsWithTracking.length
       : 0;
@@ -4788,7 +4807,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       sessionsWithTimeTracking: sessionsWithTracking.length
     };
     
-    // Candidate time tracking
+    // Candidate time tracking (all-time)
     const candidateTrackingMap = {};
     
     completedSessions.forEach(session => {
@@ -4804,7 +4823,7 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       }
       candidateTrackingMap[candidateId].totalSessions += 1;
       candidateTrackingMap[candidateId].totalActualTime += session.actualDuration || 0;
-      candidateTrackingMap[candidateId].totalScheduledTime += session.duration;
+      candidateTrackingMap[candidateId].totalScheduledTime += session.duration || 0;
     });
     
     const candidateTimeTracking = Object.values(candidateTrackingMap).map(candidate => ({
@@ -4829,6 +4848,17 @@ app.get('/api/analytics/expert/:expertId', authenticateToken, async (req, res) =
       timeTracking,
       candidateTimeTracking
     };
+    
+    console.log(`✅ Expert Analytics Response:`, {
+      totalEarnings,
+      totalSessions: allSessions.length,
+      averageRating: Math.round(averageRating * 10) / 10,
+      completionRate: Math.round(completionRate * 10) / 10,
+      monthlyEarningsCount: monthlyEarnings.length,
+      sessionTypesCount: sessionTypes.length,
+      weeklyStatsCount: weeklyStats.length,
+      topClientsCount: topClients.length
+    });
     
     res.json({
       success: true,
