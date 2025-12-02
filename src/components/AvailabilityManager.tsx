@@ -274,167 +274,161 @@ export default function AvailabilityManager({ expertId, onAvailabilityChange, se
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Availability Management</h2>
-          <p className="text-gray-600">Manage your available time slots for bookings</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setActiveTab('calendar')}
-            className="flex items-center gap-2"
-          >
-            <Grid3X3 className="h-4 w-4" />
-            View Calendar
-          </Button>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button 
-                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                onClick={resetForm}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Availability
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editingSlot ? 'Edit Availability' : 'Add New Availability'}
-              </DialogTitle>
-              <DialogDescription>
-                Set your available time slots for candidate bookings
-              </DialogDescription>
-            </DialogHeader>
+      {/* Action buttons - header removed as it's shown in ExpertDashboard */}
+      <div className="flex items-center justify-end gap-3">
+        <Button
+          variant="outline"
+          onClick={() => setActiveTab('calendar')}
+          className="flex items-center gap-2"
+        >
+          <Grid3X3 className="h-4 w-4" />
+          View Calendar
+        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              onClick={resetForm}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Availability
+            </Button>
+          </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {editingSlot ? 'Edit Availability' : 'Add New Availability'}
+            </DialogTitle>
+            <DialogDescription>
+              Set your available time slots for candidate bookings
+            </DialogDescription>
+          </DialogHeader>
 
-            <div className="space-y-6">
-              {/* Basic Settings */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startTime">Start Time</Label>
-                  <Input
-                    id="startTime"
-                    type="time"
-                    value={formData.startTime}
-                    onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endTime">End Time</Label>
-                  <Input
-                    id="endTime"
-                    type="time"
-                    value={formData.endTime}
-                    onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
-                  />
-                </div>
+          <div className="space-y-6">
+            {/* Basic Settings */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startTime">Start Time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                />
               </div>
-
-              {/* Recurring Settings */}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="isRecurring"
-                    checked={formData.isRecurring}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isRecurring: !!checked }))}
-                  />
-                  <Label htmlFor="isRecurring">Recurring Availability</Label>
-                </div>
-
-                {formData.isRecurring ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Recurring Pattern</Label>
-                      <Select
-                        value={formData.recurringPattern}
-                        onValueChange={(value: 'daily' | 'weekly' | 'monthly') => 
-                          setFormData(prev => ({ ...prev, recurringPattern: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="daily">Daily</SelectItem>
-                          <SelectItem value="weekly">Weekly</SelectItem>
-                          <SelectItem value="monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {formData.recurringPattern === 'weekly' && (
-                      <div className="space-y-2">
-                        <Label>Available Days</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {daysOfWeek.map((day) => (
-                            <div key={day.key} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={day.key}
-                                checked={formData.recurringDays.includes(day.key)}
-                                onCheckedChange={() => handleDayToggle(day.key)}
-                              />
-                              <Label htmlFor={day.key} className="text-sm">
-                                {day.label}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="date">Specific Date</Label>
-                    <Input
-                      id="date"
-                      type="date"
-                      value={formData.date}
-                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Advanced Settings */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="maxBookings">Max Bookings per Day</Label>
-                  <Input
-                    id="maxBookings"
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={formData.maxBookings}
-                    onChange={(e) => setFormData(prev => ({ ...prev, maxBookings: parseInt(e.target.value) || 8 }))}
-                  />
-                </div>
-                <div className="flex items-center space-x-2 pt-6">
-                  <Checkbox
-                    id="isActive"
-                    checked={formData.isActive}
-                    onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: !!checked }))}
-                  />
-                  <Label htmlFor="isActive">Active</Label>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                  <X className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {editingSlot ? 'Update' : 'Add'} Availability
-                </Button>
+              <div className="space-y-2">
+                <Label htmlFor="endTime">End Time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                />
               </div>
             </div>
-          </DialogContent>
-        </Dialog>
-        </div>
+
+            {/* Recurring Settings */}
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="isRecurring"
+                  checked={formData.isRecurring}
+                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isRecurring: !!checked }))}
+                />
+                <Label htmlFor="isRecurring">Recurring Availability</Label>
+              </div>
+
+              {formData.isRecurring ? (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Recurring Pattern</Label>
+                    <Select
+                      value={formData.recurringPattern}
+                      onValueChange={(value: 'daily' | 'weekly' | 'monthly') => 
+                        setFormData(prev => ({ ...prev, recurringPattern: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="weekly">Weekly</SelectItem>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {formData.recurringPattern === 'weekly' && (
+                    <div className="space-y-2">
+                      <Label>Available Days</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {daysOfWeek.map((day) => (
+                          <div key={day.key} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={day.key}
+                              checked={formData.recurringDays.includes(day.key)}
+                              onCheckedChange={() => handleDayToggle(day.key)}
+                            />
+                            <Label htmlFor={day.key} className="text-sm">
+                              {day.label}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="date">Specific Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Advanced Settings */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="maxBookings">Max Bookings per Day</Label>
+                <Input
+                  id="maxBookings"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={formData.maxBookings}
+                  onChange={(e) => setFormData(prev => ({ ...prev, maxBookings: parseInt(e.target.value) || 8 }))}
+                />
+              </div>
+              <div className="flex items-center space-x-2 pt-6">
+                <Checkbox
+                  id="isActive"
+                  checked={formData.isActive}
+                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: !!checked }))}
+                />
+                <Label htmlFor="isActive">Active</Label>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button onClick={handleSave}>
+                <Save className="h-4 w-4 mr-2" />
+                {editingSlot ? 'Update' : 'Add'} Availability
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       </div>
 
       {/* Tabs */}

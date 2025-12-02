@@ -46,13 +46,47 @@ export default function InteractiveCalendar({ sessions, availabilitySlots = [] }
 
       // Add sessions as booking events
       sessions.forEach(session => {
-        const sessionDate = new Date(session.scheduledDate || session.date || '');
+        // Handle date parsing - use local date components to avoid timezone shifts
+        let sessionDate: Date;
+        let dateStr: string;
+        let timeStr: string;
+        
+        if (session.scheduledDate) {
+          // If we have scheduledDate (ISO string), parse it and use local components
+          sessionDate = new Date(session.scheduledDate);
+          if (!isNaN(sessionDate.getTime())) {
+            // Use local date components to avoid timezone shifts
+            const year = sessionDate.getFullYear();
+            const month = String(sessionDate.getMonth() + 1).padStart(2, '0');
+            const day = String(sessionDate.getDate()).padStart(2, '0');
+            dateStr = `${year}-${month}-${day}`;
+            timeStr = session.time || `${String(sessionDate.getHours()).padStart(2, '0')}:${String(sessionDate.getMinutes()).padStart(2, '0')}`;
+          } else {
+            return; // Skip invalid dates
+          }
+        } else if (session.date && session.time) {
+          // If we have separate date and time strings, combine them as local time
+          const [year, month, day] = session.date.split('-').map(Number);
+          const [hours, minutes] = session.time.split(':').map(Number);
+          sessionDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+          dateStr = session.date; // Use the date string directly
+          timeStr = session.time;
+        } else if (session.date) {
+          // If only date string, parse as local date
+          const [year, month, day] = session.date.split('-').map(Number);
+          sessionDate = new Date(year, month - 1, day);
+          dateStr = session.date;
+          timeStr = session.time || '00:00';
+        } else {
+          return; // Skip sessions without date
+        }
+        
         if (!isNaN(sessionDate.getTime())) {
           calendarEvents.push({
             id: session.id,
             title: `${session.candidateName || 'Client'} - ${session.sessionType || 'Interview'}`,
-            date: sessionDate.toISOString().split('T')[0],
-            time: session.time || sessionDate.toTimeString().split(' ')[0].substring(0, 5),
+            date: dateStr,
+            time: timeStr,
             duration: session.duration || 60,
             type: 'booking',
             status: session.status,
@@ -109,7 +143,11 @@ export default function InteractiveCalendar({ sessions, availabilitySlots = [] }
   };
 
   const getEventsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local date components instead of ISO string to avoid timezone shifts
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     return events.filter(event => event.date === dateStr);
   };
 

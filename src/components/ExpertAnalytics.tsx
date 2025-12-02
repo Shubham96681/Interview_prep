@@ -327,12 +327,10 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header removed - already shown in ExpertDashboard */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900">Analytics Dashboard</h2>
           <div className="flex items-center gap-3">
-            <p className="text-gray-600">Track your performance and earnings</p>
             {lastUpdate && (
               <span className="text-xs text-gray-500">
                 Last updated: {lastUpdate.toLocaleTimeString()}
