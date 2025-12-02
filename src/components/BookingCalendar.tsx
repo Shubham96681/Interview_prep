@@ -65,8 +65,11 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       const grouped: Record<string, string[]> = {};
 
       booked.forEach((b) => {
-        // Skip cancelled sessions
-        if (b.status === "cancelled") return;
+        // Skip cancelled sessions only
+        if (b.status === "cancelled") {
+          console.log('⏭️ Skipping cancelled session:', b);
+          return;
+        }
         
         // Extract date and time
         const date = normalizeDate(b.scheduledDate || b.date);
@@ -74,17 +77,25 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
         // Validate we have both date and time
         if (!date || !time) {
-          console.warn('Invalid booked slot data:', b);
+          console.warn('⚠️ Invalid booked slot data (missing date or time):', b);
           return;
         }
 
         grouped[date] = grouped[date] || [];
         if (!grouped[date].includes(time)) {
           grouped[date].push(time);
+          console.log(`✅ Added booked slot: ${date} at ${time} (status: ${b.status})`);
+        } else {
+          console.log(`ℹ️ Duplicate booked slot skipped: ${date} at ${time}`);
         }
       });
 
       console.log('📅 Grouped booked slots:', grouped);
+      console.log('📊 Total booked slots by date:', Object.keys(grouped).map(date => ({
+        date,
+        count: grouped[date].length,
+        times: grouped[date]
+      })));
 
       const list: Slot[] = [];
       
@@ -94,6 +105,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
         const dateStr = normalizeDate(d);
 
         const bookedTimes = grouped[dateStr] || [];
+        console.log(`📅 Date ${dateStr}: ${bookedTimes.length} booked slots:`, bookedTimes);
         const disabled: string[] = [];
 
         if (i === 0) {
@@ -152,12 +164,16 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
 
   const getSlotStatus = (date: string, time: string): "booked" | "not_available" | "available" => {
     const slot = slots.find((s) => s.date === date);
-    if (!slot) return "not_available";
+    if (!slot) {
+      console.warn(`⚠️ No slot found for date: ${date}`);
+      return "not_available";
+    }
 
     const normalizedTime = normalize(time);
 
     // Check booked first (highest priority)
     if (slot.booked.includes(normalizedTime)) {
+      console.log(`🔴 Slot ${date} ${time} is BOOKED`);
       return "booked";
     }
     
@@ -171,6 +187,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
       return "available";
     }
 
+    console.warn(`⚠️ Slot ${date} ${time} not found in any category. Booked: ${slot.booked.join(', ')}, Disabled: ${slot.disabled.join(', ')}, Available: ${slot.available.join(', ')}`);
     return "not_available";
   };
 
