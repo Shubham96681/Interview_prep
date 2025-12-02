@@ -433,20 +433,24 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.monthlyEarnings.map((month) => (
-                <div key={month.month} className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-600">{month.month}</span>
-                  <div className="flex items-center gap-3">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
-                        style={{ width: `${(month.amount / 2500) * 100}%` }}
-                      ></div>
+              {analyticsData.monthlyEarnings && analyticsData.monthlyEarnings.length > 0 ? (
+                analyticsData.monthlyEarnings.map((month) => (
+                  <div key={month.month} className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-600">{month.month}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full"
+                          style={{ width: `${(month.amount / 2500) * 100}%` }}
+                        ></div>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900">${month.amount}</span>
                     </div>
-                    <span className="text-sm font-semibold text-gray-900">${month.amount}</span>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-center text-gray-500 text-sm py-8">No monthly earnings data available</div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -461,23 +465,27 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.sessionTypes.map((type, index) => (
-                <div key={type.type} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-4 h-4 rounded-full"
-                      style={{ 
-                        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'][index % 4]
-                      }}
-                    ></div>
-                    <span className="text-sm font-medium text-gray-600">{type.type}</span>
+              {analyticsData.sessionTypes && analyticsData.sessionTypes.length > 0 ? (
+                analyticsData.sessionTypes.map((type, index) => (
+                  <div key={type.type} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-4 h-4 rounded-full"
+                        style={{ 
+                          backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'][index % 4]
+                        }}
+                      ></div>
+                      <span className="text-sm font-medium text-gray-600">{type.type}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-900">{type.count} sessions</p>
+                      <p className="text-xs text-gray-500">${type.revenue}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-gray-900">{type.count} sessions</p>
-                    <p className="text-xs text-gray-500">${type.revenue}</p>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-center text-gray-500 text-sm py-8">No session types data available</div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -495,21 +503,25 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.weeklyStats.map((week) => (
-                <div key={week.week} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div>
-                    <p className="font-medium text-gray-900">{week.week}</p>
-                    <p className="text-sm text-gray-600">{week.sessions} sessions</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-green-600">${week.earnings}</p>
-                    <div className="flex items-center">
-                      <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                      <span className="text-xs text-green-600">+5%</span>
+              {analyticsData.weeklyStats && analyticsData.weeklyStats.length > 0 ? (
+                analyticsData.weeklyStats.map((week) => (
+                  <div key={week.week} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-gray-900">{week.week}</p>
+                      <p className="text-sm text-gray-600">{week.sessions} sessions</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-semibold text-green-600">${week.earnings}</p>
+                      <div className="flex items-center">
+                        <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
+                        <span className="text-xs text-green-600">+5%</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-center text-gray-500 text-sm py-8">No weekly stats data available</div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -524,26 +536,30 @@ export default function ExpertAnalytics({ expertId, sessions }: ExpertAnalyticsP
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {analyticsData.topClients.map((client, index) => (
-                <div key={client.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
-                      {index + 1}
+              {analyticsData.topClients && analyticsData.topClients.length > 0 ? (
+                analyticsData.topClients.map((client, index) => (
+                  <div key={client.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{client.name}</p>
+                        <p className="text-sm text-gray-600">{client.sessions} sessions</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-900">{client.name}</p>
-                      <p className="text-sm text-gray-600">{client.sessions} sessions</p>
+                    <div className="text-right">
+                      <p className="font-semibold text-gray-900">${client.revenue}</p>
+                      <div className="flex items-center">
+                        <Star className="h-3 w-3 text-yellow-500 mr-1" />
+                        <span className="text-xs text-gray-600">4.8</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-900">${client.revenue}</p>
-                    <div className="flex items-center">
-                      <Star className="h-3 w-3 text-yellow-500 mr-1" />
-                      <span className="text-xs text-gray-600">4.8</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))
+              ) : (
+                <div className="text-center text-gray-500 text-sm py-8">No top clients data available</div>
+              )}
             </div>
           </CardContent>
         </Card>

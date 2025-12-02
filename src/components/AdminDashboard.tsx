@@ -507,7 +507,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
 
     switch (type) {
       case 'sessions':
-        data = sessions.map(s => ({
+        data = (sessions || []).map(s => ({
           id: s.id,
           candidate: s.candidateName,
           expert: s.expertName,
@@ -521,7 +521,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         filename = 'sessions-export.csv';
         break;
       case 'users':
-        data = users.map(u => ({
+        data = (users || []).map(u => ({
           name: u.name,
           email: u.email,
           type: u.userType,
@@ -532,7 +532,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         filename = 'users-export.csv';
         break;
       case 'payments':
-        data = sessions
+        data = (sessions || [])
           .filter(s => s.paymentAmount)
           .map(s => ({
             sessionId: s.id,
@@ -545,7 +545,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
         filename = 'payments-export.csv';
         break;
       case 'recordings':
-        data = sessions
+        data = (sessions || [])
           .filter(s => s.recordingUrl || s.isRecordingEnabled)
           .map(s => ({
             'Session ID': s.id,
@@ -926,10 +926,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      ${sessions.reduce((sum, s) => sum + (s.paymentAmount || 0), 0).toFixed(2)}
+                      ${(sessions || []).reduce((sum, s) => sum + (s.paymentAmount || 0), 0).toFixed(2)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      From {sessions.filter(s => s.paymentStatus === 'completed').length} completed payments
+                      From {(sessions || []).filter(s => s.paymentStatus === 'completed').length} completed payments
                     </p>
                   </CardContent>
                 </Card>
@@ -941,8 +941,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {sessions.length > 0 
-                        ? Math.round(sessions.reduce((sum, s) => sum + (s.duration || 0), 0) / sessions.length)
+                      {(sessions || []).length > 0 
+                        ? Math.round((sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0) / (sessions || []).length)
                         : 0} min
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -958,8 +958,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">
-                      {sessions.length > 0
-                        ? Math.round((analytics.sessionsByStatus.completed || 0) / sessions.length * 100)
+                      {(sessions || []).length > 0
+                        ? Math.round((analytics.sessionsByStatus.completed || 0) / (sessions || []).length * 100)
                         : 0}%
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -998,7 +998,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   <CardContent>
                     <div className="space-y-2">
                       {Object.entries(
-                        sessions.reduce((acc, s) => {
+                        (sessions || []).reduce((acc, s) => {
                           acc[s.sessionType] = (acc[s.sessionType] || 0) + 1;
                           return acc;
                         }, {} as Record<string, number>)
@@ -1010,7 +1010,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                               <div
                                 className="bg-blue-600 h-2 rounded-full"
                                 style={{
-                                  width: `${(count / sessions.length) * 100}%`
+                                  width: `${(sessions || []).length > 0 ? (count / (sessions || []).length) * 100 : 0}%`
                                 }}
                               />
                             </div>
@@ -1035,7 +1035,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   <CardContent>
                     <div className="space-y-2">
                       {Object.entries(
-                        sessions.reduce((acc, s) => {
+                        (sessions || []).reduce((acc, s) => {
                           const status = s.paymentStatus || 'pending';
                           acc[status] = (acc[status] || 0) + 1;
                           return acc;
@@ -1068,7 +1068,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Top Experts</p>
                       <div className="space-y-1">
-                        {users
+                        {(users || [])
                           .filter(u => u.userType === 'expert')
                           .sort((a, b) => (b.totalSessions || 0) - (a.totalSessions || 0))
                           .slice(0, 5)
@@ -1083,7 +1083,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Top Candidates</p>
                       <div className="space-y-1">
-                        {users
+                        {(users || [])
                           .filter(u => u.userType === 'candidate')
                           .sort((a, b) => (b.totalSessions || 0) - (a.totalSessions || 0))
                           .slice(0, 5)
@@ -1098,17 +1098,17 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                     <div>
                       <p className="text-sm text-muted-foreground mb-2">Recent Activity</p>
                       <div className="space-y-1 text-sm">
-                        <div>New users today: {users.filter(u => {
+                        <div>New users today: {(users || []).filter(u => {
                           const created = new Date(u.createdAt);
                           const today = new Date();
                           return created.toDateString() === today.toDateString();
                         }).length}</div>
-                        <div>Sessions today: {sessions.filter(s => {
+                        <div>Sessions today: {(sessions || []).filter(s => {
                           const sessionDate = new Date(s.date);
                           const today = new Date();
                           return sessionDate.toDateString() === today.toDateString();
                         }).length}</div>
-                        <div>Reviews today: {reviews.filter(r => {
+                        <div>Reviews today: {(reviews || []).filter(r => {
                           const reviewDate = new Date(r.createdAt);
                           const today = new Date();
                           return reviewDate.toDateString() === today.toDateString();
@@ -1587,7 +1587,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sessions.map((session) => (
+                  {sessions && sessions.length > 0 ? (
+                    sessions.map((session) => (
                     <TableRow key={session.id}>
                       <TableCell>
                         <div>{session.date}</div>
@@ -1670,7 +1671,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        No sessions found
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -1844,7 +1852,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {reviews.map((review) => (
+                {reviews && reviews.length > 0 ? (
+                  reviews.map((review) => (
                   <Card key={review.id}>
                     <CardHeader>
                       <div className="flex justify-between items-start">
@@ -1872,7 +1881,10 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       </p>
                     </CardContent>
                   </Card>
-                ))}
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 text-sm py-8">No reviews available</div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1891,7 +1903,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                 </div>
                 <div className="flex gap-2">
                   <Badge variant="outline">
-                    {sessions.filter(s => s.recordingUrl).length} recordings available
+                    {(sessions || []).filter(s => s.recordingUrl).length} recordings available
                   </Badge>
                   <Button variant="outline" size="sm" onClick={() => exportData('recordings')}>
                     <Download className="h-4 w-4 mr-2" />
@@ -1901,7 +1913,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
               </div>
             </CardHeader>
             <CardContent>
-              {sessions.filter(s => s.recordingUrl || s.isRecordingEnabled).length > 0 ? (
+              {(sessions || []).filter(s => s.recordingUrl || s.isRecordingEnabled).length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1916,7 +1928,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sessions
+                    {(sessions || [])
                       .filter(s => s.recordingUrl || s.isRecordingEnabled)
                       .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
                       .map((session) => (
@@ -2073,7 +2085,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {transactions.map((t) => (
+                  {transactions && transactions.length > 0 ? (
+                    transactions.map((t) => (
                     <TableRow key={t.id}>
                       <TableCell>{new Date(t.date).toLocaleDateString()}</TableCell>
                       <TableCell>{t.candidate}</TableCell>
@@ -2087,7 +2100,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        No transactions found
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -2097,11 +2117,11 @@ export default function AdminDashboard({}: AdminDashboardProps) {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Expert Payouts</CardTitle>
-                <Button variant="outline" size="sm" onClick={() => {
-                  const csv = [
-                    'Expert,Email,Total Earnings,Platform Commission,Payout Amount,Sessions',
-                    ...payouts.map(p => `"${p.expertName}","${p.expertEmail}",${p.totalEarnings},${p.platformCommission},${p.payoutAmount},${p.sessionCount}`)
-                  ].join('\n');
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const csv = [
+                      'Expert,Email,Total Earnings,Platform Commission,Payout Amount,Sessions',
+                      ...(payouts || []).map(p => `"${p.expertName}","${p.expertEmail}",${p.totalEarnings},${p.platformCommission},${p.payoutAmount},${p.sessionCount}`)
+                    ].join('\n');
                   const blob = new Blob([csv], { type: 'text/csv' });
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
@@ -2129,7 +2149,8 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {payouts.map((p) => (
+                  {payouts && payouts.length > 0 ? (
+                    payouts.map((p) => (
                     <TableRow key={p.expertId}>
                       <TableCell>{p.expertName}</TableCell>
                       <TableCell>{p.expertEmail}</TableCell>
@@ -2138,7 +2159,14 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                       <TableCell className="font-semibold">${p.payoutAmount?.toFixed(2)}</TableCell>
                       <TableCell>{p.sessionCount}</TableCell>
                     </TableRow>
-                  ))}
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No payouts found
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -2189,7 +2217,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users
+                  {(users || [])
                     .filter(u => u.userType === 'expert')
                     .sort((a, b) => (b.rating || 0) - (a.rating || 0))
                     .slice(0, 10)
@@ -2618,7 +2646,7 @@ export default function AdminDashboard({}: AdminDashboardProps) {
                   )}
                 </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {users
+                  {(users || [])
                     .filter(u => 
                       u.id !== selectedSession.candidateId && 
                       u.id !== selectedSession.expertId &&
