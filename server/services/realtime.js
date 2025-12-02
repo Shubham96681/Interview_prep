@@ -15,9 +15,10 @@ class RealtimeService extends EventEmitter {
     console.log(`📊 Max connections: ${this.maxTotalConnections}, Max per user: ${this.maxConnectionsPerUser}`);
     
     // Start heartbeat to keep connections alive
+    // Use 15 seconds to prevent proxy timeouts (many proxies timeout SSE after 20-30s of inactivity)
     this.heartbeatInterval = setInterval(() => {
       this.broadcastHeartbeat();
-    }, 30000); // 30 seconds
+    }, 15000); // 15 seconds - safer for proxies and load balancers
 
     // Clean up stale connections every 5 minutes
     this.connectionCleanupInterval = setInterval(() => {

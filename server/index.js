@@ -3409,9 +3409,11 @@ app.get('/api/realtime', (req, res) => {
   console.log(`✅ SSE connection established for user: ${userId}`);
 
     // Keep connection alive with periodic heartbeat
+    // Use 15 seconds to prevent proxy timeouts (many proxies timeout SSE after 20-30s of inactivity)
     const keepAliveInterval = setInterval(() => {
       try {
         if (!res.destroyed && !res.closed) {
+          // Send a comment line (SSE keepalive) - this prevents connection timeout
           res.write(`: keepalive\n\n`);
         } else {
           clearInterval(keepAliveInterval);
@@ -3421,7 +3423,7 @@ app.get('/api/realtime', (req, res) => {
         clearInterval(keepAliveInterval);
         realtimeService.removeConnection(userId, res);
       }
-    }, 30000); // Every 30 seconds
+    }, 15000); // Every 15 seconds - safer for proxies and load balancers
 
   // Handle client disconnect
   req.on('close', () => {
