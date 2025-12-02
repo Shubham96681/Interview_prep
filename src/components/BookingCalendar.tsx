@@ -397,20 +397,8 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                     
                     {/* Booked slot diagonal red line */}
                     {isBooked && (
-                      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
-                        <div
-                          className="absolute top-0 left-0 w-full h-full"
-                          style={{
-                            background: 'linear-gradient(135deg, transparent 45%, #ef4444 45%, #ef4444 55%, transparent 55%)',
-                          }}
-                        ></div>
-                        <div
-                          className="absolute top-0 left-0 w-full h-full"
-                          style={{
-                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%)',
-                            clipPath: 'polygon(0 0, 100% 100%, 0 100%)',
-                          }}
-                        ></div>
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="w-full h-0.5 bg-red-500 transform rotate-45 opacity-80"></div>
                       </div>
                     )}
                     
