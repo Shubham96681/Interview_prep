@@ -223,7 +223,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
             <h4 className="text-lg font-semibold text-gray-900">Select Date</h4>
             <span className="text-xs text-gray-500 font-medium">Next 7 days</span>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="flex flex-wrap gap-3">
             {slots.map((slot) => (
               <button
                 key={slot.date}
@@ -310,7 +310,7 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
               </div>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+            <div className="flex flex-wrap gap-3 justify-start">
               {allSlots.map((time) => {
                 const slotStatus = getSlotStatus(selectedDate, time);
                 
@@ -343,8 +343,8 @@ export default function BookingCalendar({ expertId, expertName, hourlyRate, onBo
                       }
                     }}
                     className={`
-                      relative group flex flex-col items-center justify-center gap-1.5
-                      h-20 rounded-xl border-2 transition-all duration-200
+                      relative group flex flex-row items-center justify-center gap-2
+                      min-w-[90px] px-4 py-3 rounded-xl border-2 transition-all duration-200
                       ${isSelected 
                         ? "border-blue-600 bg-blue-100 shadow-lg scale-105 ring-2 ring-blue-200" 
                         : ""
