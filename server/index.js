@@ -714,17 +714,99 @@ app.post('/api/auth/login', validateLogin, async (req, res) => {
     // Remove password from response
     const { password: _, ...userWithoutPassword } = user;
 
+    // Check if user must change password
+    const mustChangePassword = user.mustChangePassword || false;
+
     res.json({
       success: true,
       message: 'Login successful',
       user: userWithoutPassword,
-      token
+      token,
+      mustChangePassword // Flag to indicate password change is required
     });
   } catch (error) {
     console.error('❌ Login error:', error.message);
     console.error('Stack trace:', error.stack);
     res.status(500).json({ 
       message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Change password
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?.id || req.user?.userId;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated'
+      });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current password and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long'
+      });
+    }
+
+    // Get user with password
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, password: true, mustChangePassword: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Verify current password
+    const bcrypt = require('bcryptjs');
+    const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect'
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear mustChangePassword flag
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: false
+      }
+    });
+
+    console.log('✅ Password changed successfully for user:', userId);
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error changing password:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to change password',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -769,6 +851,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
         workingHoursStart: true,
         workingHoursEnd: true,
         daysAvailable: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true
       }
@@ -3640,6 +3723,373 @@ app.delete('/api/admin/sessions/:id', authenticateToken, requireRole('admin'), v
   }
 });
 
+// Reschedule session (admin only)
+app.post('/api/admin/sessions/:sessionId/reschedule', authenticateToken, requireRole('admin'), validateObjectId('sessionId'), async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { email } = req.query;
+    const { date, time, reason } = req.body;
+    
+    console.log('🔄 POST /api/admin/sessions/:sessionId/reschedule - Request received:', {
+      sessionId,
+      email,
+      date,
+      time
+    });
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Find the session
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Parse new date and time
+    if (!date || !time) {
+      return res.status(400).json({
+        success: false,
+        message: 'Date and time are required'
+      });
+    }
+
+    const [year, month, day] = date.split('-').map(Number);
+    const [hours, minutes] = time.split(':').map(Number);
+    const newScheduledDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+    // Update session
+    const updatedSession = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        scheduledDate: newScheduledDate,
+        status: 'rescheduled',
+        updatedAt: new Date()
+      },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    console.log('✅ Session rescheduled successfully:', sessionId);
+
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event (reschedule) to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
+
+    // Send reschedule email (optional)
+    try {
+      const emailService = require('./services/email');
+      await emailService.sendMeetingRescheduleEmailToCandidate(
+        session.candidate.email,
+        session.candidate.name,
+        session.expert.name,
+        session,
+        newScheduledDate
+      );
+      console.log('✅ Meeting reschedule email sent to candidate');
+    } catch (emailError) {
+      console.error('❌ Error sending reschedule email:', emailError);
+      // Don't fail if email fails
+    }
+
+    // Format response
+    const localDate = new Date(updatedSession.scheduledDate);
+    const dateStr = `${String(localDate.getFullYear())}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+
+    res.json({
+      success: true,
+      message: 'Session rescheduled successfully',
+      data: {
+        id: updatedSession.id,
+        date: dateStr,
+        time: timeStr,
+        scheduledDate: updatedSession.scheduledDate.toISOString(),
+        status: updatedSession.status
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error rescheduling session:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reschedule session',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Cancel session (admin only)
+app.post('/api/admin/sessions/:sessionId/cancel', authenticateToken, requireRole('admin'), validateObjectId('sessionId'), async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { email } = req.query;
+    const { reason } = req.body;
+    
+    console.log('❌ POST /api/admin/sessions/:sessionId/cancel - Request received:', {
+      sessionId,
+      email,
+      reason
+    });
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Find the session
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Update session status to cancelled
+    const updatedSession = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        status: 'cancelled',
+        updatedAt: new Date()
+      },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    console.log('✅ Session cancelled successfully:', sessionId);
+
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event (cancel) to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
+
+    // Broadcast availability update
+    try {
+      const localDate = new Date(session.scheduledDate);
+      const dateStr = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, '0')}-${String(localDate.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(localDate.getHours()).padStart(2, '0')}:${String(localDate.getMinutes()).padStart(2, '0')}`;
+      
+      realtimeService.broadcast('availability_updated', {
+        expertId: session.expertId,
+        date: dateStr,
+        time: timeStr,
+        sessionId: sessionId,
+        cancelled: true
+      });
+      console.log('📡 Broadcasted availability update for expert:', session.expertId);
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting availability update:', realtimeError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Session cancelled successfully',
+      data: {
+        id: updatedSession.id,
+        status: updatedSession.status
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error cancelling session:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to cancel session',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Update session participants (admin only)
+app.put('/api/admin/sessions/:sessionId/participants', authenticateToken, requireRole('admin'), validateObjectId('sessionId'), async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { email } = req.query;
+    const { participantIds } = req.body;
+    
+    console.log('👥 PUT /api/admin/sessions/:sessionId/participants - Request received:', {
+      sessionId,
+      email,
+      participantIds
+    });
+    
+    // Verify admin access
+    if (email && req.user.email !== email) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    if (!Array.isArray(participantIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'participantIds must be an array'
+      });
+    }
+
+    // Find the session
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId }
+    });
+
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        error: 'Session not found'
+      });
+    }
+
+    // Verify all participant IDs exist
+    const participants = await prisma.user.findMany({
+      where: {
+        id: { in: participantIds }
+      },
+      select: { id: true, name: true, email: true }
+    });
+
+    if (participants.length !== participantIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more participant IDs are invalid'
+      });
+    }
+
+    // Update session with new participants
+    const updatedSession = await prisma.session.update({
+      where: { id: sessionId },
+      data: {
+        additionalParticipants: JSON.stringify(participantIds),
+        updatedAt: new Date()
+      },
+      include: {
+        candidate: {
+          select: { id: true, name: true, email: true }
+        },
+        expert: {
+          select: { id: true, name: true, email: true }
+        }
+      }
+    });
+
+    console.log('✅ Session participants updated successfully:', sessionId);
+
+    // Broadcast session update to admins
+    try {
+      realtimeService.broadcast('session_updated', {
+        session: {
+          id: updatedSession.id,
+          expertId: updatedSession.expertId,
+          candidateId: updatedSession.candidateId,
+          expertName: updatedSession.expert.name,
+          candidateName: updatedSession.candidate.name,
+          scheduledDate: updatedSession.scheduledDate,
+          status: updatedSession.status,
+          sessionType: updatedSession.sessionType,
+          duration: updatedSession.duration
+        },
+        timestamp: new Date().toISOString()
+      });
+      console.log('📡 Broadcasted session_updated event (participants) to admins');
+    } catch (realtimeError) {
+      console.error('❌ Error broadcasting session_updated:', realtimeError);
+    }
+
+    res.json({
+      success: true,
+      message: 'Session participants updated successfully',
+      data: {
+        id: updatedSession.id,
+        participants: participants.map(p => ({ id: p.id, name: p.name, email: p.email }))
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error updating session participants:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update session participants',
+      message: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Get all users (admin only)
 app.get('/api/admin/users', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
@@ -3743,6 +4193,7 @@ app.post('/api/admin/users', authenticateToken, requireRole('admin'), async (req
       userType,
       isActive: isActive !== undefined ? isActive : true,
       isVerified: isVerified !== undefined ? isVerified : (userType === 'admin' ? true : false),
+      mustChangePassword: true, // Force password change on first login for admin-created users
       phone: phone || null,
       company: company || null,
       title: title || null,

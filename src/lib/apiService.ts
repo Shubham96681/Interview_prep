@@ -273,6 +273,13 @@ class ApiService {
     return this.request('/api/auth/me');
   }
 
+  async changePassword(currentPassword: string, newPassword: string) {
+    return this.request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  }
+
   async getSessions(limit: number = 100, userId?: string, userType?: string) {
     const params = new URLSearchParams({ limit: limit.toString() });
     if (userId) params.append('userId', userId);

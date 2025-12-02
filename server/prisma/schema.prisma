@@ -32,6 +32,7 @@ model User {
   totalSessions      Int      @default(0)
   hourlyRate         Float?
   isVerified         Boolean  @default(false)
+  mustChangePassword Boolean  @default(false) // Force password change on first login
   yearsOfExperience  String?
   proficiency        String? // JSON string of proficiency array
   

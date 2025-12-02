@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { User as UserType, authService } from '@/lib/auth';
 import { apiService } from '@/lib/apiService';
 import RegistrationForm from './RegistrationForm';
+import ChangePasswordDialog from './ChangePasswordDialog';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -25,6 +26,8 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
   const [password, setPassword] = useState('');
   const [showRegistration, setShowRegistration] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
+  const [pendingUser, setPendingUser] = useState<UserType | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +61,15 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
       if (!savedToken || savedToken !== data.token) {
         console.error('❌ Token not saved correctly!');
         toast.error('Failed to save authentication token');
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check if password change is required
+      if (data.mustChangePassword) {
+        console.log('🔐 Password change required for user:', data.user.email);
+        setPendingUser({ ...data.user, token: data.token });
+        setShowPasswordChange(true);
         setIsLoading(false);
         return;
       }
@@ -245,6 +257,26 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
             toast.success(`Welcome ${userData.name}!`);
           }
         }}
+      />
+
+      {/* Password Change Dialog */}
+      <ChangePasswordDialog
+        isOpen={showPasswordChange}
+        onClose={() => {
+          setShowPasswordChange(false);
+          setPendingUser(null);
+          // Don't close auth modal - user needs to login again after password change
+        }}
+        onSuccess={() => {
+          // After successful password change, complete the login
+          if (pendingUser) {
+            const userWithToken = { ...pendingUser, token: pendingUser.token };
+            onLogin(pendingUser.userType as 'candidate' | 'expert' | 'admin', userWithToken);
+            setPendingUser(null);
+            onClose();
+          }
+        }}
+        currentPassword={password} // Pass the password they just used to login
       />
     </Dialog>
   );
