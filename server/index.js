@@ -838,32 +838,34 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       select: { id: true, email: true, name: true }
     });
 
-    // Don't reveal if user exists or not (security best practice)
-    // But still send OTP if user exists
-    if (user) {
-      // Generate and store OTP for password reset
-      const otp = otpService.storeOTP(email, null, 'password-reset');
-
-      // Send OTP email
-      try {
-        await emailService.sendPasswordResetOTPEmail(user.email, user.name, otp);
-        console.log(`✅ Password reset OTP sent to ${email}`);
-      } catch (emailError) {
-        console.error('❌ Error sending password reset OTP email:', emailError);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send OTP email. Please try again later.'
-        });
-      }
-    } else {
-      // Still return success to prevent email enumeration
-      console.log(`⚠️ Password reset requested for non-existent email: ${email}`);
+    // Return error if user doesn't exist
+    if (!user) {
+      console.log(`❌ Password reset requested for non-existent email: ${email}`);
+      return res.status(404).json({
+        success: false,
+        message: 'This email is not registered. Please check your email address or sign up for a new account.'
+      });
     }
 
-    // Always return success message (don't reveal if user exists)
+    // User exists, generate and store OTP for password reset
+    const otp = otpService.storeOTP(email, null, 'password-reset');
+
+    // Send OTP email
+    try {
+      await emailService.sendPasswordResetOTPEmail(user.email, user.name, otp);
+      console.log(`✅ Password reset OTP sent to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Error sending password reset OTP email:', emailError);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send OTP email. Please try again later.'
+      });
+    }
+
+    // Return success message
     res.json({
       success: true,
-      message: 'If an account exists with this email, a password reset OTP has been sent.'
+      message: 'Password reset OTP has been sent to your email.'
     });
   } catch (error) {
     console.error('❌ Error in forgot password:', error);
