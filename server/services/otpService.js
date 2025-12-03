@@ -37,7 +37,8 @@ class OTPService {
       expiresAt,
       userData,
       type,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      verified: false // Track if OTP has been verified (for password reset flow)
     });
     
     console.log(`✅ ${type} OTP stored for ${email}, expires at ${new Date(expiresAt).toISOString()}`);
@@ -75,10 +76,19 @@ class OTPService {
       return { valid: false, error: 'Invalid OTP. Please try again.' };
     }
     
-    // OTP is valid, return user data (if any) and remove OTP
+    // OTP is valid
     const userData = stored.userData;
-    this.otpStore.delete(key);
-    console.log(`✅ ${type} OTP verified for ${email}`);
+    
+    // For password-reset type, mark as verified but don't delete yet (will be deleted after password reset)
+    // For registration type, delete immediately after verification
+    if (type === 'password-reset') {
+      stored.verified = true;
+      console.log(`✅ ${type} OTP verified for ${email} (marked as verified, will be deleted after password reset)`);
+    } else {
+      // Registration OTP: delete immediately after verification
+      this.otpStore.delete(key);
+      console.log(`✅ ${type} OTP verified for ${email}`);
+    }
     
     return { valid: true, userData };
   }
@@ -133,9 +143,38 @@ class OTPService {
     stored.otp = newOtp;
     stored.expiresAt = Date.now() + (10 * 60 * 1000); // Reset expiration
     stored.createdAt = Date.now();
+    stored.verified = false; // Reset verified flag when resending
     
     console.log(`🔄 ${type} OTP resent for ${email}`);
     return newOtp;
+  }
+
+  /**
+   * Check if OTP is verified (for password reset flow)
+   * @param {string} email - User email
+   * @param {string} type - 'registration' or 'password-reset'
+   */
+  isOTPVerified(email, type = 'password-reset') {
+    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const stored = this.otpStore.get(key);
+    if (!stored || stored.type !== type) {
+      return false;
+    }
+    return stored.verified === true && Date.now() <= stored.expiresAt;
+  }
+
+  /**
+   * Delete verified OTP (after successful password reset)
+   * @param {string} email - User email
+   * @param {string} type - 'registration' or 'password-reset'
+   */
+  deleteOTP(email, type = 'password-reset') {
+    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const deleted = this.otpStore.delete(key);
+    if (deleted) {
+      console.log(`🗑️ ${type} OTP deleted for ${email}`);
+    }
+    return deleted;
   }
 }
 

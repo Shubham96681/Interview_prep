@@ -891,7 +891,7 @@ app.post('/api/auth/verify-reset-otp', async (req, res) => {
 
     console.log(`🔐 Verifying password reset OTP for: ${email}`);
 
-    // Verify OTP
+    // Verify OTP (this will mark it as verified but not delete it)
     const verification = otpService.verifyOTP(email, otp, 'password-reset');
 
     if (!verification.valid) {
@@ -902,9 +902,9 @@ app.post('/api/auth/verify-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`✅ Password reset OTP verified for ${email}`);
+    console.log(`✅ Password reset OTP verified for ${email} (marked as verified)`);
 
-    // OTP is valid, return success (user can now reset password)
+    // OTP is valid and marked as verified, return success (user can now reset password)
     res.json({
       success: true,
       message: 'OTP verified successfully. You can now reset your password.'
@@ -940,15 +940,32 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
     console.log(`🔐 Resetting password for: ${email}`);
 
-    // Verify OTP first
-    const verification = otpService.verifyOTP(email, otp, 'password-reset');
-
-    if (!verification.valid) {
-      console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
-      return res.status(400).json({
-        success: false,
-        message: verification.error || 'Invalid or expired OTP'
-      });
+    // Check if OTP was already verified (from verify-reset-otp step)
+    // If not verified yet, verify it now
+    const isVerified = otpService.isOTPVerified(email, 'password-reset');
+    
+    if (!isVerified) {
+      // OTP not verified yet, try to verify it now
+      const verification = otpService.verifyOTP(email, otp, 'password-reset');
+      
+      if (!verification.valid) {
+        console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
+        return res.status(400).json({
+          success: false,
+          message: verification.error || 'Invalid or expired OTP. Please verify the OTP first.'
+        });
+      }
+    } else {
+      // OTP already verified, verify it matches (re-verify to ensure it's the same OTP)
+      const verification = otpService.verifyOTP(email, otp, 'password-reset');
+      
+      if (!verification.valid) {
+        console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
+        return res.status(400).json({
+          success: false,
+          message: verification.error || 'Invalid or expired OTP. Please verify the OTP again.'
+        });
+      }
     }
 
     // Find user
@@ -976,6 +993,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
         mustChangePassword: false
       }
     });
+
+    // Delete the verified OTP after successful password reset
+    otpService.deleteOTP(email, 'password-reset');
 
     console.log(`✅ Password reset successfully for user: ${user.id}`);
 
