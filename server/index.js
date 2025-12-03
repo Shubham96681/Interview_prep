@@ -830,11 +830,14 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
-    console.log(`🔐 Forgot password request for: ${email}`);
+    // Normalize email (lowercase)
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    console.log(`🔐 Forgot password request for: ${normalizedEmail}`);
 
-    // Check if user exists
+    // Check if user exists (use normalized email)
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       select: { id: true, email: true, name: true }
     });
 
@@ -847,13 +850,13 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
-    // User exists, generate and store OTP for password reset
-    const otp = otpService.storeOTP(email, null, 'password-reset');
+    // User exists, generate and store OTP for password reset (use normalized email)
+    const otp = otpService.storeOTP(normalizedEmail, null, 'password-reset');
 
-    // Send OTP email
+    // Send OTP email (use original user.email from database)
     try {
       await emailService.sendPasswordResetOTPEmail(user.email, user.name, otp);
-      console.log(`✅ Password reset OTP sent to ${email}`);
+      console.log(`✅ Password reset OTP sent to ${user.email}, OTP: ${otp}`);
     } catch (emailError) {
       console.error('❌ Error sending password reset OTP email:', emailError);
       return res.status(500).json({
@@ -889,10 +892,15 @@ app.post('/api/auth/verify-reset-otp', async (req, res) => {
       });
     }
 
-    console.log(`🔐 Verifying password reset OTP for: ${email}`);
+    // Normalize email and OTP
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedOTP = otp.toString().trim().replace(/\D/g, ''); // Remove non-digits
+
+    console.log(`🔐 Verifying password reset OTP for: ${normalizedEmail}`);
+    console.log(`   Input OTP: "${otp}" -> Normalized: "${normalizedOTP}"`);
 
     // Verify OTP (this will mark it as verified but not delete it)
-    const verification = otpService.verifyOTP(email, otp, 'password-reset');
+    const verification = otpService.verifyOTP(normalizedEmail, normalizedOTP, 'password-reset');
 
     if (!verification.valid) {
       console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
@@ -938,18 +946,23 @@ app.post('/api/auth/reset-password', async (req, res) => {
       });
     }
 
-    console.log(`🔐 Resetting password for: ${email}`);
+    // Normalize email and OTP
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedOTP = otp.toString().trim().replace(/\D/g, ''); // Remove non-digits
+
+    console.log(`🔐 Resetting password for: ${normalizedEmail}`);
+    console.log(`   Input OTP: "${otp}" -> Normalized: "${normalizedOTP}"`);
 
     // Check if OTP was already verified (from verify-reset-otp step)
     // If not verified yet, verify it now
-    const isVerified = otpService.isOTPVerified(email, 'password-reset');
+    const isVerified = otpService.isOTPVerified(normalizedEmail, 'password-reset');
     
     if (!isVerified) {
       // OTP not verified yet, try to verify it now
-      const verification = otpService.verifyOTP(email, otp, 'password-reset');
+      const verification = otpService.verifyOTP(normalizedEmail, normalizedOTP, 'password-reset');
       
       if (!verification.valid) {
-        console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
+        console.log(`❌ Password reset OTP verification failed for ${normalizedEmail}: ${verification.error}`);
         return res.status(400).json({
           success: false,
           message: verification.error || 'Invalid or expired OTP. Please verify the OTP first.'
@@ -957,10 +970,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
       }
     } else {
       // OTP already verified, verify it matches (re-verify to ensure it's the same OTP)
-      const verification = otpService.verifyOTP(email, otp, 'password-reset');
+      const verification = otpService.verifyOTP(normalizedEmail, normalizedOTP, 'password-reset');
       
       if (!verification.valid) {
-        console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
+        console.log(`❌ Password reset OTP verification failed for ${normalizedEmail}: ${verification.error}`);
         return res.status(400).json({
           success: false,
           message: verification.error || 'Invalid or expired OTP. Please verify the OTP again.'
@@ -968,9 +981,9 @@ app.post('/api/auth/reset-password', async (req, res) => {
       }
     }
 
-    // Find user
+    // Find user (use normalized email for lookup)
     const user = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
       select: { id: true, email: true }
     });
 
@@ -995,7 +1008,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     });
 
     // Delete the verified OTP after successful password reset
-    otpService.deleteOTP(email, 'password-reset');
+    otpService.deleteOTP(normalizedEmail, 'password-reset');
 
     console.log(`✅ Password reset successfully for user: ${user.id}`);
 

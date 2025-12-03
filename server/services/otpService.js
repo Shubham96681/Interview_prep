@@ -29,8 +29,11 @@ class OTPService {
     const otp = this.generateOTP();
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
     
+    // Normalize email (lowercase) for consistent key lookup
+    const normalizedEmail = email.toLowerCase().trim();
+    
     // Use different key prefix for password reset to avoid conflicts
-    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const key = type === 'password-reset' ? `reset_${normalizedEmail}` : normalizedEmail;
     
     this.otpStore.set(key, {
       otp,
@@ -41,7 +44,7 @@ class OTPService {
       verified: false // Track if OTP has been verified (for password reset flow)
     });
     
-    console.log(`✅ ${type} OTP stored for ${email}, expires at ${new Date(expiresAt).toISOString()}`);
+    console.log(`✅ ${type} OTP stored for ${normalizedEmail} (key: ${key}), OTP: ${otp}, expires at ${new Date(expiresAt).toISOString()}`);
     return otp;
   }
 
@@ -52,27 +55,37 @@ class OTPService {
    * @param {string} type - 'registration' or 'password-reset'
    */
   verifyOTP(email, otp, type = 'registration') {
-    const key = type === 'password-reset' ? `reset_${email}` : email;
+    // Normalize email (lowercase) and OTP (trim whitespace, remove non-digits)
+    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedOTP = otp.toString().trim().replace(/\D/g, ''); // Remove all non-digits
+    
+    const key = type === 'password-reset' ? `reset_${normalizedEmail}` : normalizedEmail;
     const stored = this.otpStore.get(key);
     
     if (!stored) {
-      console.log(`❌ No ${type} OTP found for ${email}`);
+      console.log(`❌ No ${type} OTP found for ${normalizedEmail} (key: ${key})`);
+      // Log all existing keys for debugging
+      console.log(`📋 Available OTP keys:`, Array.from(this.otpStore.keys()));
       return { valid: false, error: 'OTP not found. Please request a new one.' };
     }
     
     if (stored.type !== type) {
-      console.log(`❌ OTP type mismatch for ${email}`);
+      console.log(`❌ OTP type mismatch for ${normalizedEmail}: expected ${type}, got ${stored.type}`);
       return { valid: false, error: 'Invalid OTP type. Please request a new one.' };
     }
     
     if (Date.now() > stored.expiresAt) {
-      console.log(`❌ ${type} OTP expired for ${email}`);
+      console.log(`❌ ${type} OTP expired for ${normalizedEmail} (expired at ${new Date(stored.expiresAt).toISOString()})`);
       this.otpStore.delete(key);
       return { valid: false, error: 'OTP has expired. Please request a new one.' };
     }
     
-    if (stored.otp !== otp) {
-      console.log(`❌ Invalid ${type} OTP for ${email}`);
+    // Compare normalized OTPs
+    if (stored.otp !== normalizedOTP) {
+      console.log(`❌ Invalid ${type} OTP for ${normalizedEmail}`);
+      console.log(`   Expected: "${stored.otp}" (length: ${stored.otp.length})`);
+      console.log(`   Received: "${normalizedOTP}" (length: ${normalizedOTP.length})`);
+      console.log(`   Original input: "${otp}"`);
       return { valid: false, error: 'Invalid OTP. Please try again.' };
     }
     
@@ -99,7 +112,8 @@ class OTPService {
    * @param {string} type - 'registration' or 'password-reset'
    */
   getUserData(email, type = 'registration') {
-    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const normalizedEmail = email.toLowerCase().trim();
+    const key = type === 'password-reset' ? `reset_${normalizedEmail}` : normalizedEmail;
     const stored = this.otpStore.get(key);
     if (!stored || Date.now() > stored.expiresAt || stored.type !== type) {
       return null;
@@ -134,7 +148,8 @@ class OTPService {
    * @param {string} type - 'registration' or 'password-reset'
    */
   resendOTP(email, type = 'registration') {
-    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const normalizedEmail = email.toLowerCase().trim();
+    const key = type === 'password-reset' ? `reset_${normalizedEmail}` : normalizedEmail;
     const stored = this.otpStore.get(key);
     if (!stored || stored.type !== type) {
       return null;
@@ -142,7 +157,7 @@ class OTPService {
     
     // Check if expired - if so, don't resend, user needs to request new OTP
     if (Date.now() > stored.expiresAt) {
-      console.log(`⏰ Cannot resend expired ${type} OTP for ${email}`);
+      console.log(`⏰ Cannot resend expired ${type} OTP for ${normalizedEmail}`);
       this.otpStore.delete(key);
       return null;
     }
@@ -154,7 +169,7 @@ class OTPService {
     stored.createdAt = Date.now();
     stored.verified = false; // Reset verified flag when resending
     
-    console.log(`🔄 ${type} OTP resent for ${email}, expires at ${new Date(stored.expiresAt).toISOString()}`);
+    console.log(`🔄 ${type} OTP resent for ${normalizedEmail}, new OTP: ${newOtp}, expires at ${new Date(stored.expiresAt).toISOString()}`);
     return newOtp;
   }
 
@@ -164,7 +179,8 @@ class OTPService {
    * @param {string} type - 'registration' or 'password-reset'
    */
   isOTPVerified(email, type = 'password-reset') {
-    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const normalizedEmail = email.toLowerCase().trim();
+    const key = type === 'password-reset' ? `reset_${normalizedEmail}` : normalizedEmail;
     const stored = this.otpStore.get(key);
     if (!stored || stored.type !== type) {
       return false;
@@ -173,7 +189,7 @@ class OTPService {
     if (Date.now() > stored.expiresAt) {
       // OTP expired, delete it
       this.otpStore.delete(key);
-      console.log(`⏰ ${type} OTP expired for ${email}, deleted`);
+      console.log(`⏰ ${type} OTP expired for ${normalizedEmail}, deleted`);
       return false;
     }
     return stored.verified === true;
@@ -185,10 +201,11 @@ class OTPService {
    * @param {string} type - 'registration' or 'password-reset'
    */
   deleteOTP(email, type = 'password-reset') {
-    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const normalizedEmail = email.toLowerCase().trim();
+    const key = type === 'password-reset' ? `reset_${normalizedEmail}` : normalizedEmail;
     const deleted = this.otpStore.delete(key);
     if (deleted) {
-      console.log(`🗑️ ${type} OTP deleted for ${email}`);
+      console.log(`🗑️ ${type} OTP deleted for ${normalizedEmail}`);
     }
     return deleted;
   }
