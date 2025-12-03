@@ -91,6 +91,74 @@ class EmailService {
   }
 
   /**
+   * Send password reset OTP email
+   */
+  async sendPasswordResetOTPEmail(email, name, otp) {
+    try {
+      const mailOptions = {
+        from: 'testshubham6287@gmail.com',
+        to: email,
+        subject: 'Password Reset - Interview Prep Platform',
+        html: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .otp-box { background: white; border: 2px dashed #ef4444; padding: 20px; text-align: center; margin: 20px 0; border-radius: 5px; }
+              .otp-code { font-size: 32px; font-weight: bold; color: #ef4444; letter-spacing: 5px; }
+              .footer { text-align: center; margin-top: 20px; color: #666; font-size: 12px; }
+              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 20px 0; }
+              .security { background: #e7f3ff; border-left: 4px solid #2196F3; padding: 10px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🔐 Password Reset Request</h1>
+              </div>
+              <div class="content">
+                <p>Hello ${name},</p>
+                <p>We received a request to reset your password. Use the OTP code below to verify your identity and reset your password:</p>
+                
+                <div class="otp-box">
+                  <div class="otp-code">${otp}</div>
+                </div>
+                
+                <div class="warning">
+                  <strong>⚠️ Important:</strong> This OTP is valid for <strong>10 minutes</strong> only. Please use it before it expires.
+                </div>
+                
+                <div class="security">
+                  <strong>🔒 Security Notice:</strong> If you didn't request a password reset, please ignore this email. Your password will remain unchanged.
+                </div>
+                
+                <p>After verifying the OTP, you'll be able to set a new password for your account.</p>
+                
+                <p>Best regards,<br>Interview Prep Platform Team</p>
+              </div>
+              <div class="footer">
+                <p>This is an automated email. Please do not reply to this message.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log('✅ Password reset OTP email sent:', info.messageId);
+      return { success: true, messageId: info.messageId };
+    } catch (error) {
+      console.error('❌ Error sending password reset OTP email:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Send successful registration confirmation email
    */
   async sendRegistrationSuccessEmail(email, name, userType) {

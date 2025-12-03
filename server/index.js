@@ -818,6 +818,179 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
   }
 });
 
+// Forgot password - send OTP
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required'
+      });
+    }
+
+    console.log(`🔐 Forgot password request for: ${email}`);
+
+    // Check if user exists
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true }
+    });
+
+    // Don't reveal if user exists or not (security best practice)
+    // But still send OTP if user exists
+    if (user) {
+      // Generate and store OTP for password reset
+      const otp = otpService.storeOTP(email, null, 'password-reset');
+
+      // Send OTP email
+      try {
+        await emailService.sendPasswordResetOTPEmail(user.email, user.name, otp);
+        console.log(`✅ Password reset OTP sent to ${email}`);
+      } catch (emailError) {
+        console.error('❌ Error sending password reset OTP email:', emailError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send OTP email. Please try again later.'
+        });
+      }
+    } else {
+      // Still return success to prevent email enumeration
+      console.log(`⚠️ Password reset requested for non-existent email: ${email}`);
+    }
+
+    // Always return success message (don't reveal if user exists)
+    res.json({
+      success: true,
+      message: 'If an account exists with this email, a password reset OTP has been sent.'
+    });
+  } catch (error) {
+    console.error('❌ Error in forgot password:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process password reset request',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Verify password reset OTP
+app.post('/api/auth/verify-reset-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and OTP are required'
+      });
+    }
+
+    console.log(`🔐 Verifying password reset OTP for: ${email}`);
+
+    // Verify OTP
+    const verification = otpService.verifyOTP(email, otp, 'password-reset');
+
+    if (!verification.valid) {
+      console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
+      return res.status(400).json({
+        success: false,
+        message: verification.error || 'Invalid or expired OTP'
+      });
+    }
+
+    console.log(`✅ Password reset OTP verified for ${email}`);
+
+    // OTP is valid, return success (user can now reset password)
+    res.json({
+      success: true,
+      message: 'OTP verified successfully. You can now reset your password.'
+    });
+  } catch (error) {
+    console.error('❌ Error verifying password reset OTP:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify OTP',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Reset password with new password
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, OTP, and new password are required'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password must be at least 6 characters long'
+      });
+    }
+
+    console.log(`🔐 Resetting password for: ${email}`);
+
+    // Verify OTP first
+    const verification = otpService.verifyOTP(email, otp, 'password-reset');
+
+    if (!verification.valid) {
+      console.log(`❌ Password reset OTP verification failed for ${email}: ${verification.error}`);
+      return res.status(400).json({
+        success: false,
+        message: verification.error || 'Invalid or expired OTP'
+      });
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Hash new password
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear mustChangePassword flag
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        mustChangePassword: false
+      }
+    });
+
+    console.log(`✅ Password reset successfully for user: ${user.id}`);
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully. You can now login with your new password.'
+    });
+  } catch (error) {
+    console.error('❌ Error resetting password:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 // Get current user
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {

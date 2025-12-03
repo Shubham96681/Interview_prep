@@ -28,6 +28,14 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordChange, setShowPasswordChange] = useState(false);
   const [pendingUser, setPendingUser] = useState<UserType | null>(null);
+  
+  // Forgot password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
+  const [forgotPasswordOTP, setForgotPasswordOTP] = useState('');
+  const [forgotPasswordNewPassword, setForgotPasswordNewPassword] = useState('');
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<'email' | 'otp' | 'password' | 'success'>('email');
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,7 +164,19 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="login-password" className="text-gray-900 font-medium">Password</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="login-password" className="text-gray-900 font-medium">Password</Label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowForgotPassword(true);
+                          setForgotPasswordEmail(email); // Pre-fill email if available
+                        }}
+                        className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                     <div className="relative group">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
                       <Input
@@ -278,6 +298,237 @@ export default function AuthModal({ isOpen, onClose, onLogin, defaultRole: _defa
         }}
         currentPassword={password} // Pass the password they just used to login
       />
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+        <DialogContent className="max-w-md bg-white border border-gray-200">
+          <DialogHeader>
+            <DialogTitle className="text-center text-2xl font-bold text-gray-900">
+              Reset Your Password
+            </DialogTitle>
+            <DialogDescription className="text-center text-gray-600 text-sm">
+              {forgotPasswordStep === 'email' && 'Enter your email address to receive a password reset OTP'}
+              {forgotPasswordStep === 'otp' && 'Enter the OTP sent to your email'}
+              {forgotPasswordStep === 'password' && 'Enter your new password'}
+              {forgotPasswordStep === 'success' && 'Password reset successful!'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {forgotPasswordStep === 'email' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-email" className="text-gray-900 font-medium">Email</Label>
+                <div className="relative group">
+                  <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
+                  <Input
+                    id="forgot-email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={forgotPasswordEmail}
+                    onChange={(e) => setForgotPasswordEmail(e.target.value)}
+                    className="pl-10 border-gray-300 focus:border-blue-600 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!forgotPasswordEmail) {
+                    toast.error('Please enter your email');
+                    return;
+                  }
+                  setForgotPasswordLoading(true);
+                  try {
+                    const response = await apiService.forgotPassword(forgotPasswordEmail);
+                    if (response.success) {
+                      toast.success('OTP sent to your email');
+                      setForgotPasswordStep('otp');
+                    } else {
+                      toast.error(response.error || 'Failed to send OTP');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to send OTP');
+                  } finally {
+                    setForgotPasswordLoading(false);
+                  }
+                }}
+                disabled={forgotPasswordLoading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {forgotPasswordLoading ? 'Sending...' : 'Send OTP'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setForgotPasswordStep('email');
+                  setForgotPasswordEmail('');
+                  setForgotPasswordOTP('');
+                  setForgotPasswordNewPassword('');
+                }}
+                className="w-full"
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
+
+          {forgotPasswordStep === 'otp' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-otp" className="text-gray-900 font-medium">OTP Code</Label>
+                <Input
+                  id="forgot-otp"
+                  type="text"
+                  placeholder="Enter 6-digit OTP"
+                  value={forgotPasswordOTP}
+                  onChange={(e) => setForgotPasswordOTP(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="border-gray-300 focus:border-blue-600 focus:ring-blue-600 text-center text-2xl tracking-widest"
+                  maxLength={6}
+                />
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!forgotPasswordOTP || forgotPasswordOTP.length !== 6) {
+                    toast.error('Please enter a valid 6-digit OTP');
+                    return;
+                  }
+                  setForgotPasswordLoading(true);
+                  try {
+                    const response = await apiService.verifyResetOTP(forgotPasswordEmail, forgotPasswordOTP);
+                    if (response.success) {
+                      toast.success('OTP verified successfully');
+                      setForgotPasswordStep('password');
+                    } else {
+                      toast.error(response.error || 'Invalid or expired OTP');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to verify OTP');
+                  } finally {
+                    setForgotPasswordLoading(false);
+                  }
+                }}
+                disabled={forgotPasswordLoading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {forgotPasswordLoading ? 'Verifying...' : 'Verify OTP'}
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setForgotPasswordLoading(true);
+                    try {
+                      const response = await apiService.forgotPassword(forgotPasswordEmail);
+                      if (response.success) {
+                        toast.success('OTP resent to your email');
+                      } else {
+                        toast.error(response.error || 'Failed to resend OTP');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to resend OTP');
+                    } finally {
+                      setForgotPasswordLoading(false);
+                    }
+                  }}
+                  disabled={forgotPasswordLoading}
+                  className="flex-1"
+                >
+                  Resend OTP
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setForgotPasswordStep('email')}
+                  className="flex-1"
+                >
+                  Back
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {forgotPasswordStep === 'password' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="forgot-new-password" className="text-gray-900 font-medium">New Password</Label>
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400 group-focus-within:text-blue-600 transition-colors" />
+                  <Input
+                    id="forgot-new-password"
+                    type="password"
+                    placeholder="Enter new password (min 6 characters)"
+                    value={forgotPasswordNewPassword}
+                    onChange={(e) => setForgotPasswordNewPassword(e.target.value)}
+                    className="pl-10 border-gray-300 focus:border-blue-600 focus:ring-blue-600"
+                  />
+                </div>
+              </div>
+              <Button
+                onClick={async () => {
+                  if (!forgotPasswordNewPassword || forgotPasswordNewPassword.length < 6) {
+                    toast.error('Password must be at least 6 characters long');
+                    return;
+                  }
+                  setForgotPasswordLoading(true);
+                  try {
+                    const response = await apiService.resetPassword(
+                      forgotPasswordEmail,
+                      forgotPasswordOTP,
+                      forgotPasswordNewPassword
+                    );
+                    if (response.success) {
+                      toast.success('Password reset successfully!');
+                      setForgotPasswordStep('success');
+                    } else {
+                      toast.error(response.error || 'Failed to reset password');
+                    }
+                  } catch (error: any) {
+                    toast.error(error.message || 'Failed to reset password');
+                  } finally {
+                    setForgotPasswordLoading(false);
+                  }
+                }}
+                disabled={forgotPasswordLoading}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {forgotPasswordLoading ? 'Resetting...' : 'Reset Password'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setForgotPasswordStep('otp')}
+                className="w-full"
+              >
+                Back
+              </Button>
+            </div>
+          )}
+
+          {forgotPasswordStep === 'success' && (
+            <div className="space-y-4">
+              <div className="text-center py-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-3xl">✅</span>
+                </div>
+                <p className="text-gray-700 mb-2">Your password has been reset successfully!</p>
+                <p className="text-sm text-gray-600">You can now login with your new password.</p>
+              </div>
+              <Button
+                onClick={() => {
+                  setShowForgotPassword(false);
+                  setForgotPasswordStep('email');
+                  setForgotPasswordEmail('');
+                  setForgotPasswordOTP('');
+                  setForgotPasswordNewPassword('');
+                  // Pre-fill email in login form
+                  setEmail(forgotPasswordEmail);
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                Go to Login
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

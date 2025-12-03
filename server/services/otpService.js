@@ -21,58 +21,77 @@ class OTPService {
 
   /**
    * Store OTP with expiration (10 minutes)
+   * @param {string} email - User email
+   * @param {object} userData - User data (for registration) or null (for password reset)
+   * @param {string} type - 'registration' or 'password-reset'
    */
-  storeOTP(email, userData) {
+  storeOTP(email, userData, type = 'registration') {
     const otp = this.generateOTP();
     const expiresAt = Date.now() + (10 * 60 * 1000); // 10 minutes
     
-    this.otpStore.set(email, {
+    // Use different key prefix for password reset to avoid conflicts
+    const key = type === 'password-reset' ? `reset_${email}` : email;
+    
+    this.otpStore.set(key, {
       otp,
       expiresAt,
       userData,
+      type,
       createdAt: Date.now()
     });
     
-    console.log(`✅ OTP stored for ${email}, expires at ${new Date(expiresAt).toISOString()}`);
+    console.log(`✅ ${type} OTP stored for ${email}, expires at ${new Date(expiresAt).toISOString()}`);
     return otp;
   }
 
   /**
    * Verify OTP
+   * @param {string} email - User email
+   * @param {string} otp - OTP code
+   * @param {string} type - 'registration' or 'password-reset'
    */
-  verifyOTP(email, otp) {
-    const stored = this.otpStore.get(email);
+  verifyOTP(email, otp, type = 'registration') {
+    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const stored = this.otpStore.get(key);
     
     if (!stored) {
-      console.log(`❌ No OTP found for ${email}`);
+      console.log(`❌ No ${type} OTP found for ${email}`);
       return { valid: false, error: 'OTP not found. Please request a new one.' };
     }
     
+    if (stored.type !== type) {
+      console.log(`❌ OTP type mismatch for ${email}`);
+      return { valid: false, error: 'Invalid OTP type. Please request a new one.' };
+    }
+    
     if (Date.now() > stored.expiresAt) {
-      console.log(`❌ OTP expired for ${email}`);
-      this.otpStore.delete(email);
+      console.log(`❌ ${type} OTP expired for ${email}`);
+      this.otpStore.delete(key);
       return { valid: false, error: 'OTP has expired. Please request a new one.' };
     }
     
     if (stored.otp !== otp) {
-      console.log(`❌ Invalid OTP for ${email}`);
+      console.log(`❌ Invalid ${type} OTP for ${email}`);
       return { valid: false, error: 'Invalid OTP. Please try again.' };
     }
     
-    // OTP is valid, return user data and remove OTP
+    // OTP is valid, return user data (if any) and remove OTP
     const userData = stored.userData;
-    this.otpStore.delete(email);
-    console.log(`✅ OTP verified for ${email}`);
+    this.otpStore.delete(key);
+    console.log(`✅ ${type} OTP verified for ${email}`);
     
     return { valid: true, userData };
   }
 
   /**
    * Get stored user data without verifying (for resending OTP)
+   * @param {string} email - User email
+   * @param {string} type - 'registration' or 'password-reset'
    */
-  getUserData(email) {
-    const stored = this.otpStore.get(email);
-    if (!stored || Date.now() > stored.expiresAt) {
+  getUserData(email, type = 'registration') {
+    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const stored = this.otpStore.get(key);
+    if (!stored || Date.now() > stored.expiresAt || stored.type !== type) {
       return null;
     }
     return stored.userData;
@@ -99,10 +118,13 @@ class OTPService {
 
   /**
    * Resend OTP (generate new one, keep same user data)
+   * @param {string} email - User email
+   * @param {string} type - 'registration' or 'password-reset'
    */
-  resendOTP(email) {
-    const stored = this.otpStore.get(email);
-    if (!stored) {
+  resendOTP(email, type = 'registration') {
+    const key = type === 'password-reset' ? `reset_${email}` : email;
+    const stored = this.otpStore.get(key);
+    if (!stored || stored.type !== type) {
       return null;
     }
     
@@ -112,7 +134,7 @@ class OTPService {
     stored.expiresAt = Date.now() + (10 * 60 * 1000); // Reset expiration
     stored.createdAt = Date.now();
     
-    console.log(`🔄 OTP resent for ${email}`);
+    console.log(`🔄 ${type} OTP resent for ${email}`);
     return newOtp;
   }
 }

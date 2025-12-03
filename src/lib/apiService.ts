@@ -280,6 +280,27 @@ class ApiService {
     });
   }
 
+  async forgotPassword(email: string) {
+    return this.request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async verifyResetOTP(email: string, otp: string) {
+    return this.request('/api/auth/verify-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  }
+
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    return this.request('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, newPassword }),
+    });
+  }
+
   async getSessions(limit: number = 100, userId?: string, userType?: string) {
     const params = new URLSearchParams({ limit: limit.toString() });
     if (userId) params.append('userId', userId);
