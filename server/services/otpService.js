@@ -114,10 +114,12 @@ class OTPService {
     const now = Date.now();
     let cleaned = 0;
     
-    for (const [email, data] of this.otpStore.entries()) {
+    // Use the actual key from entries (not email, since password-reset uses reset_email format)
+    for (const [key, data] of this.otpStore.entries()) {
       if (now > data.expiresAt) {
-        this.otpStore.delete(email);
+        this.otpStore.delete(key);
         cleaned++;
+        console.log(`🗑️ Cleaned up expired ${data.type} OTP for key: ${key}`);
       }
     }
     
@@ -138,14 +140,21 @@ class OTPService {
       return null;
     }
     
+    // Check if expired - if so, don't resend, user needs to request new OTP
+    if (Date.now() > stored.expiresAt) {
+      console.log(`⏰ Cannot resend expired ${type} OTP for ${email}`);
+      this.otpStore.delete(key);
+      return null;
+    }
+    
     // Generate new OTP but keep user data
     const newOtp = this.generateOTP();
     stored.otp = newOtp;
-    stored.expiresAt = Date.now() + (10 * 60 * 1000); // Reset expiration
+    stored.expiresAt = Date.now() + (10 * 60 * 1000); // Reset expiration to 10 minutes from now
     stored.createdAt = Date.now();
     stored.verified = false; // Reset verified flag when resending
     
-    console.log(`🔄 ${type} OTP resent for ${email}`);
+    console.log(`🔄 ${type} OTP resent for ${email}, expires at ${new Date(stored.expiresAt).toISOString()}`);
     return newOtp;
   }
 
@@ -160,7 +169,14 @@ class OTPService {
     if (!stored || stored.type !== type) {
       return false;
     }
-    return stored.verified === true && Date.now() <= stored.expiresAt;
+    // Check expiration first
+    if (Date.now() > stored.expiresAt) {
+      // OTP expired, delete it
+      this.otpStore.delete(key);
+      console.log(`⏰ ${type} OTP expired for ${email}, deleted`);
+      return false;
+    }
+    return stored.verified === true;
   }
 
   /**
