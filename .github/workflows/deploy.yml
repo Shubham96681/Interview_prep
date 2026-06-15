@@ -94,15 +94,49 @@ jobs:
           echo "Testing sudo access..."
           sudo -n true || echo "Warning: sudo may require password"
           
+          # Install server prerequisites on fresh EC2 instances
+          echo "📦 Checking and installing server prerequisites..."
+          PKG_MGR=""
+          if command -v dnf &> /dev/null; then
+            PKG_MGR="dnf"
+          elif command -v yum &> /dev/null; then
+            PKG_MGR="yum"
+          fi
+          
+          if [ -z "$PKG_MGR" ]; then
+            echo "❌ No supported package manager found (dnf/yum)"
+            exit 1
+          fi
+          
+          sudo $PKG_MGR update -y
+          sudo $PKG_MGR install -y git curl nginx
+          
+          if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+            echo "📦 Installing Node.js 18..."
+            curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+            sudo $PKG_MGR install -y nodejs
+          fi
+          
+          if ! command -v pm2 &> /dev/null; then
+            echo "📦 Installing PM2..."
+            sudo npm install -g pm2
+          fi
+          
+          sudo systemctl enable nginx
+          sudo systemctl start nginx || true
+          
+          echo "✅ Prerequisites ready:"
+          git --version
+          node --version
+          npm --version
+          pm2 --version
+          nginx -v
+          
           # Ensure /var/www exists and has correct permissions
           echo "Setting up /var/www directory..."
           sudo mkdir -p /var/www || { echo "Failed to create /var/www"; exit 1; }
           sudo chown "$EC2_USERNAME:$EC2_USERNAME" /var/www || { echo "Failed to chown /var/www"; exit 1; }
           echo "✅ /var/www directory ready"
-          
-          # Check if git is available
-          echo "Checking git availability..."
-          git --version || { echo "Git is not installed!"; exit 1; }
           
           # Check if directory exists
           echo "Checking if project directory exists..."
