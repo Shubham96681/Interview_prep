@@ -206,18 +206,24 @@ if [ ! -f server/.env ]; then
 fi
 
 # Update FRONTEND_URL to use the correct IP (HTTPS)
-echo "📝 Updating FRONTEND_URL in server/.env..."
+PUBLIC_HOST="${PUBLIC_HOST:-${EC2_HOST:-}}"
+if [ -z "$PUBLIC_HOST" ]; then
+    PUBLIC_HOST="$(curl -fsS --max-time 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)"
+fi
+if [ -z "$PUBLIC_HOST" ]; then
+    echo "⚠️  PUBLIC_HOST not set; keeping existing FRONTEND_URL"
+else
+echo "📝 Updating FRONTEND_URL in server/.env to https://${PUBLIC_HOST}..."
 cd server
 if grep -q "^FRONTEND_URL=" .env; then
-    # Update existing FRONTEND_URL
-    sed -i 's|^FRONTEND_URL=.*|FRONTEND_URL=https://54.91.53.228|' .env
-    echo "   ✅ Updated FRONTEND_URL to https://54.91.53.228"
+    sed -i "s|^FRONTEND_URL=.*|FRONTEND_URL=https://${PUBLIC_HOST}|" .env
+    echo "   ✅ Updated FRONTEND_URL to https://${PUBLIC_HOST}"
 else
-    # Add FRONTEND_URL if it doesn't exist
-    echo "FRONTEND_URL=https://54.91.53.228" >> .env
-    echo "   ✅ Added FRONTEND_URL=https://54.91.53.228"
+    echo "FRONTEND_URL=https://${PUBLIC_HOST}" >> .env
+    echo "   ✅ Added FRONTEND_URL=https://${PUBLIC_HOST}"
 fi
 cd ..
+fi
 
 # Run database migrations
 echo "🗄️  Running database migrations..."
@@ -288,6 +294,14 @@ NGINX_CONFIG="/etc/nginx/conf.d/interview-prep.conf"
 NGINX_CONFIG_DIR="/etc/nginx/conf.d"
 NGINX_SSL_DIR="/etc/nginx/ssl"
 
+if [ -z "${PUBLIC_HOST:-}" ]; then
+    PUBLIC_HOST="${EC2_HOST:-}"
+fi
+if [ -z "$PUBLIC_HOST" ]; then
+    PUBLIC_HOST="$(curl -fsS --max-time 2 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo localhost)"
+fi
+echo "   Using public host: $PUBLIC_HOST"
+
 # Create nginx config and SSL directories if they don't exist
 sudo mkdir -p "$NGINX_CONFIG_DIR"
 sudo mkdir -p "$NGINX_SSL_DIR"
@@ -298,7 +312,7 @@ if [ ! -f "$NGINX_SSL_DIR/nginx-selfsigned.crt" ]; then
     sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
       -keyout "$NGINX_SSL_DIR/nginx-selfsigned.key" \
       -out "$NGINX_SSL_DIR/nginx-selfsigned.crt" \
-      -subj "/CN=54.91.53.228" 2>/dev/null || {
+      -subj "/CN=${PUBLIC_HOST}" 2>/dev/null || {
         echo "⚠️  Failed to generate SSL certificate. Continuing with HTTP only."
     }
 fi
@@ -309,7 +323,7 @@ sudo tee "$NGINX_CONFIG" > /dev/null <<EOF
 # HTTP server - redirect to HTTPS
 server {
     listen 80 default_server;
-    server_name 54.91.53.228;
+    server_name ${PUBLIC_HOST};
     
     # Redirect all HTTP to HTTPS
     return 301 https://\$server_name\$request_uri;
@@ -318,7 +332,7 @@ server {
 # HTTPS server
 server {
     listen 443 ssl http2 default_server;
-    server_name 54.91.53.228;
+    server_name ${PUBLIC_HOST};
 
     # SSL certificate configuration
     ssl_certificate /etc/nginx/ssl/nginx-selfsigned.crt;
@@ -420,12 +434,12 @@ df -h / | tail -1 | awk '{print "Available space: " $4 " of " $2 " (" $5 " used)
 
 echo ""
 echo "=== Deployment Completed Successfully ==="
-echo "Backend: http://54.91.53.228:5000"
-echo "Frontend: https://54.91.53.228 (HTTPS)"
-echo "          http://54.91.53.228 (redirects to HTTPS)"
+echo "Backend: http://${PUBLIC_HOST}:5000"
+echo "Frontend: https://${PUBLIC_HOST} (HTTPS)"
+echo "          http://${PUBLIC_HOST} (redirects to HTTPS)"
 echo ""
 echo "⚠️  Note: Self-signed certificate is used. Browsers will show a security warning."
-echo "   Click 'Advanced' → 'Proceed to 54.91.53.228' to continue."
+echo "   Click 'Advanced' → 'Proceed to ${PUBLIC_HOST}' to continue."
 echo ""
 echo "Timestamp: $(date)"
 

@@ -118,10 +118,11 @@ jobs:
         script_stop: true
         debug: true
         fingerprint: ""
-        envs: EC2_USERNAME,SKIP_FRONTEND_BUILD,NODE_OPTIONS
+        envs: EC2_USERNAME,EC2_HOST,SKIP_FRONTEND_BUILD,NODE_OPTIONS
         script: |
           set -e
           export SKIP_FRONTEND_BUILD=true
+          export PUBLIC_HOST="$EC2_HOST"
           
           cd /var/www/interview-prep
           sudo chown -R "$EC2_USERNAME:$EC2_USERNAME" /var/www/interview-prep
