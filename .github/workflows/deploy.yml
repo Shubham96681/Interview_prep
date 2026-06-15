@@ -23,7 +23,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
         
     - name: Install frontend dependencies
@@ -73,7 +73,7 @@ jobs:
         fingerprint: ""
         envs: EC2_USERNAME,GITHUB_TOKEN
         script: |
-          set -e
+          set -euo pipefail
           
           echo "🚀 Starting automated deployment..."
           echo "Current user: $(whoami)"
@@ -100,9 +100,9 @@ jobs:
           # Install server prerequisites on fresh EC2 instances
           echo "📦 Checking and installing server prerequisites..."
           PKG_MGR=""
-          if command -v dnf &> /dev/null; then
+          if command -v dnf >/dev/null 2>&1; then
             PKG_MGR="dnf"
-          elif command -v yum &> /dev/null; then
+          elif command -v yum >/dev/null 2>&1; then
             PKG_MGR="yum"
           fi
           
@@ -113,8 +113,12 @@ jobs:
           
           # Amazon Linux 2023 ships curl-minimal; do not install full curl (conflicts)
           PACKAGES=""
-          command -v git &> /dev/null || PACKAGES="$PACKAGES git"
-          command -v nginx &> /dev/null || PACKAGES="$PACKAGES nginx"
+          if ! command -v git >/dev/null 2>&1; then
+            PACKAGES="$PACKAGES git"
+          fi
+          if ! command -v nginx >/dev/null 2>&1; then
+            PACKAGES="$PACKAGES nginx"
+          fi
           
           if [ -n "$PACKAGES" ]; then
             echo "📦 Installing:$PACKAGES"
@@ -123,31 +127,38 @@ jobs:
             echo "✅ git and nginx already installed"
           fi
           
-          if ! command -v curl &> /dev/null; then
+          if ! command -v curl >/dev/null 2>&1; then
             echo "❌ curl is required but not available on this instance"
             exit 1
           fi
           
-          if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
-            echo "📦 Installing Node.js 18..."
-            curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
+          if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+            echo "📦 Installing Node.js 20..."
+            curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
             sudo $PKG_MGR install -y nodejs
+          else
+            NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
+            if [ "$NODE_MAJOR" -lt 20 ]; then
+              echo "📦 Upgrading Node.js to version 20..."
+              curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+              sudo $PKG_MGR install -y nodejs
+            fi
           fi
           
-          if ! command -v pm2 &> /dev/null; then
+          if ! command -v pm2 >/dev/null 2>&1; then
             echo "📦 Installing PM2..."
             sudo npm install -g pm2
           fi
           
-          sudo systemctl enable nginx
+          sudo systemctl enable nginx || true
           sudo systemctl start nginx || true
           
           echo "✅ Prerequisites ready:"
           git --version
           node --version
           npm --version
-          pm2 --version
-          nginx -v
+          pm2 --version || true
+          nginx -v 2>&1 || true
           
           # Ensure /var/www exists and has correct permissions
           echo "Setting up /var/www directory..."
