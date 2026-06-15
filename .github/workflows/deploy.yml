@@ -73,124 +73,27 @@ jobs:
         fingerprint: ""
         envs: EC2_USERNAME,GITHUB_TOKEN
         script: |
-          set -euo pipefail
+          set -e
+          export EC2_USERNAME GITHUB_TOKEN
           
-          echo "🚀 Starting automated deployment..."
+          echo "🚀 Starting EC2 preparation..."
           echo "Current user: $(whoami)"
-          echo "Current directory: $(pwd)"
-          echo "Home directory: $HOME"
           echo "Hostname: $(hostname)"
-          echo "Uptime: $(uptime)"
           
-          # Check disk space first
-          echo "💾 Current disk space:"
-          df -h / | tail -1
-          
-          # Check if instance is responsive
-          echo "🔍 System status check..."
-          echo "Memory usage:"
-          free -h || true
-          echo "Disk usage details:"
-          df -h || true
-          
-          # Test sudo access
-          echo "Testing sudo access..."
-          sudo -n true || echo "Warning: sudo may require password"
-          
-          # Install server prerequisites on fresh EC2 instances
-          echo "📦 Checking and installing server prerequisites..."
-          PKG_MGR=""
-          if command -v dnf >/dev/null 2>&1; then
-            PKG_MGR="dnf"
-          elif command -v yum >/dev/null 2>&1; then
-            PKG_MGR="yum"
-          fi
-          
-          if [ -z "$PKG_MGR" ]; then
-            echo "❌ No supported package manager found (dnf/yum)"
-            exit 1
-          fi
-          
-          # Amazon Linux 2023 ships curl-minimal; do not install full curl (conflicts)
-          PACKAGES=""
-          if ! command -v git >/dev/null 2>&1; then
-            PACKAGES="$PACKAGES git"
-          fi
-          if ! command -v nginx >/dev/null 2>&1; then
-            PACKAGES="$PACKAGES nginx"
-          fi
-          
-          if [ -n "$PACKAGES" ]; then
-            echo "📦 Installing:$PACKAGES"
-            sudo $PKG_MGR install -y $PACKAGES
-          else
-            echo "✅ git and nginx already installed"
-          fi
-          
-          if ! command -v curl >/dev/null 2>&1; then
-            echo "❌ curl is required but not available on this instance"
-            exit 1
-          fi
-          
-          if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-            echo "📦 Installing Node.js 20..."
-            curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-            sudo $PKG_MGR install -y nodejs
-          else
-            NODE_MAJOR="$(node -p "process.versions.node.split('.')[0]")"
-            if [ "$NODE_MAJOR" -lt 20 ]; then
-              echo "📦 Upgrading Node.js to version 20..."
-              curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-              sudo $PKG_MGR install -y nodejs
+          # Bootstrap: clone repo first if prepare script is not available yet
+          if [ ! -f /var/www/interview-prep/scripts/ec2-prepare.sh ]; then
+            echo "📦 Bootstrapping repository..."
+            if ! command -v git >/dev/null 2>&1; then
+              sudo dnf install -y git || sudo yum install -y git
             fi
-          fi
-          
-          if ! command -v pm2 >/dev/null 2>&1; then
-            echo "📦 Installing PM2..."
-            sudo npm install -g pm2
-          fi
-          
-          sudo systemctl enable nginx || true
-          sudo systemctl start nginx || true
-          
-          echo "✅ Prerequisites ready:"
-          git --version
-          node --version
-          npm --version
-          pm2 --version || true
-          nginx -v 2>&1 || true
-          
-          # Ensure /var/www exists and has correct permissions
-          echo "Setting up /var/www directory..."
-          sudo mkdir -p /var/www || { echo "Failed to create /var/www"; exit 1; }
-          sudo chown "$EC2_USERNAME:$EC2_USERNAME" /var/www || { echo "Failed to chown /var/www"; exit 1; }
-          echo "✅ /var/www directory ready"
-          
-          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/Shubham96681/Interview_prep.git"
-          
-          # Clone or update repository
-          echo "Checking if project directory exists..."
-          if [ -d /var/www/interview-prep/.git ]; then
-            echo "📁 Project directory exists"
-            echo "🔄 Pulling latest changes..."
-            cd /var/www/interview-prep || { echo "Failed to cd to /var/www/interview-prep"; exit 1; }
-            git remote set-url origin "$REPO_URL"
-            git fetch origin main || { echo "Failed to fetch from origin"; exit 1; }
-            git reset --hard origin/main || { echo "Failed to reset to origin/main"; exit 1; }
-            git clean -fd || { echo "Failed to clean untracked files"; exit 1; }
-            echo "✅ Repository updated"
-          else
-            echo "📦 Cloning repository..."
+            sudo mkdir -p /var/www
+            sudo chown "$EC2_USERNAME:$EC2_USERNAME" /var/www
+            REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/Shubham96681/Interview_prep.git"
             rm -rf /var/www/interview-prep
-            cd /var/www || { echo "Failed to cd to /var/www"; exit 1; }
-            git clone "$REPO_URL" interview-prep || { echo "Failed to clone repository"; exit 1; }
-            cd interview-prep || { echo "Failed to cd to interview-prep"; exit 1; }
-            echo "✅ Repository cloned"
+            git clone "$REPO_URL" /var/www/interview-prep
           fi
           
-          sudo chown -R "$EC2_USERNAME:$EC2_USERNAME" /var/www/interview-prep
-          mkdir -p /var/www/interview-prep/dist
-          echo "✅ EC2 prepared for deployment"
+          bash /var/www/interview-prep/scripts/ec2-prepare.sh
       
     - name: Copy frontend build to EC2
       uses: appleboy/scp-action@v0.1.7
