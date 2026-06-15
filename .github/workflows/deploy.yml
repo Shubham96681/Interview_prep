@@ -9,9 +9,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
     env:
       EC2_HOST: ${{ secrets.EC2_HOST }}
       EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     steps:
     - name: Checkout code
@@ -55,7 +58,7 @@ jobs:
           echo "   - Instance is running and healthy"
         fi
     
-    - name: Deploy to EC2
+    - name: Prepare EC2 and clone repository
       continue-on-error: false
       uses: appleboy/ssh-action@v1.0.3
       with:
@@ -68,7 +71,7 @@ jobs:
         script_stop: true
         debug: true
         fingerprint: ""
-        envs: EC2_USERNAME,NODE_OPTIONS
+        envs: EC2_USERNAME,GITHUB_TOKEN
         script: |
           set -e
           
@@ -152,60 +155,71 @@ jobs:
           sudo chown "$EC2_USERNAME:$EC2_USERNAME" /var/www || { echo "Failed to chown /var/www"; exit 1; }
           echo "✅ /var/www directory ready"
           
-          # Check if directory exists
+          REPO_URL="https://x-access-token:${GITHUB_TOKEN}@github.com/Shubham96681/Interview_prep.git"
+          
+          # Clone or update repository
           echo "Checking if project directory exists..."
-          if [ -d /var/www/interview-prep ]; then
+          if [ -d /var/www/interview-prep/.git ]; then
             echo "📁 Project directory exists"
             echo "🔄 Pulling latest changes..."
             cd /var/www/interview-prep || { echo "Failed to cd to /var/www/interview-prep"; exit 1; }
-            echo "Current directory after cd: $(pwd)"
+            git remote set-url origin "$REPO_URL"
             git fetch origin main || { echo "Failed to fetch from origin"; exit 1; }
             git reset --hard origin/main || { echo "Failed to reset to origin/main"; exit 1; }
             git clean -fd || { echo "Failed to clean untracked files"; exit 1; }
             echo "✅ Repository updated"
           else
-            echo "📦 Project directory does not exist, cloning repository..."
+            echo "📦 Cloning repository..."
+            rm -rf /var/www/interview-prep
             cd /var/www || { echo "Failed to cd to /var/www"; exit 1; }
-            echo "Current directory: $(pwd)"
-            echo "Listing /var/www contents:"
-            ls -la /var/www || true
-            git clone https://github.com/Shubham96681/Interview_prep.git interview-prep || { echo "Failed to clone repository"; exit 1; }
+            git clone "$REPO_URL" interview-prep || { echo "Failed to clone repository"; exit 1; }
             cd interview-prep || { echo "Failed to cd to interview-prep"; exit 1; }
             echo "✅ Repository cloned"
           fi
           
-          echo "Final directory: $(pwd)"
-          echo "Verifying we're in the right place..."
-          ls -la || { echo "Failed to list directory contents"; exit 1; }
+          sudo chown -R "$EC2_USERNAME:$EC2_USERNAME" /var/www/interview-prep
+          mkdir -p /var/www/interview-prep/dist
+          echo "✅ EC2 prepared for deployment"
+      
+    - name: Copy frontend build to EC2
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        source: "dist"
+        target: "/var/www/interview-prep"
+        overwrite: true
+      
+    - name: Deploy application on EC2
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        port: 22
+        timeout: 3600s
+        command_timeout: 3600s
+        script_stop: true
+        debug: true
+        fingerprint: ""
+        envs: EC2_USERNAME,SKIP_FRONTEND_BUILD,NODE_OPTIONS
+        script: |
+          set -e
+          export SKIP_FRONTEND_BUILD=true
           
-          # Ensure correct ownership
-          echo "Setting ownership..."
-          sudo chown -R "$EC2_USERNAME:$EC2_USERNAME" /var/www/interview-prep || { echo "Failed to chown project directory"; exit 1; }
-          echo "✅ Ownership set"
+          cd /var/www/interview-prep
+          sudo chown -R "$EC2_USERNAME:$EC2_USERNAME" /var/www/interview-prep
+          chmod +x deploy.sh
           
-          # Make deploy script executable
-          echo "Making deploy.sh executable..."
-          chmod +x deploy.sh || { echo "Failed to chmod deploy.sh"; exit 1; }
-          echo "✅ deploy.sh is executable"
-          
-          # Run deployment script with explicit output flushing
           echo "📦 Running deployment script..."
-          echo "   (This will take several minutes, output will appear below)"
-          
-          # Run deploy script directly - it handles its own output
-          # The script command can cause exit code issues, so run directly
           if ./deploy.sh; then
-              DEPLOY_EXIT_CODE=0
+            echo "✅ Deployment script completed successfully"
           else
-              DEPLOY_EXIT_CODE=$?
+            echo "❌ Deployment script failed"
+            exit 1
           fi
-          
-          if [ $DEPLOY_EXIT_CODE -ne 0 ]; then
-              echo "❌ Deployment script failed with exit code: $DEPLOY_EXIT_CODE"
-              exit 1
-          fi
-          
-          echo "✅ Deployment script completed successfully"
       
     - name: Verify deployment
       uses: appleboy/ssh-action@v1.0.3

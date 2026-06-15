@@ -137,6 +137,11 @@ npx prisma generate || echo "⚠️ Prisma generate failed, continuing..."
 cd ..
 
 # Build frontend
+if [ "${SKIP_FRONTEND_BUILD}" = "true" ] && [ -f "dist/index.html" ]; then
+  echo "✅ Using pre-built frontend from CI (skipping npm run build)"
+elif [ -f "dist/index.html" ]; then
+  echo "✅ Frontend build already exists, skipping rebuild"
+else
 echo "🔨 Building frontend application..."
 echo "   This may take 5-15 minutes on EC2..."
 echo "   Starting build at $(date)..."
@@ -178,6 +183,7 @@ elif [ $BUILD_EXIT_CODE -eq 124 ]; then
 else
     echo "❌ Build failed with exit code: $BUILD_EXIT_CODE at $(date)"
     exit 1
+fi
 fi
 
 # Verify build succeeded
