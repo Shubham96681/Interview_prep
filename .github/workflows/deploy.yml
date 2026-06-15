@@ -108,8 +108,22 @@ jobs:
             exit 1
           fi
           
-          sudo $PKG_MGR update -y
-          sudo $PKG_MGR install -y git curl nginx
+          # Amazon Linux 2023 ships curl-minimal; do not install full curl (conflicts)
+          PACKAGES=""
+          command -v git &> /dev/null || PACKAGES="$PACKAGES git"
+          command -v nginx &> /dev/null || PACKAGES="$PACKAGES nginx"
+          
+          if [ -n "$PACKAGES" ]; then
+            echo "📦 Installing:$PACKAGES"
+            sudo $PKG_MGR install -y $PACKAGES
+          else
+            echo "✅ git and nginx already installed"
+          fi
+          
+          if ! command -v curl &> /dev/null; then
+            echo "❌ curl is required but not available on this instance"
+            exit 1
+          fi
           
           if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
             echo "📦 Installing Node.js 18..."
