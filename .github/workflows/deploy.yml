@@ -9,6 +9,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
     
     steps:
     - name: Checkout code
@@ -35,13 +38,13 @@ jobs:
       continue-on-error: true
       run: |
         echo "🔍 Pre-flight connectivity check (non-blocking)..."
-        echo "Instance IP: 54.91.53.228"
+        echo "Instance IP: $EC2_HOST"
         echo "Note: Security group allows SSH from 0.0.0.0/0 (anywhere), so your IP doesn't matter for deployment."
         echo ""
         echo "Note: This check may fail even if SSH works. The actual SSH connection will be attempted regardless."
         echo ""
         echo "Testing connectivity to port 22..."
-        if timeout 5 bash -c 'cat < /dev/null > /dev/tcp/54.91.53.228/22' 2>/dev/null; then
+        if timeout 5 bash -c "cat < /dev/null > /dev/tcp/$EC2_HOST/22" 2>/dev/null; then
           echo "✅ Port 22 is reachable from GitHub Actions!"
         else
           echo "⚠️  Port 22 connectivity check failed, but continuing..."
@@ -56,8 +59,8 @@ jobs:
       continue-on-error: false
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: 54.91.53.228
-        username: ec2-user
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
         timeout: 3600s
@@ -65,7 +68,7 @@ jobs:
         script_stop: true
         debug: true
         fingerprint: ""
-        envs: NODE_OPTIONS
+        envs: EC2_USERNAME,NODE_OPTIONS
         script: |
           set -e
           
@@ -94,7 +97,7 @@ jobs:
           # Ensure /var/www exists and has correct permissions
           echo "Setting up /var/www directory..."
           sudo mkdir -p /var/www || { echo "Failed to create /var/www"; exit 1; }
-          sudo chown ec2-user:ec2-user /var/www || { echo "Failed to chown /var/www"; exit 1; }
+          sudo chown "$EC2_USERNAME:$EC2_USERNAME" /var/www || { echo "Failed to chown /var/www"; exit 1; }
           echo "✅ /var/www directory ready"
           
           # Check if git is available
@@ -129,7 +132,7 @@ jobs:
           
           # Ensure correct ownership
           echo "Setting ownership..."
-          sudo chown -R ec2-user:ec2-user /var/www/interview-prep || { echo "Failed to chown project directory"; exit 1; }
+          sudo chown -R "$EC2_USERNAME:$EC2_USERNAME" /var/www/interview-prep || { echo "Failed to chown project directory"; exit 1; }
           echo "✅ Ownership set"
           
           # Make deploy script executable
@@ -159,8 +162,8 @@ jobs:
     - name: Verify deployment
       uses: appleboy/ssh-action@v1.0.3
       with:
-        host: 54.91.53.228
-        username: ec2-user
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         port: 22
         timeout: 300s

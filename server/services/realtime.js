@@ -33,7 +33,21 @@ class RealtimeService extends EventEmitter {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    if (this.connectionCleanupInterval) {
+      clearInterval(this.connectionCleanupInterval);
+      this.connectionCleanupInterval = null;
+    }
     console.log('🛑 Real-time service stopped');
+  }
+
+  cleanupStaleConnections() {
+    this.connections.forEach((connections, userId) => {
+      connections.forEach(connection => {
+        if (connection.destroyed || connection.writableEnded || connection.closed) {
+          this.removeConnection(userId, connection);
+        }
+      });
+    });
   }
 
   // Add a connection for a user
